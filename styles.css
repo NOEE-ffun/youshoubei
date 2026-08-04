@@ -66,6 +66,10 @@ body {
   background: oklch(96% 0.01 262 / 0.86);
 }
 
+#bg-layer.has-image::after {
+  background: transparent;
+}
+
 /* 通用可访问性工具 */
 .visually-hidden {
   position: absolute;
