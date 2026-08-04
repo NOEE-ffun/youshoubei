@@ -140,10 +140,19 @@
     }
   }
 
+  async function apiErrorMessage(response) {
+    try {
+      const data = await response.json();
+      return data && data.error ? String(data.error) : '';
+    } catch (error) {
+      return '';
+    }
+  }
+
   async function cloudGetWorkspace() {
     const response = await fetch('/api/data');
     if (response.status === 404) return { tournaments: [], activeId: null };
-    if (!response.ok) throw new Error('读取云端数据失败');
+    if (!response.ok) throw new Error((await apiErrorMessage(response)) || '读取云端数据失败');
     return response.json();
   }
 
@@ -158,7 +167,7 @@
       body: JSON.stringify(workspace)
     });
     if (response.status === 401) throw new Error('管理口令错误');
-    if (!response.ok) throw new Error('保存云端数据失败');
+    if (!response.ok) throw new Error((await apiErrorMessage(response)) || '保存云端数据失败');
   }
 
   async function uploadCloudImage(blob) {
@@ -172,7 +181,7 @@
       body: blob
     });
     if (response.status === 401) throw new Error('管理口令错误');
-    if (!response.ok) throw new Error('图片上传失败');
+    if (!response.ok) throw new Error((await apiErrorMessage(response)) || '图片上传失败');
     const data = await response.json();
     return data.url;
   }

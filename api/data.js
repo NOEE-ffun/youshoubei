@@ -34,6 +34,7 @@ module.exports = async function handler(req, res) {
       const workspace = await readWorkspace();
       sendJson(res, 200, workspace || { tournaments: [], activeId: null });
     } catch (error) {
+      console.error('[data] GET 失败:', error.message);
       sendJson(res, 500, { error: '读取云端数据失败: ' + error.message });
     }
     return;
@@ -70,6 +71,7 @@ module.exports = async function handler(req, res) {
       });
       sendJson(res, 200, { ok: true });
     } catch (error) {
+      console.error('[data] PUT 失败:', error.message);
       sendJson(res, 500, { error: '保存云端数据失败: ' + error.message });
     }
     return;
