@@ -1,0 +1,14 @@
+{
+  "name": "tournament-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "8 人 BO3 双败淘汰赛制与卡组展示网站（浏览器应用）",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test/bracket.test.js"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.6.1"
+  }
+}
