@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>卡组 - 赛制面板</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <div id="bg-layer" aria-hidden="true"></div>
+  <header id="app-header"></header>
+
+  <div class="page-wrap no-sidebar">
+    <main id="main-content" tabindex="-1">
+      <h1>卡组</h1>
+      <p class="page-intro">每位选手两套卡组，每套最多两张 16:9 图片；点击图片可放大查看。</p>
+      <div class="players-grid" id="players-grid"></div>
+    </main>
+  </div>
+
+  <input type="file" id="deck-file-input" accept="image/*" hidden>
+
+  <script src="common.js"></script>
+  <script src="decks.js"></script>
+</body>
+</html>
