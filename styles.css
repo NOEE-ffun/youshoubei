@@ -63,7 +63,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: oklch(96% 0.01 262 / 0.86);
+  background: oklch(96% 0.01 262 / 0.5);
 }
 
 #bg-layer.has-image::after {
