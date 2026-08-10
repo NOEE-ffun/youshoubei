@@ -4,6 +4,10 @@ const assert = require('node:assert/strict');
 const {
   MATCHES,
   isScoreValid,
+  isBestOfFive,
+  getScoreOptions,
+  getDeckCount,
+  ensureMatchDecks,
   resolveAll,
   deriveStandings,
   groupByPhase
@@ -44,14 +48,25 @@ for (const id of ['wb_r2_1', 'lb_r1_1', 'lb_r3', 'lb_final', 'grand_final']) {
   assert.equal(m.played, false);
 }
 
-// 3. 比分合法性
-assert.equal(isScoreValid(2, 0), true);
-assert.equal(isScoreValid(2, 1), true);
-assert.equal(isScoreValid(1, 2), true);
-assert.equal(isScoreValid(0, 2), true);
-assert.equal(isScoreValid(1, 1), false);
-assert.equal(isScoreValid(2, 2), false);
-assert.equal(isScoreValid(0, 0), false);
+// 3. 赛制与比分合法性
+assert.equal(isBestOfFive('wb_final'), true);
+assert.equal(isBestOfFive('lb_final'), true);
+assert.equal(isBestOfFive('grand_final'), true);
+assert.equal(isBestOfFive('wb_r1_1'), false);
+assert.equal(getDeckCount('wb_r1_1'), 2);
+assert.equal(getDeckCount('grand_final'), 3);
+assert.deepEqual(getScoreOptions('wb_r1_1'), [[2, 0], [2, 1], [1, 2], [0, 2]]);
+assert.deepEqual(getScoreOptions('wb_final'), [[3, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 3]]);
+assert.equal(isScoreValid('wb_r1_1', 2, 0), true);
+assert.equal(isScoreValid('wb_r1_1', 2, 1), true);
+assert.equal(isScoreValid('wb_r1_1', 1, 2), true);
+assert.equal(isScoreValid('wb_r1_1', 0, 2), true);
+assert.equal(isScoreValid('wb_r1_1', 1, 1), false);
+assert.equal(isScoreValid('wb_r1_1', 3, 2), false);
+assert.equal(isScoreValid('wb_final', 3, 0), true);
+assert.equal(isScoreValid('wb_final', 3, 2), true);
+assert.equal(isScoreValid('wb_final', 2, 3), true);
+assert.equal(isScoreValid('wb_final', 2, 1), false);
 
 // 4. 部分赛程：R1 第一场 P1 胜 P2，下游只推进该分支
 const partial = scores([
@@ -81,7 +96,7 @@ const wbOnly = scores([
   ['wb_r1_4', 2, 0],
   ['wb_r2_1', 2, 0],
   ['wb_r2_2', 2, 0],
-  ['wb_final', 2, 0]
+  ['wb_final', 3, 0]
 ]);
 const wbOnlyResolved = resolveAll(seeds, wbOnly);
 const wbOnlyLbFinal = wbOnlyResolved.find((m) => m.id === 'lb_final');
@@ -96,14 +111,14 @@ const full = scores([
   ['wb_r1_4', 2, 0],
   ['wb_r2_1', 2, 0],
   ['wb_r2_2', 2, 0],
-  ['wb_final', 2, 0],
+  ['wb_final', 3, 0],
   ['lb_r1_1', 2, 1],
   ['lb_r1_2', 2, 1],
   ['lb_r2_1', 0, 2],
   ['lb_r2_2', 2, 0],
   ['lb_r3', 2, 0],
-  ['lb_final', 0, 2],
-  ['grand_final', 2, 1]
+  ['lb_final', 1, 3],
+  ['grand_final', 3, 2]
 ]);
 const fullResolved = resolveAll(seeds, full);
 const byId = Object.fromEntries(fullResolved.map((m) => [m.id, m]));
@@ -125,9 +140,55 @@ assert.equal(standings.runnerUp, 'P2');
 assert.equal(standings.thirdPlace, 'P5');
 
 // 7. 反向结果：总决赛 P2 获胜，P2 夺冠、P1 亚军、P5 季军
-const p2Wins = { ...full, grand_final: { a: 1, b: 2 } };
+const p2Wins = { ...full, grand_final: { a: 2, b: 3 } };
 assert.equal(deriveStandings(seeds, p2Wins).champion, 'P2');
 assert.equal(deriveStandings(seeds, p2Wins).runnerUp, 'P1');
 assert.equal(deriveStandings(seeds, p2Wins).thirdPlace, 'P5');
 
-console.log('bracket-model 全部 7 组测试通过 ✓');
+// 8. 按对局补齐卡组：旧版选手卡组迁移到各对局，BO5 补第三套
+const legacyRecord = {
+  players: [
+    { id: 'P1', name: 'P1', decks: [{ id: 'd1', name: '主卡组', images: ['img-a'] }, { id: 'd2', name: '备卡组', images: [] }] },
+    { id: 'P2', name: 'P2', decks: [] },
+    { id: 'P3', name: 'P3' },
+    { id: 'P4', name: 'P4' },
+    { id: 'P5', name: 'P5' },
+    { id: 'P6', name: 'P6' },
+    { id: 'P7', name: 'P7' },
+    { id: 'P8', name: 'P8' }
+  ],
+  scores: {},
+  matchDecks: {}
+};
+ensureMatchDecks(legacyRecord);
+const r1P1 = legacyRecord.matchDecks.wb_r1_1.P1;
+assert.equal(r1P1.length, 2, 'BO3 每名选手应有两套卡组');
+assert.equal(r1P1[0].name, '主卡组');
+assert.deepEqual(r1P1[0].images, ['img-a'], '旧卡组图片应迁移');
+assert.equal(legacyRecord.matchDecks.wb_r1_1.P2[0].name, '卡组 1', '无旧卡组时生成默认卡组');
+
+// BO5 对局：先用完整赛程让 P1 进入胜者组决赛
+const migrated = ensureMatchDecks({
+  players: legacyRecord.players,
+  scores: full,
+  matchDecks: {}
+});
+const finalP1 = migrated.matchDecks.wb_final.P1;
+assert.equal(finalP1.length, 3, 'BO5 每名选手应有三套卡组');
+assert.equal(finalP1[0].name, '主卡组');
+assert.equal(finalP1[2].name, '卡组 3', '第三套应为空卡组');
+assert.deepEqual(finalP1[2].images, []);
+
+// 已存在的对局卡组不应被覆盖
+const preserved = ensureMatchDecks({
+  players: legacyRecord.players,
+  scores: full,
+  matchDecks: {
+    wb_r1_1: {
+      P1: [{ id: 'custom', name: '自定卡组', images: ['x'] }]
+    }
+  }
+});
+assert.equal(preserved.matchDecks.wb_r1_1.P1[0].name, '自定卡组', '已有条目不应被覆盖');
+
+console.log('bracket-model 全部 8 组测试通过 ✓');

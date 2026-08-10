@@ -30,6 +30,9 @@
 
   function renderAll() {
     if (!window.TournamentApp || !window.TournamentApp.current) return;
+    if (typeof BracketModel !== 'undefined' && BracketModel.ensureMatchDecks) {
+      BracketModel.ensureMatchDecks(window.TournamentApp.current);
+    }
     document.getElementById('reset-scores-btn').disabled = !canEdit();
     renderSidebar();
     renderChampion();
@@ -144,12 +147,7 @@
     const editable = canEdit();
     const current = record.scores[match.id];
     const isActive = (a, b) => current && current.a === a && current.b === b ? ' active' : '';
-    const scoreButtons = [
-      [2, 0],
-      [2, 1],
-      [1, 2],
-      [0, 2]
-    ].map(([a, b]) =>
+    const scoreButtons = BracketModel.getScoreOptions(match.id).map(([a, b]) =>
       '<button type="button" class="score-btn' + isActive(a, b) + '" data-score="' + a + ',' + b + '"' +
       (editable && ready ? '' : ' disabled') + '>' + a + ':' + b + '</button>'
     ).join('');
@@ -158,6 +156,7 @@
       '<article class="match-card' + (played ? ' played' : '') + '" data-match="' + match.id + '">' +
       '<header class="match-head">' +
       '<h3 class="match-title">' + escapeHtml(match.label) + '</h3>' +
+      '<span class="match-format">' + BracketModel.getFormatLabel(match.id) + '</span>' +
       '<span class="match-state' + (played ? ' done' : '') + '">' + (played ? '已结束' : '未开始') + '</span>' +
       '</header>' +
       playerRow(match, 0, names) +
@@ -166,6 +165,9 @@
       scoreButtons +
       '<button type="button" class="score-btn score-clear" data-clear="1"' +
       (editable && played ? '' : ' disabled') + '>清除</button>' +
+      '</div>' +
+      '<div class="card-actions">' +
+      '<button type="button" class="btn btn-secondary btn-sm" data-view-decks="' + match.id + '">查看卡组</button>' +
       '</div>' +
       '</article>'
     );
@@ -215,11 +217,14 @@
   function bindBracket() {
     for (const id of ['wb-flow', 'lb-flow', 'gf-flow']) {
       document.getElementById(id).addEventListener('click', async (event) => {
-        const btn = event.target.closest('button[data-score], button[data-clear]');
+        const btn = event.target.closest('button[data-score], button[data-clear], button[data-view-decks]');
         if (!btn || btn.disabled) return;
         const card = btn.closest('.match-card');
         const record = currentRecord();
-        if (btn.dataset.clear) {
+        if (btn.dataset.viewDecks) {
+          if (window.DeckModal && window.DeckModal.open) window.DeckModal.open(btn.dataset.viewDecks);
+          return;
+        } else if (btn.dataset.clear) {
           delete record.scores[card.dataset.match];
         } else {
           const [a, b] = btn.dataset.score.split(',').map(Number);
