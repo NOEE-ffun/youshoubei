@@ -150,6 +150,7 @@
       p.id,
       Array.isArray(p.decks) ? p.decks : null
     ]));
+    const usedIds = new Set();
 
     for (const match of MATCHES) {
       const resolved = resolveMatch(match, seeds, scores);
@@ -157,21 +158,31 @@
       if (!record.matchDecks[match.id]) record.matchDecks[match.id] = {};
       for (const playerId of [resolved.a, resolved.b]) {
         if (!playerId) continue;
-        if (record.matchDecks[match.id][playerId]) continue;
-        const legacy = legacyByPlayer.get(playerId) || [];
-        const decks = [];
-        for (let i = 0; i < count; i += 1) {
-          if (legacy[i]) {
-            decks.push({
-              id: legacy[i].id || deckId(),
-              name: legacy[i].name || '卡组 ' + (i + 1),
-              images: Array.isArray(legacy[i].images) ? legacy[i].images.slice() : []
-            });
-          } else {
-            decks.push({ id: deckId(), name: '卡组 ' + (i + 1), images: [] });
+        if (!record.matchDecks[match.id][playerId]) {
+          const legacy = legacyByPlayer.get(playerId) || [];
+          const decks = [];
+          for (let i = 0; i < count; i += 1) {
+            if (legacy[i]) {
+              decks.push({
+                id: legacy[i].id && !usedIds.has(legacy[i].id) ? legacy[i].id : deckId(),
+                name: legacy[i].name || '卡组 ' + (i + 1),
+                images: Array.isArray(legacy[i].images) ? legacy[i].images.slice() : []
+              });
+            } else {
+              decks.push({ id: deckId(), name: '卡组 ' + (i + 1), images: [] });
+            }
           }
+          record.matchDecks[match.id][playerId] = decks;
         }
-        record.matchDecks[match.id][playerId] = decks;
+        /* 修复旧数据：同一卡组 id 只保留第一次出现，其余换成新 id，
+         * 避免“按 id 查找卡组”时所有对局都命中同一套卡组。 */
+        const decks = record.matchDecks[match.id][playerId];
+        if (!Array.isArray(decks)) continue;
+        for (const deck of decks) {
+          if (!deck || typeof deck !== 'object') continue;
+          if (!deck.id || usedIds.has(deck.id)) deck.id = deckId();
+          usedIds.add(deck.id);
+        }
       }
     }
     return record;
