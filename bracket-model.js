@@ -41,19 +41,34 @@
 
   const MATCH_BY_ID = Object.fromEntries(MATCHES.map((m) => [m.id, m]));
 
-  function isScoreValid(a, b) {
-    const valid = [
-      [2, 0],
-      [2, 1],
-      [1, 2],
-      [0, 2]
-    ];
+  const BO5_MATCHES = new Set(['wb_final', 'lb_final', 'grand_final']);
+
+  function isBestOfFive(matchId) {
+    return BO5_MATCHES.has(matchId);
+  }
+
+  function getFormatLabel(matchId) {
+    return isBestOfFive(matchId) ? 'BO5' : 'BO3';
+  }
+
+  function getDeckCount(matchId) {
+    return isBestOfFive(matchId) ? 3 : 2;
+  }
+
+  function getScoreOptions(matchId) {
+    return isBestOfFive(matchId)
+      ? [[3, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 3]]
+      : [[2, 0], [2, 1], [1, 2], [0, 2]];
+  }
+
+  function isScoreValid(matchId, a, b) {
+    const valid = getScoreOptions(matchId);
     return valid.some(([va, vb]) => va === a && vb === b);
   }
 
   function getResult(scores, matchId) {
     const score = scores[matchId];
-    if (!score || !isScoreValid(score.a, score.b)) return null;
+    if (!score || !isScoreValid(matchId, score.a, score.b)) return null;
     return { a: score.a, b: score.b, winnerSide: score.a > score.b ? 0 : 1 };
   }
 
@@ -119,14 +134,62 @@
     return groups;
   }
 
+  function deckId() {
+    return 'd_' + Math.random().toString(36).slice(2, 10);
+  }
+
+  /* 按对局补齐卡组记录：BO3 两套、BO5 三套。
+   * 优先复制旧版 players[].decks 中的卡组；已有 matchDecks 条目不会被覆盖。
+   */
+  function ensureMatchDecks(record) {
+    if (!record || !Array.isArray(record.players)) return record;
+    if (!record.matchDecks || typeof record.matchDecks !== 'object') record.matchDecks = {};
+    const seeds = record.players.map((p) => p.id);
+    const scores = record.scores || {};
+    const legacyByPlayer = new Map(record.players.map((p) => [
+      p.id,
+      Array.isArray(p.decks) ? p.decks : null
+    ]));
+
+    for (const match of MATCHES) {
+      const resolved = resolveMatch(match, seeds, scores);
+      const count = getDeckCount(match.id);
+      if (!record.matchDecks[match.id]) record.matchDecks[match.id] = {};
+      for (const playerId of [resolved.a, resolved.b]) {
+        if (!playerId) continue;
+        if (record.matchDecks[match.id][playerId]) continue;
+        const legacy = legacyByPlayer.get(playerId) || [];
+        const decks = [];
+        for (let i = 0; i < count; i += 1) {
+          if (legacy[i]) {
+            decks.push({
+              id: legacy[i].id || deckId(),
+              name: legacy[i].name || '卡组 ' + (i + 1),
+              images: Array.isArray(legacy[i].images) ? legacy[i].images.slice() : []
+            });
+          } else {
+            decks.push({ id: deckId(), name: '卡组 ' + (i + 1), images: [] });
+          }
+        }
+        record.matchDecks[match.id][playerId] = decks;
+      }
+    }
+    return record;
+  }
+
   return {
     MATCHES,
     MATCH_BY_ID,
+    isBestOfFive,
+    getFormatLabel,
+    getDeckCount,
+    getScoreOptions,
     isScoreValid,
     getResult,
     resolveMatch,
     resolveAll,
     deriveStandings,
-    groupByPhase
+    groupByPhase,
+    ensureMatchDecks
   };
 });

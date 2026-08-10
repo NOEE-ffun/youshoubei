@@ -85,12 +85,7 @@
     const now = Date.now();
     const players = Array.from({ length: 8 }, (_, i) => ({
       id: uid('p'),
-      name: '选手 ' + (i + 1),
-      decks: [0, 1].map((d) => ({
-        id: uid('d'),
-        name: '卡组 ' + (d + 1),
-        images: []
-      }))
+      name: '选手 ' + (i + 1)
     }));
     return {
       id: uid('t'),
@@ -100,6 +95,7 @@
       updatedAt: now,
       players,
       scores: {},
+      matchDecks: {},
       background: null
     };
   }
@@ -244,17 +240,28 @@
         background: record.background,
         players: record.players.map((player) => ({
           ...player,
-          decks: player.decks.map((deck) => ({
-            ...deck,
-            images: deck.images.slice()
-          }))
+          decks: Array.isArray(player.decks)
+            ? player.decks.map((deck) => ({
+                ...deck,
+                images: Array.isArray(deck.images) ? deck.images.slice() : []
+              }))
+            : undefined
         }))
       };
+      if (typeof BracketModel !== 'undefined' && BracketModel.ensureMatchDecks) {
+        BracketModel.ensureMatchDecks(copy);
+      }
       for (const player of copy.players) {
-        for (const deck of player.decks) {
-          for (let i = 0; i < deck.images.length; i += 1) {
-            if (typeof deck.images[i] !== 'string') {
-              deck.images[i] = await uploadCloudImage(deck.images[i]);
+        delete player.decks;
+      }
+      for (const matchId of Object.keys(copy.matchDecks || {})) {
+        for (const playerId of Object.keys(copy.matchDecks[matchId])) {
+          for (const deck of copy.matchDecks[matchId][playerId]) {
+            if (!Array.isArray(deck.images)) deck.images = [];
+            for (let i = 0; i < deck.images.length; i += 1) {
+              if (typeof deck.images[i] !== 'string') {
+                deck.images[i] = await uploadCloudImage(deck.images[i]);
+              }
             }
           }
         }
@@ -732,7 +739,6 @@
       '  <span class="header-title" title="' + escapeHtml(active.name) + '">' + escapeHtml(active.name) + '</span>' +
       '  <nav class="main-nav" aria-label="页面导航">' +
       '    <a href="index.html" data-page="index">赛程</a>' +
-      '    <a href="decks.html" data-page="decks">卡组</a>' +
       '  </nav>' +
       '  <div class="header-actions">' +
       '    <label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
@@ -742,7 +748,8 @@
       '  </div>' +
       '</div>';
 
-    placeholder.querySelector('.main-nav a[data-page="' + app.activePage + '"]').setAttribute('aria-current', 'page');
+    const currentLink = placeholder.querySelector('.main-nav a[data-page="' + app.activePage + '"]');
+    if (currentLink) currentLink.setAttribute('aria-current', 'page');
 
     placeholder.querySelector('#tournament-switch').addEventListener('change', async (event) => {
       await setActiveId(event.target.value);
@@ -776,6 +783,9 @@
       ? (cloudWorkspace && cloudWorkspace.activeId)
       : localStorage.getItem(LS_ACTIVE);
     const record = all.find((t) => t.id === activeId) || all[0];
+    if (record && typeof BracketModel !== 'undefined' && BracketModel.ensureMatchDecks) {
+      BracketModel.ensureMatchDecks(record);
+    }
     appInstance.current = record;
     appInstance.list = all.map((t) => ({ id: t.id, name: t.name, updatedAt: t.updatedAt }));
     applyBackground(record);
