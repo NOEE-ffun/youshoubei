@@ -112,10 +112,12 @@
   }
 
   function deckBlock(playerId, deck, deckIndex, editable) {
+    const key = currentMatchId + '-' + playerId + '-' + deckIndex;
     return (
       '<div class="deck">' +
-      '<label class="visually-hidden" for="deck-name-' + deck.id + '">卡组 ' + (deckIndex + 1) + ' 名称</label>' +
-      '<input class="deck-name-input" id="deck-name-' + deck.id + '" value="' + escapeHtml(deck.name) + '"' +
+      '<label class="visually-hidden" for="deck-name-' + key + '">卡组 ' + (deckIndex + 1) + ' 名称</label>' +
+      '<input class="deck-name-input" id="deck-name-' + key + '" data-deck-key="' +
+      currentMatchId + '|' + playerId + '|' + deckIndex + '" value="' + escapeHtml(deck.name) + '"' +
       ' autocomplete="off"' + (editable ? '' : ' disabled') + '>' +
       '<div class="deck-images">' +
       [0, 1].map((slotIndex) => imageSlot(playerId, deck, deckIndex, slotIndex, editable)).join('') +
@@ -155,7 +157,10 @@
     const body = dialog.querySelector('#deck-dialog-body');
 
     body.querySelectorAll('.deck-name-input').forEach((input) => {
-      const deck = findDeckById(input.id.replace('deck-name-', ''));
+      const [matchId, playerId, deckIndex] = (input.dataset.deckKey || '').split('|');
+      const matchDecks = window.TournamentApp.current.matchDecks || {};
+      const playerDecks = (matchDecks[matchId] && matchDecks[matchId][playerId]) || [];
+      const deck = playerDecks[Number(deckIndex)];
       if (!deck) return;
       const commit = () => {
         const next = input.value.trim();
@@ -219,18 +224,6 @@
         render();
       });
     });
-  }
-
-  function findDeckById(id) {
-    const record = window.TournamentApp.current;
-    for (const matchId of Object.keys(record.matchDecks || {})) {
-      for (const playerId of Object.keys(record.matchDecks[matchId])) {
-        for (const deck of record.matchDecks[matchId][playerId]) {
-          if (deck.id === id) return deck;
-        }
-      }
-    }
-    return null;
   }
 
   async function addImage(targetKey, file) {
