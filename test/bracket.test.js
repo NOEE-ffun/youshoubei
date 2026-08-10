@@ -191,4 +191,42 @@ const preserved = ensureMatchDecks({
 });
 assert.equal(preserved.matchDecks.wb_r1_1.P1[0].name, '自定卡组', '已有条目不应被覆盖');
 
-console.log('bracket-model 全部 8 组测试通过 ✓');
+// 9. 旧数据迁移/修复后，所有对局的卡组 id 必须全局唯一
+const duplicateRecord = {
+  players: legacyRecord.players,
+  scores: full,
+  matchDecks: {
+    wb_r1_1: {
+      P1: [{ id: 'd1', name: '主卡组', images: [] }, { id: 'd2', name: '备卡组', images: [] }]
+    },
+    wb_r2_1: {
+      P1: [{ id: 'd1', name: '主卡组', images: [] }, { id: 'd2', name: '备卡组', images: [] }]
+    },
+    wb_final: {
+      P1: [
+        { id: 'd1', name: '主卡组', images: [] },
+        { id: 'd2', name: '备卡组', images: [] },
+        { id: 'd3', name: '卡组 3', images: [] }
+      ]
+    }
+  }
+};
+ensureMatchDecks(duplicateRecord);
+const allDeckIds = [];
+for (const matchId of Object.keys(duplicateRecord.matchDecks)) {
+  for (const playerId of Object.keys(duplicateRecord.matchDecks[matchId])) {
+    for (const deck of duplicateRecord.matchDecks[matchId][playerId]) {
+      allDeckIds.push(deck.id);
+    }
+  }
+}
+assert.equal(new Set(allDeckIds).size, allDeckIds.length, '迁移后卡组 id 应全局唯一');
+assert.equal(duplicateRecord.matchDecks.wb_r1_1.P1[0].id, 'd1', '第一次出现的 id 应保留');
+assert.notEqual(duplicateRecord.matchDecks.wb_r2_1.P1[0].id, 'd1', '重复的 id 应被替换');
+
+// 10. 修复幂等：再次补齐不会改变已经唯一的 id
+const repairedSnapshot = JSON.stringify(duplicateRecord.matchDecks);
+ensureMatchDecks(duplicateRecord);
+assert.equal(JSON.stringify(duplicateRecord.matchDecks), repairedSnapshot, '重复调用不应改变卡组 id');
+
+console.log('bracket-model 全部 10 组测试通过 ✓');
