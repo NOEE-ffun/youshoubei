@@ -211,7 +211,12 @@
           src: window.TournamentApp.blobUrl(image),
           alt: '卡组图片 ' + (i + 1)
         }));
-        window.TournamentApp.openLightbox(items, Number(slotIndex), btn);
+        /* 弹窗会盖住放大图，先收起，关闭放大图后再恢复 */
+        if (dialog.open) dialog.close();
+        window.TournamentApp.openLightbox(items, Number(slotIndex), btn, () => {
+          if (!dialog.open) dialog.showModal();
+          if (document.contains(btn)) btn.focus();
+        });
       });
     });
 
