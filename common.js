@@ -336,6 +336,7 @@
   let lightboxItems = [];
   let lightboxIndex = 0;
   let lightboxReturnFocus = null;
+  let lightboxReturnCallback = null;
 
   function buildLightbox() {
     lightbox = document.createElement('div');
@@ -369,8 +370,11 @@
       img.src = '';
       const target = lightboxReturnFocus;
       lightboxReturnFocus = null;
+      const callback = lightboxReturnCallback;
+      lightboxReturnCallback = null;
       lightboxItems = [];
       if (target && document.contains(target)) target.focus();
+      if (callback) callback();
     }
 
     function step(delta) {
@@ -395,11 +399,12 @@
     lightbox.__close = closeLightbox;
   }
 
-  function openLightbox(items, index, returnFocus) {
+  function openLightbox(items, index, returnFocus, onClose) {
     if (!lightbox) buildLightbox();
     lightboxItems = items;
     lightboxIndex = Math.max(0, Math.min(index || 0, items.length - 1));
     lightboxReturnFocus = returnFocus || null;
+    lightboxReturnCallback = typeof onClose === 'function' ? onClose : null;
     lightbox.__show();
     lightbox.querySelector('.lightbox-close').focus();
   }
