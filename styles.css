@@ -1,5 +1,6 @@
 :root {
-  /* 设计令牌：浅色明快主题，单一蓝色强调色 */
+  /* 设计令牌：浅色明快主题，单一蓝色强调色。
+   * 颜色均为 hex（旧浏览器回退）+ oklch（现代浏览器主值）双写。 */
   --bg: #f4f6fb;
   --surface: #ffffff;
   --surface-2: #eef1f8;
@@ -16,8 +17,11 @@
   --danger: #d64545;
   --danger: oklch(58% 0.2 25);
   --danger-soft: #fdecec;
+  --danger-soft: oklch(96% 0.02 17);
   --success: #1f9d6a;
+  --success: oklch(62% 0.13 160);
   --success-soft: #e4f6ee;
+  --success-soft: oklch(96% 0.02 167);
   --radius-sm: 0.5rem;
   --radius: 0.875rem;
   --radius-lg: 1.25rem;
