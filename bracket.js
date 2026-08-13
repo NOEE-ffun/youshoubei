@@ -99,23 +99,43 @@
 
   /* ---------- 选手名单 ---------- */
 
+  /* 比赛已分出冠亚季军时,返回 playerId → 奖牌信息 的映射;未结束返回空 Map */
+  function medalMap(record) {
+    const map = new Map();
+    if (!record || !Array.isArray(record.players)) return map;
+    const standings = BracketModel.deriveStandings(
+      record.players.map((p) => p.id),
+      record.scores || {}
+    );
+    if (!standings.champion) return map;
+    if (standings.champion) map.set(standings.champion, { type: 'gold', emoji: '🥇' });
+    if (standings.runnerUp) map.set(standings.runnerUp, { type: 'silver', emoji: '🥈' });
+    if (standings.thirdPlace) map.set(standings.thirdPlace, { type: 'bronze', emoji: '🥉' });
+    return map;
+  }
+
   function renderRoster() {
     const app = window.TournamentApp;
     const record = app.current;
     const grid = document.getElementById('roster-grid');
     const editable = canEdit();
-    grid.innerHTML = record.players.map((player, index) =>
-      '<div class="roster-item">' +
-      '<span class="roster-index">' + (index + 1) + '</span>' +
-      '<div class="roster-avatar" data-avatar="' + player.id + '">' +
-      avatarMarkup(player, 'avatar-lg') +
-      (editable ? avatarActions(player) : '') +
-      '</div>' +
-      '<label class="visually-hidden" for="roster-name-' + player.id + '">选手 ' + (index + 1) + ' 姓名</label>' +
-      '<input id="roster-name-' + player.id + '" value="' + escapeHtml(player.name) + '" autocomplete="off"' +
-      (editable ? '' : ' disabled') + '>' +
-      '</div>'
-    ).join('');
+    const medalOf = medalMap(record);
+    grid.innerHTML = record.players.map((player, index) => {
+      const medal = medalOf.get(player.id);
+      return (
+        '<div class="roster-item' + (medal ? ' medal-' + medal.type : '') + '">' +
+        '<span class="roster-index">' + (index + 1) + '</span>' +
+        (medal ? '<span class="medal-badge">' + medal.emoji + '</span>' : '') +
+        '<div class="roster-avatar" data-avatar="' + player.id + '">' +
+        avatarMarkup(player, 'avatar-lg') +
+        (editable ? avatarActions(player) : '') +
+        '</div>' +
+        '<label class="visually-hidden" for="roster-name-' + player.id + '">选手 ' + (index + 1) + ' 姓名</label>' +
+        '<input id="roster-name-' + player.id + '" value="' + escapeHtml(player.name) + '" autocomplete="off"' +
+        (editable ? '' : ' disabled') + '>' +
+        '</div>'
+      );
+    }).join('');
 
     grid.querySelectorAll('.roster-item input').forEach((input, index) => {
       const player = record.players[index];

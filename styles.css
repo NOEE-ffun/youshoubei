@@ -1271,14 +1271,15 @@ dialog::backdrop {
   min-height: calc(100vh - 4rem);
 }
 
-/* 选手跑马灯：双行反向滚动，毛玻璃条，横向无缝滚动 */
+/* 选手跑马灯：页面垂直居中，双行反向滚动，毛玻璃条，横向无缝滚动 */
 .home-marquee {
   position: fixed;
   inset-inline: 0;
-  inset-block-end: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: grid;
   gap: 0.875rem;
-  padding: 1.25rem 0 1.75rem;
+  padding: 1.25rem 0;
   overflow: hidden;
   pointer-events: none;
   z-index: 10;
@@ -1293,6 +1294,7 @@ dialog::backdrop {
   gap: 1.5rem;
   inline-size: max-content;
   animation: marquee 30s linear infinite;
+  pointer-events: auto;
 }
 
 /* 第二行反向滚动 */
@@ -1300,7 +1302,8 @@ dialog::backdrop {
   animation-direction: reverse;
 }
 
-.home-marquee:hover .marquee-track {
+/* 悬停轨道任意位置即暂停滚动 */
+.marquee-track:hover {
   animation-play-state: paused;
 }
 
@@ -1322,6 +1325,25 @@ dialog::backdrop {
   border-radius: 1rem;
   padding: 0.6rem 1.6rem 0.6rem 0.875rem;
   box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background var(--dur-ui) var(--ease-out),
+    border-color var(--dur-ui) var(--ease-out),
+    box-shadow var(--dur-ui) var(--ease-out);
+}
+
+/* 悬停高亮（仅精细指针设备）：放大、背景提实、强调描边 */
+@media (hover: hover) and (pointer: fine) {
+  .marquee-item:hover {
+    transform: scale(1.06);
+    background: oklch(100% 0 0 / 0.95);
+    border-color: var(--accent);
+    box-shadow: var(--shadow);
+  }
+}
+
+.marquee-item:active {
+  transform: scale(0.98);
 }
 
 .marquee-name {
@@ -1329,6 +1351,26 @@ dialog::backdrop {
   font-size: 1.3rem;
   color: var(--text);
   white-space: nowrap;
+}
+
+/* 奖牌色（比赛已分出冠亚季军时生效） */
+.medal-gold {
+  background: oklch(95% 0.06 85 / 0.6);
+  border-color: oklch(80% 0.15 85 / 0.65);
+}
+.medal-silver {
+  background: oklch(96% 0.02 250 / 0.6);
+  border-color: oklch(78% 0.03 250 / 0.65);
+}
+.medal-bronze {
+  background: oklch(95% 0.045 45 / 0.6);
+  border-color: oklch(70% 0.11 45 / 0.65);
+}
+
+.medal-badge {
+  font-size: 1.15rem;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 /* 无障碍：减少动效偏好时停止滚动，保留静态展示 */
