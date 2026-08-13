@@ -766,6 +766,8 @@
     return '<span class="' + cls + ' avatar-fallback" style="background:' + color + '">' +
       escapeHtml(initial) + '</span>';
   }
+  /* 跨文件暴露：bracket.js（选手名单）与 deck-modal.js（卡组弹窗）渲染头像 */
+  window.avatarMarkup = avatarMarkup;
 
   function applyBackground(record) {
     const layer = document.getElementById('bg-layer');
