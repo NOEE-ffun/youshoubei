@@ -229,4 +229,10 @@ const repairedSnapshot = JSON.stringify(duplicateRecord.matchDecks);
 ensureMatchDecks(duplicateRecord);
 assert.equal(JSON.stringify(duplicateRecord.matchDecks), repairedSnapshot, '重复调用不应改变卡组 id');
 
-console.log('bracket-model 全部 10 组测试通过 ✓');
+// 11. 头像占位色：确定性 + 在色板范围内
+const { AVATAR_COLORS, avatarColor } = require('../bracket-model.js');
+assert.equal(avatarColor('P1'), avatarColor('P1'), '同一选手颜色应稳定');
+assert.ok(AVATAR_COLORS.includes(avatarColor('P1')), '颜色应来自色板');
+assert.equal(AVATAR_COLORS.length, 8, '色板应有 8 色');
+
+console.log('bracket-model 全部 11 组测试通过 ✓');

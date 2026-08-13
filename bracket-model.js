@@ -51,6 +51,22 @@
     return isBestOfFive(matchId) ? 'BO5' : 'BO3';
   }
 
+  /* 头像占位色板：柔和色系，与设计令牌协调 */
+  const AVATAR_COLORS = [
+    '#3563e9', '#7a5af8', '#0e9f6e', '#d97706',
+    '#d64545', '#0e7490', '#be185d', '#4d7c0f'
+  ];
+
+  /* 按选手 id 确定性取色：同一选手任何位置颜色一致 */
+  function avatarColor(seed) {
+    let hash = 0;
+    const str = String(seed || '');
+    for (let i = 0; i < str.length; i += 1) {
+      hash = (hash * 31 + str.charCodeAt(i)) | 0;
+    }
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  }
+
   function getDeckCount(matchId) {
     return isBestOfFive(matchId) ? 3 : 2;
   }
@@ -191,6 +207,8 @@
   return {
     MATCHES,
     MATCH_BY_ID,
+    AVATAR_COLORS,
+    avatarColor,
     isBestOfFive,
     getFormatLabel,
     getDeckCount,
