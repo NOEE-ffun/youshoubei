@@ -99,12 +99,17 @@
     const app = window.TournamentApp;
     const record = app.current;
     const grid = document.getElementById('roster-grid');
+    const editable = canEdit();
     grid.innerHTML = record.players.map((player, index) =>
       '<div class="roster-item">' +
       '<span class="roster-index">' + (index + 1) + '</span>' +
+      '<div class="roster-avatar" data-avatar="' + player.id + '">' +
+      avatarMarkup(player, 'avatar-lg') +
+      (editable ? avatarActions(player) : '') +
+      '</div>' +
       '<label class="visually-hidden" for="roster-name-' + player.id + '">选手 ' + (index + 1) + ' 姓名</label>' +
       '<input id="roster-name-' + player.id + '" value="' + escapeHtml(player.name) + '" autocomplete="off"' +
-      (canEdit() ? '' : ' disabled') + '>' +
+      (editable ? '' : ' disabled') + '>' +
       '</div>'
     ).join('');
 
@@ -119,6 +124,20 @@
       input.addEventListener('change', commit);
       input.addEventListener('input', debounce(commit, 500));
     });
+    bindRosterAvatars();
+  }
+
+  function avatarActions(player) {
+    const has = Boolean(player.avatar);
+    return (
+      '<span class="avatar-actions">' +
+      '<button type="button" class="avatar-action" data-avatar-upload="' + player.id + '">' +
+      (has ? '更换' : '上传') + '</button>' +
+      (has
+        ? '<button type="button" class="avatar-action danger" data-avatar-delete="' + player.id + '">删除</button>'
+        : '') +
+      '</span>'
+    );
   }
 
   /* ---------- 赛程 ---------- */
@@ -244,6 +263,62 @@
       record.scores = {};
       await save();
       renderAll();
+    });
+  }
+
+  /* 头像上传文件选择器（隐藏，页面级共用一个） */
+  let avatarFileInput = null;
+  let pendingAvatarId = null;
+
+  function ensureAvatarFileInput() {
+    if (avatarFileInput) return;
+    avatarFileInput = document.createElement('input');
+    avatarFileInput.type = 'file';
+    avatarFileInput.accept = 'image/*';
+    avatarFileInput.hidden = true;
+    document.body.appendChild(avatarFileInput);
+    avatarFileInput.addEventListener('change', async () => {
+      const file = avatarFileInput.files && avatarFileInput.files[0];
+      avatarFileInput.value = '';
+      const playerId = pendingAvatarId;
+      pendingAvatarId = null;
+      if (!file || !playerId) return;
+      const record = currentRecord();
+      const player = record.players.find((p) => p.id === playerId);
+      if (!player) return;
+      try {
+        const blob = await window.TournamentApp.compressAvatar(file);
+        player.avatar = window.TournamentApp.mode === 'cloud'
+          ? await window.TournamentApp.uploadImage(blob)
+          : blob;
+        await save();
+        renderAll();
+      } catch (error) {
+        alert(error.message);
+      }
+    });
+  }
+
+  function bindRosterAvatars() {
+    ensureAvatarFileInput();
+    const grid = document.getElementById('roster-grid');
+    grid.querySelectorAll('[data-avatar-upload]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (!canEdit()) return;
+        pendingAvatarId = btn.dataset.avatarUpload;
+        avatarFileInput.click();
+      });
+    });
+    grid.querySelectorAll('[data-avatar-delete]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!canEdit()) return;
+        const record = currentRecord();
+        const player = record.players.find((p) => p.id === btn.dataset.avatarDelete);
+        if (!player) return;
+        player.avatar = null;
+        await save();
+        renderAll();
+      });
     });
   }
 

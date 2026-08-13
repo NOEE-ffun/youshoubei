@@ -1142,3 +1142,54 @@ dialog::backdrop {
     grid-template-columns: 1fr;
   }
 }
+
+/* 头像 */
+.avatar {
+  display: inline-block;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  background: var(--surface-3);
+}
+.avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+}
+.avatar-lg { width: 48px; height: 48px; font-size: 1.25rem; }
+.avatar-md { width: 28px; height: 28px; font-size: 0.8125rem; }
+.avatar-sm { width: 24px; height: 24px; font-size: 0.6875rem; }
+.roster-avatar {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.roster-avatar .avatar-actions {
+  position: absolute;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  top: -6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s var(--ease);
+}
+.roster-avatar:hover .avatar-actions,
+.roster-avatar:focus-within .avatar-actions {
+  opacity: 1;
+}
+.avatar-action {
+  font-size: 0.6875rem;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+.avatar-action.danger { color: var(--danger); }
