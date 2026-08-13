@@ -534,7 +534,12 @@
       const input = manageDialog.querySelector('#new-tournament-name');
       const name = input.value.trim() || '我的赛事';
       const record = makeDefaultTournament(name);
-      await storagePut(record);
+      try {
+        await storagePut(record);
+      } catch (error) {
+        alert('新建比赛失败：' + (error && error.message ? error.message : error));
+        return;
+      }
       await setActiveId(record.id);
       input.value = '';
       renderManageList();
@@ -556,7 +561,12 @@
         record.background = pendingBackground;
       }
       pendingBackground = undefined;
-      await storagePut(record);
+      try {
+        await storagePut(record);
+      } catch (error) {
+        alert('保存设置失败：' + (error && error.message ? error.message : error));
+        return;
+      }
       applyBackground(record);
       renderHeader();
       settingsDialog.close();
@@ -684,7 +694,12 @@
         const record = await storageGetAll().then((all) => all.find((t) => t.id === id));
         if (!record) return;
         record.name = input.value.trim() || record.name;
-        await storagePut(record);
+        try {
+          await storagePut(record);
+        } catch (error) {
+          alert('重命名失败：' + (error && error.message ? error.message : error));
+          return;
+        }
         await refreshApp();
         renderManageList();
         document.dispatchEvent(new CustomEvent('ts:changed'));
@@ -705,11 +720,21 @@
         const item = window.TournamentApp.list.find((t) => t.id === id);
         if (!item) return;
         if (!confirm('确定删除比赛「' + item.name + '」吗？该操作不可恢复。')) return;
-        await storageDelete(id);
+        try {
+          await storageDelete(id);
+        } catch (error) {
+          alert('删除失败：' + (error && error.message ? error.message : error));
+          return;
+        }
         const remaining = (await storageGetAll());
         if (!remaining.length) {
           const fresh = makeDefaultTournament('我的赛事');
-          await storagePut(fresh);
+          try {
+            await storagePut(fresh);
+          } catch (error) {
+            alert('新建默认比赛失败：' + (error && error.message ? error.message : error));
+            return;
+          }
           remaining.push(fresh);
         }
         if (id === window.TournamentApp.current.id) {

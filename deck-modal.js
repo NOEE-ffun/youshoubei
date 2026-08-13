@@ -29,7 +29,11 @@
   }
 
   function save() {
-    return window.TournamentApp.idbPut(window.TournamentApp.current);
+    /* 保存失败必须可见：云端未解锁/口令失效时 alert 提示 */
+    return window.TournamentApp.idbPut(window.TournamentApp.current).catch((error) => {
+      console.error('[save] 失败:', error);
+      alert('保存失败：' + (error && error.message ? error.message : error));
+    });
   }
 
   function buildDialog() {
