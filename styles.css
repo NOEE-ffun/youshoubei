@@ -3,6 +3,8 @@
    * 颜色均为 hex（旧浏览器回退）+ oklch（现代浏览器主值）双写。 */
   --bg: #f4f6fb;
   --surface: #ffffff;
+  /* 半透明卡片表面：透出背景图；配合 backdrop-filter 模糊保证文字可读 */
+  --surface-glass: oklch(100% 0 0 / 0.84);
   --surface-2: #eef1f8;
   --surface-3: #e2e7f2;
   --text: #1c2434;
@@ -327,7 +329,9 @@ main > h1 {
 
 /* 侧边栏（赛制规则） */
 .rules-sidebar {
-  background: var(--surface);
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
@@ -390,9 +394,11 @@ main > h1 {
   gap: 1rem;
   background: linear-gradient(
     120deg,
-    var(--accent-soft),
-    oklch(97% 0.02 262 / 0.7)
+    oklch(95% 0.03 262 / 0.8),
+    oklch(97% 0.02 262 / 0.6)
   );
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid oklch(from var(--accent) l c h / 0.35);
   border-radius: var(--radius);
   padding: 0.875rem 1.25rem;
@@ -424,11 +430,17 @@ main > h1 {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--surface);
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.55rem 0.75rem;
   box-shadow: var(--shadow-sm);
+}
+
+.roster-item:hover {
+  background: oklch(100% 0 0 / 0.94);
 }
 
 .roster-index {
@@ -525,14 +537,21 @@ main > h1 {
 
 /* 对局卡片 */
 .match-card {
-  background: var(--surface);
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
   padding: 0.75rem;
   transition:
     border-color 160ms var(--ease),
-    box-shadow 160ms var(--ease);
+    box-shadow 160ms var(--ease),
+    background 160ms var(--ease);
+}
+
+.match-card:hover {
+  background: oklch(100% 0 0 / 0.94);
 }
 
 .match-card.played {
