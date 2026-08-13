@@ -4,7 +4,7 @@
   --bg: #f4f6fb;
   --surface: #ffffff;
   /* 半透明卡片表面：透出背景图；配合 backdrop-filter 模糊保证文字可读 */
-  --surface-glass: oklch(100% 0 0 / 0.84);
+  --surface-glass: oklch(100% 0 0 / 0.7);
   --surface-2: #eef1f8;
   --surface-3: #e2e7f2;
   --text: #1c2434;
@@ -388,8 +388,8 @@ main > h1 {
   gap: 1rem;
   background: linear-gradient(
     120deg,
-    oklch(95% 0.03 262 / 0.8),
-    oklch(97% 0.02 262 / 0.6)
+    oklch(95% 0.03 262 / 0.7),
+    oklch(97% 0.02 262 / 0.5)
   );
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
@@ -434,7 +434,7 @@ main > h1 {
 }
 
 .roster-item:hover {
-  background: oklch(100% 0 0 / 0.94);
+  background: oklch(100% 0 0 / 0.85);
 }
 
 .roster-index {
@@ -537,7 +537,7 @@ main > h1 {
 }
 
 .match-card:hover {
-  background: oklch(100% 0 0 / 0.94);
+  background: oklch(100% 0 0 / 0.85);
 }
 
 .match-card.played {
