@@ -322,5 +322,5 @@
   bindSidebar();
   bindBracket();
   bindToolbar();
-  window.TournamentAppInit('index');
+  window.TournamentAppInit('schedule');
 })();
