@@ -252,6 +252,11 @@
         BracketModel.ensureMatchDecks(copy);
       }
       for (const player of copy.players) {
+        if (player.avatar && typeof player.avatar !== 'string') {
+          player.avatar = await uploadCloudImage(player.avatar);
+        }
+      }
+      for (const player of copy.players) {
         delete player.decks;
       }
       for (const matchId of Object.keys(copy.matchDecks || {})) {
