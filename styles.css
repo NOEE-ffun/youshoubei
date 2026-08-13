@@ -1325,6 +1325,7 @@ body.home-page {
   font-weight: 600;
   letter-spacing: 0.5em;
   text-indent: 0.5em;
+  white-space: nowrap;
   color: oklch(90% 0.03 300 / 0.75);
   animation: home-rise 700ms 120ms var(--ease) both;
 }
