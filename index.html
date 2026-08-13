@@ -3,51 +3,287 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark">
-  <title>赛制面板</title>
+  <meta name="color-scheme" content="light">
+  <title>右手杯</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="home-page">
-  <!-- 流体渐变背景与噪点质感 -->
-  <div class="home-bg" aria-hidden="true"></div>
-  <div class="home-noise" aria-hidden="true"></div>
+  <!-- 二进制装饰列（左右两侧） -->
+  <div class="bin-col bin-left" aria-hidden="true">
+        <span>0</span>
+        <span>0</span>
+        <span>1</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>1</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>1</span>
+        <span>0</span>
+        <span>1</span>
+        <span>1</span>
+        <span>0</span>
+        <span>0</span>
+        <span>1</span>
+        <span>1</span>
+  </div>
+  <div class="bin-col bin-right" aria-hidden="true">
+        <span>1</span>
+        <span>0</span>
+        <span>1</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>1</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>1</span>
+        <span>1</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>1</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>0</span>
+        <span>1</span>
+        <span>0</span>
+        <span>0</span>
+  </div>
 
   <main class="home-main">
-    <!-- 主视觉：线稿右手夹卡牌（半透明，位于标题后方） -->
+    <!-- 主视觉：像素点阵右手 V 手势（半透明，位于标题后方） -->
     <div class="home-hero" aria-hidden="true">
-      <svg class="hand-svg" viewBox="0 0 400 460">
-        <!-- 双层描边：底层常显，上层亮点沿线条循环流动（见 styles.css） -->
-        <g class="hand-base">
-          <path class="finger back" d="M 285 470 C 288 420 278 380 268 355" />
-          <path class="finger back" d="M 255 470 C 258 410 250 360 243 315" />
-          <g transform="rotate(-10 200 165)">
-            <rect class="card-frame" x="125" y="60" width="150" height="210" rx="14" />
-            <rect class="card-inner" x="140" y="75" width="120" height="180" rx="10" />
-            <line class="card-line" x1="150" y1="95" x2="240" y2="95" />
-          </g>
-          <path class="thumb" d="M 140 470 C 100 400 100 320 135 285" />
-          <path class="finger" d="M 222 470 L 222 100" />
-          <path class="finger" d="M 178 470 L 178 112" />
-        </g>
-        <g class="hand-glow">
-          <path class="finger back" d="M 285 470 C 288 420 278 380 268 355" />
-          <path class="finger back" d="M 255 470 C 258 410 250 360 243 315" />
-          <g transform="rotate(-10 200 165)">
-            <rect class="card-frame" x="125" y="60" width="150" height="210" rx="14" />
-            <rect class="card-inner" x="140" y="75" width="120" height="180" rx="10" />
-            <line class="card-line" x1="150" y1="95" x2="240" y2="95" />
-          </g>
-          <path class="thumb" d="M 140 470 C 100 400 100 320 135 285" />
-          <path class="finger" d="M 222 470 L 222 100" />
-          <path class="finger" d="M 178 470 L 178 112" />
-        </g>
+      <svg class="pixel-hand" viewBox="0 0 16 18">
+      <rect class="blink" x="2" y="0" width="1" height="1"/>
+      <rect x="3" y="0" width="1" height="1"/>
+      <rect x="12" y="0" width="1" height="1"/>
+      <rect class="blink" x="13" y="0" width="1" height="1"/>
+      <rect x="1" y="1" width="1" height="1"/>
+      <rect class="blink" x="2" y="1" width="1" height="1"/>
+      <rect x="3" y="1" width="1" height="1"/>
+      <rect x="4" y="1" width="1" height="1"/>
+      <rect x="11" y="1" width="1" height="1"/>
+      <rect x="12" y="1" width="1" height="1"/>
+      <rect class="blink" x="13" y="1" width="1" height="1"/>
+      <rect x="14" y="1" width="1" height="1"/>
+      <rect x="1" y="2" width="1" height="1"/>
+      <rect x="2" y="2" width="1" height="1"/>
+      <rect x="3" y="2" width="1" height="1"/>
+      <rect x="4" y="2" width="1" height="1"/>
+      <rect x="11" y="2" width="1" height="1"/>
+      <rect x="12" y="2" width="1" height="1"/>
+      <rect x="13" y="2" width="1" height="1"/>
+      <rect x="14" y="2" width="1" height="1"/>
+      <rect x="1" y="3" width="1" height="1"/>
+      <rect x="2" y="3" width="1" height="1"/>
+      <rect x="3" y="3" width="1" height="1"/>
+      <rect x="4" y="3" width="1" height="1"/>
+      <rect x="11" y="3" width="1" height="1"/>
+      <rect x="12" y="3" width="1" height="1"/>
+      <rect x="13" y="3" width="1" height="1"/>
+      <rect x="14" y="3" width="1" height="1"/>
+      <rect x="0" y="4" width="1" height="1"/>
+      <rect x="1" y="4" width="1" height="1"/>
+      <rect x="2" y="4" width="1" height="1"/>
+      <rect x="3" y="4" width="1" height="1"/>
+      <rect x="4" y="4" width="1" height="1"/>
+      <rect x="5" y="4" width="1" height="1"/>
+      <rect x="10" y="4" width="1" height="1"/>
+      <rect x="11" y="4" width="1" height="1"/>
+      <rect x="12" y="4" width="1" height="1"/>
+      <rect x="13" y="4" width="1" height="1"/>
+      <rect x="14" y="4" width="1" height="1"/>
+      <rect x="15" y="4" width="1" height="1"/>
+      <rect x="0" y="5" width="1" height="1"/>
+      <rect x="1" y="5" width="1" height="1"/>
+      <rect x="2" y="5" width="1" height="1"/>
+      <rect x="3" y="5" width="1" height="1"/>
+      <rect x="4" y="5" width="1" height="1"/>
+      <rect x="5" y="5" width="1" height="1"/>
+      <rect x="10" y="5" width="1" height="1"/>
+      <rect x="11" y="5" width="1" height="1"/>
+      <rect x="12" y="5" width="1" height="1"/>
+      <rect x="13" y="5" width="1" height="1"/>
+      <rect x="14" y="5" width="1" height="1"/>
+      <rect x="15" y="5" width="1" height="1"/>
+      <rect x="0" y="6" width="1" height="1"/>
+      <rect x="1" y="6" width="1" height="1"/>
+      <rect x="2" y="6" width="1" height="1"/>
+      <rect x="3" y="6" width="1" height="1"/>
+      <rect x="4" y="6" width="1" height="1"/>
+      <rect x="5" y="6" width="1" height="1"/>
+      <rect x="10" y="6" width="1" height="1"/>
+      <rect x="11" y="6" width="1" height="1"/>
+      <rect x="12" y="6" width="1" height="1"/>
+      <rect x="13" y="6" width="1" height="1"/>
+      <rect x="14" y="6" width="1" height="1"/>
+      <rect x="15" y="6" width="1" height="1"/>
+      <rect x="0" y="7" width="1" height="1"/>
+      <rect x="1" y="7" width="1" height="1"/>
+      <rect x="2" y="7" width="1" height="1"/>
+      <rect x="3" y="7" width="1" height="1"/>
+      <rect x="4" y="7" width="1" height="1"/>
+      <rect x="5" y="7" width="1" height="1"/>
+      <rect x="6" y="7" width="1" height="1"/>
+      <rect class="blink" x="7" y="7" width="1" height="1"/>
+      <rect class="blink" x="8" y="7" width="1" height="1"/>
+      <rect x="9" y="7" width="1" height="1"/>
+      <rect x="10" y="7" width="1" height="1"/>
+      <rect x="11" y="7" width="1" height="1"/>
+      <rect x="12" y="7" width="1" height="1"/>
+      <rect x="13" y="7" width="1" height="1"/>
+      <rect x="14" y="7" width="1" height="1"/>
+      <rect x="15" y="7" width="1" height="1"/>
+      <rect x="0" y="8" width="1" height="1"/>
+      <rect x="1" y="8" width="1" height="1"/>
+      <rect x="2" y="8" width="1" height="1"/>
+      <rect x="3" y="8" width="1" height="1"/>
+      <rect x="4" y="8" width="1" height="1"/>
+      <rect x="5" y="8" width="1" height="1"/>
+      <rect x="6" y="8" width="1" height="1"/>
+      <rect x="7" y="8" width="1" height="1"/>
+      <rect x="8" y="8" width="1" height="1"/>
+      <rect x="9" y="8" width="1" height="1"/>
+      <rect x="10" y="8" width="1" height="1"/>
+      <rect x="11" y="8" width="1" height="1"/>
+      <rect x="12" y="8" width="1" height="1"/>
+      <rect x="13" y="8" width="1" height="1"/>
+      <rect x="14" y="8" width="1" height="1"/>
+      <rect x="15" y="8" width="1" height="1"/>
+      <rect x="0" y="9" width="1" height="1"/>
+      <rect x="1" y="9" width="1" height="1"/>
+      <rect x="2" y="9" width="1" height="1"/>
+      <rect x="3" y="9" width="1" height="1"/>
+      <rect x="4" y="9" width="1" height="1"/>
+      <rect x="5" y="9" width="1" height="1"/>
+      <rect x="6" y="9" width="1" height="1"/>
+      <rect x="7" y="9" width="1" height="1"/>
+      <rect x="8" y="9" width="1" height="1"/>
+      <rect x="9" y="9" width="1" height="1"/>
+      <rect x="10" y="9" width="1" height="1"/>
+      <rect x="11" y="9" width="1" height="1"/>
+      <rect x="12" y="9" width="1" height="1"/>
+      <rect x="13" y="9" width="1" height="1"/>
+      <rect x="14" y="9" width="1" height="1"/>
+      <rect x="15" y="9" width="1" height="1"/>
+      <rect x="0" y="10" width="1" height="1"/>
+      <rect x="1" y="10" width="1" height="1"/>
+      <rect x="2" y="10" width="1" height="1"/>
+      <rect x="3" y="10" width="1" height="1"/>
+      <rect x="4" y="10" width="1" height="1"/>
+      <rect x="5" y="10" width="1" height="1"/>
+      <rect x="6" y="10" width="1" height="1"/>
+      <rect x="7" y="10" width="1" height="1"/>
+      <rect x="8" y="10" width="1" height="1"/>
+      <rect x="9" y="10" width="1" height="1"/>
+      <rect x="10" y="10" width="1" height="1"/>
+      <rect x="11" y="10" width="1" height="1"/>
+      <rect x="12" y="10" width="1" height="1"/>
+      <rect x="13" y="10" width="1" height="1"/>
+      <rect x="14" y="10" width="1" height="1"/>
+      <rect x="15" y="10" width="1" height="1"/>
+      <rect x="0" y="11" width="1" height="1"/>
+      <rect x="1" y="11" width="1" height="1"/>
+      <rect x="2" y="11" width="1" height="1"/>
+      <rect x="3" y="11" width="1" height="1"/>
+      <rect x="4" y="11" width="1" height="1"/>
+      <rect x="5" y="11" width="1" height="1"/>
+      <rect x="6" y="11" width="1" height="1"/>
+      <rect x="7" y="11" width="1" height="1"/>
+      <rect x="8" y="11" width="1" height="1"/>
+      <rect x="9" y="11" width="1" height="1"/>
+      <rect x="10" y="11" width="1" height="1"/>
+      <rect x="11" y="11" width="1" height="1"/>
+      <rect x="12" y="11" width="1" height="1"/>
+      <rect x="13" y="11" width="1" height="1"/>
+      <rect x="14" y="11" width="1" height="1"/>
+      <rect x="15" y="11" width="1" height="1"/>
+      <rect x="0" y="12" width="1" height="1"/>
+      <rect x="1" y="12" width="1" height="1"/>
+      <rect x="2" y="12" width="1" height="1"/>
+      <rect x="3" y="12" width="1" height="1"/>
+      <rect x="4" y="12" width="1" height="1"/>
+      <rect x="5" y="12" width="1" height="1"/>
+      <rect x="6" y="12" width="1" height="1"/>
+      <rect x="7" y="12" width="1" height="1"/>
+      <rect x="8" y="12" width="1" height="1"/>
+      <rect x="9" y="12" width="1" height="1"/>
+      <rect x="10" y="12" width="1" height="1"/>
+      <rect x="11" y="12" width="1" height="1"/>
+      <rect x="12" y="12" width="1" height="1"/>
+      <rect x="13" y="12" width="1" height="1"/>
+      <rect x="14" y="12" width="1" height="1"/>
+      <rect x="15" y="12" width="1" height="1"/>
+      <rect x="1" y="13" width="1" height="1"/>
+      <rect x="2" y="13" width="1" height="1"/>
+      <rect x="3" y="13" width="1" height="1"/>
+      <rect x="4" y="13" width="1" height="1"/>
+      <rect x="5" y="13" width="1" height="1"/>
+      <rect x="6" y="13" width="1" height="1"/>
+      <rect x="7" y="13" width="1" height="1"/>
+      <rect x="8" y="13" width="1" height="1"/>
+      <rect x="9" y="13" width="1" height="1"/>
+      <rect x="10" y="13" width="1" height="1"/>
+      <rect x="11" y="13" width="1" height="1"/>
+      <rect x="12" y="13" width="1" height="1"/>
+      <rect x="13" y="13" width="1" height="1"/>
+      <rect x="14" y="13" width="1" height="1"/>
+      <rect x="2" y="14" width="1" height="1"/>
+      <rect x="3" y="14" width="1" height="1"/>
+      <rect x="4" y="14" width="1" height="1"/>
+      <rect x="5" y="14" width="1" height="1"/>
+      <rect x="6" y="14" width="1" height="1"/>
+      <rect x="7" y="14" width="1" height="1"/>
+      <rect x="8" y="14" width="1" height="1"/>
+      <rect x="9" y="14" width="1" height="1"/>
+      <rect x="10" y="14" width="1" height="1"/>
+      <rect x="11" y="14" width="1" height="1"/>
+      <rect x="12" y="14" width="1" height="1"/>
+      <rect x="13" y="14" width="1" height="1"/>
+      <rect x="3" y="15" width="1" height="1"/>
+      <rect x="4" y="15" width="1" height="1"/>
+      <rect x="5" y="15" width="1" height="1"/>
+      <rect x="6" y="15" width="1" height="1"/>
+      <rect x="7" y="15" width="1" height="1"/>
+      <rect x="8" y="15" width="1" height="1"/>
+      <rect x="9" y="15" width="1" height="1"/>
+      <rect x="10" y="15" width="1" height="1"/>
+      <rect x="11" y="15" width="1" height="1"/>
+      <rect x="12" y="15" width="1" height="1"/>
+      <rect x="4" y="16" width="1" height="1"/>
+      <rect x="5" y="16" width="1" height="1"/>
+      <rect x="6" y="16" width="1" height="1"/>
+      <rect x="7" y="16" width="1" height="1"/>
+      <rect x="8" y="16" width="1" height="1"/>
+      <rect x="9" y="16" width="1" height="1"/>
+      <rect x="10" y="16" width="1" height="1"/>
+      <rect x="11" y="16" width="1" height="1"/>
+      <rect x="5" y="17" width="1" height="1"/>
+      <rect x="6" y="17" width="1" height="1"/>
+      <rect x="7" y="17" width="1" height="1"/>
+      <rect x="8" y="17" width="1" height="1"/>
+      <rect x="9" y="17" width="1" height="1"/>
+      <rect x="10" y="17" width="1" height="1"/>
       </svg>
     </div>
 
     <!-- 标题与入口 -->
     <div class="home-copy">
-      <h1 class="home-title">赛制面板</h1>
-      <p class="home-sub">TOURNAMENT · ARENA</p>
+      <h1 class="home-title">右手杯</h1>
+      <p class="home-sub">RIGHT HAND CUP</p>
+      <div class="home-line" aria-hidden="true"></div>
       <a class="home-cta" href="schedule.html">进入赛程</a>
     </div>
   </main>
