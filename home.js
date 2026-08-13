@@ -18,21 +18,27 @@
   function renderMarquee() {
     const app = window.TournamentApp;
     const record = app && app.current;
-    const track = document.getElementById('marquee-track');
-    if (!track || !record || !Array.isArray(record.players)) return;
+    if (!record || !Array.isArray(record.players)) return;
     const players = record.players;
     if (!players.length) {
-      track.innerHTML = '';
+      for (const id of ['marquee-track', 'marquee-track-reverse']) {
+        const track = document.getElementById(id);
+        if (track) track.innerHTML = '';
+      }
       return;
     }
     const items = players.map((player) =>
       '<div class="marquee-item">' +
-      avatarMarkup(player, 'avatar-md') +
+      avatarMarkup(player, 'avatar-lg') +
       '<span class="marquee-name">' + escapeHtml(player.name) + '</span>' +
       '</div>'
     ).join('');
-    /* 无缝滚动：内容复制两份，轨道平移 -50% 即一个完整循环 */
-    track.innerHTML = items + items;
+    /* 无缝滚动：内容重复两份，轨道平移 -50% 即一个完整循环 */
+    const doubled = items + items;
+    const track = document.getElementById('marquee-track');
+    const reverseTrack = document.getElementById('marquee-track-reverse');
+    if (track) track.innerHTML = doubled;
+    if (reverseTrack) reverseTrack.innerHTML = doubled;
   }
 
   document.addEventListener('ts:ready', () => {
