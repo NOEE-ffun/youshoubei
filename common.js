@@ -330,6 +330,40 @@
     });
   }
 
+  /* 头像压缩：中心裁切成 200×200 方形后转 JPEG */
+  function compressAvatar(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.type || !file.type.startsWith('image/')) {
+        reject(new Error('请选择图片文件'));
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        const size = Math.min(image.naturalWidth, image.naturalHeight);
+        const canvas = document.createElement('canvas');
+        canvas.width = 200;
+        canvas.height = 200;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image,
+          (image.naturalWidth - size) / 2,
+          (image.naturalHeight - size) / 2,
+          size, size,
+          0, 0, 200, 200);
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('图片压缩失败'));
+        }, 'image/jpeg', 0.85);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error('无法读取图片'));
+      };
+      image.src = url;
+    });
+  }
+
   /* ---------- 灯箱 ---------- */
 
   let lightbox = null;
@@ -718,6 +752,21 @@
 
   /* ---------- 背景与页头 ---------- */
 
+  /* 头像 HTML：有图显示图片，无图显示首字符占位（颜色按选手 id 确定性取） */
+  function avatarMarkup(player, sizeClass) {
+    const cls = 'avatar ' + sizeClass;
+    if (player && player.avatar) {
+      return '<img class="' + cls + '" src="' + blobUrl(player.avatar) + '"' +
+        ' alt="' + escapeHtml(player.name || '') + ' 的头像">';
+    }
+    const initial = String((player && player.name) || '?').trim().charAt(0) || '?';
+    const color = (typeof BracketModel !== 'undefined' && BracketModel.avatarColor)
+      ? BracketModel.avatarColor(player ? player.id : '')
+      : '#3563e9';
+    return '<span class="' + cls + ' avatar-fallback" style="background:' + color + '">' +
+      escapeHtml(initial) + '</span>';
+  }
+
   function applyBackground(record) {
     const layer = document.getElementById('bg-layer');
     if (!layer) return;
@@ -816,6 +865,7 @@
       uid,
       blobUrl,
       compressImage,
+      compressAvatar,
       openLightbox,
       openSettings: openSettingsDialog,
       openManage: openManageDialog,
