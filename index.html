@@ -15,21 +15,32 @@
   <main class="home-main">
     <!-- 主视觉：线稿右手夹卡牌（半透明，位于标题后方） -->
     <div class="home-hero" aria-hidden="true">
-      <svg class="hand-svg" viewBox="0 0 400 460" role="img" aria-label="右手食指与中指夹住一张卡牌">
-        <!-- 无名指与小指（先画，位于卡牌后方） -->
-        <path class="finger back" d="M 285 470 C 288 420 278 380 268 355" />
-        <path class="finger back" d="M 255 470 C 258 410 250 360 243 315" />
-        <!-- 卡牌：外框 + 内框 + 顶部标题线（逆时针旋转 10°） -->
-        <g transform="rotate(-10 200 165)">
-          <rect class="card-frame" x="125" y="60" width="150" height="210" rx="14" />
-          <rect class="card-inner" x="140" y="75" width="120" height="180" rx="10" />
-          <line class="card-line" x1="150" y1="95" x2="240" y2="95" />
+      <svg class="hand-svg" viewBox="0 0 400 460">
+        <!-- 双层描边：底层常显，上层亮点沿线条循环流动（见 styles.css） -->
+        <g class="hand-base">
+          <path class="finger back" d="M 285 470 C 288 420 278 380 268 355" />
+          <path class="finger back" d="M 255 470 C 258 410 250 360 243 315" />
+          <g transform="rotate(-10 200 165)">
+            <rect class="card-frame" x="125" y="60" width="150" height="210" rx="14" />
+            <rect class="card-inner" x="140" y="75" width="120" height="180" rx="10" />
+            <line class="card-line" x1="150" y1="95" x2="240" y2="95" />
+          </g>
+          <path class="thumb" d="M 140 470 C 100 400 100 320 135 285" />
+          <path class="finger" d="M 222 470 L 222 100" />
+          <path class="finger" d="M 178 470 L 178 112" />
         </g>
-        <!-- 拇指：弯曲压住卡牌下缘 -->
-        <path class="thumb" d="M 140 470 C 100 400 100 320 135 285" />
-        <!-- 中指与食指：从卡牌前方夹住 -->
-        <path class="finger" d="M 222 470 L 222 100" />
-        <path class="finger" d="M 178 470 L 178 112" />
+        <g class="hand-glow">
+          <path class="finger back" d="M 285 470 C 288 420 278 380 268 355" />
+          <path class="finger back" d="M 255 470 C 258 410 250 360 243 315" />
+          <g transform="rotate(-10 200 165)">
+            <rect class="card-frame" x="125" y="60" width="150" height="210" rx="14" />
+            <rect class="card-inner" x="140" y="75" width="120" height="180" rx="10" />
+            <line class="card-line" x1="150" y1="95" x2="240" y2="95" />
+          </g>
+          <path class="thumb" d="M 140 470 C 100 400 100 320 135 285" />
+          <path class="finger" d="M 222 470 L 222 100" />
+          <path class="finger" d="M 178 470 L 178 112" />
+        </g>
       </svg>
     </div>
 

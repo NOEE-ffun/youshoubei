@@ -1279,16 +1279,17 @@ body.home-page {
 .hand-svg .finger.back { opacity: 0.45; }
 .hand-svg .thumb      { stroke-width: 3.5; }
 
-/* 描边流动：线条如墨水不断描画 */
-.hand-svg path,
-.hand-svg rect,
-.hand-svg line {
-  stroke-dasharray: 1200;
-  animation: hand-draw 9s linear infinite;
+/* 双层描边：底层常显，亮点段沿线条流动如不断描画 */
+.hand-svg .hand-glow path,
+.hand-svg .hand-glow rect,
+.hand-svg .hand-glow line {
+  stroke: oklch(100% 0 0 / 0.55);
+  stroke-dasharray: 60 300;
+  animation: hand-flow 6s linear infinite;
 }
 
-@keyframes hand-draw {
-  from { stroke-dashoffset: 2400; }
+@keyframes hand-flow {
+  from { stroke-dashoffset: 720; }
   to   { stroke-dashoffset: 0; }
 }
 
@@ -1368,9 +1369,9 @@ body.home-page {
   body.home-page .home-title,
   body.home-page .home-sub,
   body.home-page .home-cta,
-  body.home-page .hand-svg path,
-  body.home-page .hand-svg rect,
-  body.home-page .hand-svg line {
+  body.home-page .hand-svg .hand-glow path,
+  body.home-page .hand-svg .hand-glow rect,
+  body.home-page .hand-svg .hand-glow line {
     animation: none;
   }
 }
