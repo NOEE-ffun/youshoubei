@@ -197,13 +197,12 @@
     );
   }
 
-  function columnGroup(matches, roundLabels) {
+  function columnGroup(matches) {
     const rounds = [...new Set(matches.map((m) => m.round))];
     return rounds.map((round) => {
       const list = matches.filter((m) => m.round === round);
       return (
         '<div class="bracket-col">' +
-        '<p class="round-label">' + roundLabels[round] + '</p>' +
         list.map((m) => matchCard(m, currentNames(), currentRecord())).join('') +
         '</div>'
       );
@@ -224,18 +223,9 @@
     const matches = BracketModel.resolveAll(seeds, record.scores);
     const groups = BracketModel.groupByPhase(matches);
 
-    document.getElementById('wb-flow').innerHTML = columnGroup(
-      groups.wb,
-      { 1: '第一轮', 2: '半决赛', 3: '决赛' }
-    );
-    document.getElementById('lb-flow').innerHTML = columnGroup(
-      groups.lb,
-      { 1: '第一轮', 2: '第二轮', 3: '半决赛', 4: '决赛' }
-    );
-    document.getElementById('gf-flow').innerHTML = columnGroup(
-      groups.gf,
-      { 1: '总决赛' }
-    );
+    document.getElementById('wb-flow').innerHTML = columnGroup(groups.wb);
+    document.getElementById('lb-flow').innerHTML = columnGroup(groups.lb);
+    document.getElementById('gf-flow').innerHTML = columnGroup(groups.gf);
   }
 
   function bindBracket() {
