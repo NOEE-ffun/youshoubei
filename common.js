@@ -796,10 +796,11 @@
     ).join('');
     placeholder.innerHTML =
       '<div class="header-inner">' +
-      '  <span class="brand">赛制面板</span>' +
+      '  <a class="brand" href="index.html">赛制面板</a>' +
       '  <span class="header-title" title="' + escapeHtml(active.name) + '">' + escapeHtml(active.name) + '</span>' +
       '  <nav class="main-nav" aria-label="页面导航">' +
-      '    <a href="index.html" data-page="index">赛程</a>' +
+      '    <a href="index.html" data-page="home">主页</a>' +
+      '    <a href="schedule.html" data-page="schedule">赛程</a>' +
       '  </nav>' +
       '  <div class="header-actions">' +
       '    <label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
