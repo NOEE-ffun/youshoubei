@@ -1199,3 +1199,178 @@ dialog::backdrop {
 }
 .avatar-action.danger { color: var(--danger); }
 .deck-player-head { display: flex; align-items: center; gap: 0.625rem; }
+
+/* ========== 主页（品牌门户） ========== */
+
+body.home-page {
+  margin: 0;
+  min-height: 100vh;
+  background: #0b1020;
+  color: #fff;
+  overflow-x: hidden;
+}
+
+/* 流体渐变背景：多层模糊光斑缓慢流动 */
+.home-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image:
+    radial-gradient(circle at 18% 28%, oklch(72% 0.24 305 / 0.55), transparent 46%),
+    radial-gradient(circle at 82% 18%, oklch(64% 0.22 258 / 0.5), transparent 42%),
+    radial-gradient(circle at 72% 82%, oklch(76% 0.2 345 / 0.42), transparent 46%),
+    radial-gradient(circle at 12% 88%, oklch(60% 0.2 195 / 0.42), transparent 42%);
+  background-size: 220% 220%, 240% 240%, 200% 200%, 230% 230%;
+  animation: home-flow 14s ease-in-out infinite alternate;
+}
+
+@keyframes home-flow {
+  from { background-position: 0% 0%, 100% 0%, 0% 100%, 100% 100%; }
+  to   { background-position: 100% 100%, 0% 100%, 100% 0%, 0% 0%; }
+}
+
+/* 细噪点质感：内联 SVG 图案 */
+.home-noise {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+/* 主内容：网格单格叠放（手在标题后方） */
+.home-main {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 3rem 1.5rem;
+}
+
+.home-hero {
+  grid-area: 1 / 1;
+  inline-size: min(78vw, 560px);
+  opacity: 0.55;
+  animation: hand-float 7s ease-in-out infinite alternate;
+}
+
+.hand-svg {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  overflow: hidden;
+}
+
+/* 线稿样式：白描边、圆头圆角 */
+.hand-svg path,
+.hand-svg rect,
+.hand-svg line {
+  fill: none;
+  stroke: oklch(100% 0 0 / 0.92);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hand-svg .card-frame { stroke-width: 2; }
+.hand-svg .card-inner { stroke-width: 1.2; opacity: 0.65; }
+.hand-svg .card-line  { stroke-width: 1.2; opacity: 0.65; }
+.hand-svg .finger     { stroke-width: 3.5; }
+.hand-svg .finger.back { opacity: 0.45; }
+.hand-svg .thumb      { stroke-width: 3.5; }
+
+/* 描边流动：线条如墨水不断描画 */
+.hand-svg path,
+.hand-svg rect,
+.hand-svg line {
+  stroke-dasharray: 1200;
+  animation: hand-draw 9s linear infinite;
+}
+
+@keyframes hand-draw {
+  from { stroke-dashoffset: 2400; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes hand-float {
+  from { transform: translateY(-7px); }
+  to   { transform: translateY(7px); }
+}
+
+/* 标题与入口（压在图形前方） */
+.home-copy {
+  grid-area: 1 / 1;
+  text-align: center;
+  padding-block-start: 24vh;
+}
+
+.home-title {
+  margin: 0;
+  font-size: clamp(3rem, 11vw, 6.5rem);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.05;
+  background: linear-gradient(180deg, #fff 45%, oklch(86% 0.09 300 / 0.75));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: home-rise 700ms var(--ease) both;
+}
+
+.home-sub {
+  margin: 1.1rem 0 2.6rem;
+  font-size: clamp(0.8rem, 1.6vw, 1rem);
+  font-weight: 600;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  color: oklch(90% 0.03 300 / 0.75);
+  animation: home-rise 700ms 120ms var(--ease) both;
+}
+
+.home-cta {
+  display: inline-block;
+  padding: 0.9rem 2.6rem;
+  border-radius: 999px;
+  border: 1px solid oklch(100% 0 0 / 0.55);
+  background: oklch(100% 0 0 / 0.08);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-indent: 0.2em;
+  text-decoration: none;
+  transition:
+    background 200ms var(--ease),
+    border-color 200ms var(--ease),
+    box-shadow 200ms var(--ease),
+    transform 200ms var(--ease);
+  animation: home-rise 700ms 240ms var(--ease) both;
+}
+
+.home-cta:hover {
+  background: oklch(100% 0 0 / 0.18);
+  border-color: oklch(100% 0 0 / 0.9);
+  box-shadow: 0 0 34px oklch(72% 0.2 300 / 0.5);
+  transform: translateY(-2px);
+}
+
+@keyframes home-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* 无障碍：减少动效偏好时停用全部动画 */
+@media (prefers-reduced-motion: reduce) {
+  body.home-page .home-bg,
+  body.home-page .home-hero,
+  body.home-page .home-title,
+  body.home-page .home-sub,
+  body.home-page .home-cta,
+  body.home-page .hand-svg path,
+  body.home-page .hand-svg rect,
+  body.home-page .hand-svg line {
+    animation: none;
+  }
+}

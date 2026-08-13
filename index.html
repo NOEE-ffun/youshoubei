@@ -3,78 +3,42 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
-  <title>赛程 - 赛制面板</title>
+  <meta name="color-scheme" content="dark">
+  <title>赛制面板</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-  <a class="skip-link" href="#main-content">跳到主要内容</a>
-  <div id="bg-layer" aria-hidden="true"></div>
-  <header id="app-header"></header>
+<body class="home-page">
+  <!-- 流体渐变背景与噪点质感 -->
+  <div class="home-bg" aria-hidden="true"></div>
+  <div class="home-noise" aria-hidden="true"></div>
 
-  <div class="page-wrap" id="page-wrap">
-    <aside class="rules-sidebar" id="rules-sidebar" aria-label="赛制规则">
-      <div class="rules-sidebar-head">
-        <h2>赛制规则</h2>
-        <button type="button" id="rules-toggle" class="btn btn-ghost btn-sm rules-toggle" aria-expanded="true">收起</button>
-      </div>
-      <div class="rules-body">
-        <p class="rules-text" id="rules-text"></p>
-        <button type="button" id="rules-edit" class="btn btn-secondary btn-sm">编辑规则</button>
-      </div>
-    </aside>
+  <main class="home-main">
+    <!-- 主视觉：线稿右手夹卡牌（半透明，位于标题后方） -->
+    <div class="home-hero" aria-hidden="true">
+      <svg class="hand-svg" viewBox="0 0 400 460" role="img" aria-label="右手食指与中指夹住一张卡牌">
+        <!-- 无名指与小指（先画，位于卡牌后方） -->
+        <path class="finger back" d="M 285 470 C 288 420 278 380 268 355" />
+        <path class="finger back" d="M 255 470 C 258 410 250 360 243 315" />
+        <!-- 卡牌：外框 + 内框 + 顶部标题线（逆时针旋转 10°） -->
+        <g transform="rotate(-10 200 165)">
+          <rect class="card-frame" x="125" y="60" width="150" height="210" rx="14" />
+          <rect class="card-inner" x="140" y="75" width="120" height="180" rx="10" />
+          <line class="card-line" x1="150" y1="95" x2="240" y2="95" />
+        </g>
+        <!-- 拇指：弯曲压住卡牌下缘 -->
+        <path class="thumb" d="M 140 470 C 100 400 100 320 135 285" />
+        <!-- 中指与食指：从卡牌前方夹住 -->
+        <path class="finger" d="M 222 470 L 222 100" />
+        <path class="finger" d="M 178 470 L 178 112" />
+      </svg>
+    </div>
 
-    <main id="main-content" tabindex="-1">
-      <h1>赛程</h1>
-
-      <div class="champion-banner" id="champion-banner" hidden>
-        <span class="medal" aria-hidden="true">🏆</span>
-        <span id="champion-text"></span>
-      </div>
-
-      <div class="toolbar">
-        <button type="button" id="show-rules-btn" class="btn btn-secondary btn-sm" hidden>查看规则</button>
-        <span class="spacer" aria-hidden="true"></span>
-        <button type="button" id="reset-scores-btn" class="btn btn-danger btn-sm">重置比分</button>
-      </div>
-
-      <section aria-labelledby="roster-title">
-        <h2 class="section-title" id="roster-title">
-          选手名单
-          <span class="phase-tag">按顺序配对 1v2 · 3v4 · 5v6 · 7v8</span>
-        </h2>
-        <div class="roster-grid" id="roster-grid"></div>
-      </section>
-
-      <section aria-labelledby="wb-title">
-        <h2 class="section-title" id="wb-title">
-          胜者组
-          <span class="phase-tag">失利进败者组</span>
-        </h2>
-        <div class="bracket-flow" id="wb-flow" style="--rounds: 3"></div>
-      </section>
-
-      <section aria-labelledby="lb-title">
-        <h2 class="section-title" id="lb-title">
-          败者组
-          <span class="phase-tag">再败出局</span>
-        </h2>
-        <div class="bracket-flow" id="lb-flow" style="--rounds: 4"></div>
-      </section>
-
-      <section aria-labelledby="gf-title">
-        <h2 class="section-title" id="gf-title">
-          总决赛
-          <span class="phase-tag">BO5</span>
-        </h2>
-        <div class="bracket-flow" id="gf-flow" style="--rounds: 1"></div>
-      </section>
-    </main>
-  </div>
-
-  <script src="bracket-model.js"></script>
-  <script src="common.js"></script>
-  <script src="deck-modal.js"></script>
-  <script src="bracket.js"></script>
+    <!-- 标题与入口 -->
+    <div class="home-copy">
+      <h1 class="home-title">赛制面板</h1>
+      <p class="home-sub">TOURNAMENT · ARENA</p>
+      <a class="home-cta" href="schedule.html">进入赛程</a>
+    </div>
+  </main>
 </body>
 </html>
