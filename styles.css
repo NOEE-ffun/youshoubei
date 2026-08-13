@@ -1193,3 +1193,4 @@ dialog::backdrop {
   box-shadow: var(--shadow-sm);
 }
 .avatar-action.danger { color: var(--danger); }
+.deck-player-head { display: flex; align-items: center; gap: 0.625rem; }
