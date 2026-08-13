@@ -103,9 +103,13 @@
     const record = window.TournamentApp.current;
     const decks = (record.matchDecks[match.id] && record.matchDecks[match.id][playerId]) || [];
     const editable = canEdit();
+    const avatarPlayer = record.players.find((p) => p.id === playerId);
     return (
       '<section class="deck-player" data-player="' + playerId + '">' +
-      '<h3>' + escapeHtml(names.get(playerId) || '选手') + '</h3>' +
+      '<h3 class="deck-player-head">' +
+      avatarMarkup(avatarPlayer, 'avatar-md') +
+      '<span>' + escapeHtml(names.get(playerId) || '选手') + '</span>' +
+      '</h3>' +
       decks.map((deck, deckIndex) => deckBlock(playerId, deck, deckIndex, editable)).join('') +
       '</section>'
     );

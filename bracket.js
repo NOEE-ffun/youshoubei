@@ -146,6 +146,10 @@
     const participant = side === 0 ? match.a : match.b;
     const name = participant ? (names.get(participant) || '待定') : '待定';
     const score = side === 0 ? match.scoreA : match.scoreB;
+    const app = window.TournamentApp;
+    const avatarPlayer = app && app.current
+      ? app.current.players.find((p) => p.id === participant)
+      : null;
     let className = 'match-player';
     if (!participant) className += ' tbd';
     if (match.played) {
@@ -154,6 +158,7 @@
     }
     return (
       '<div class="' + className + '">' +
+      avatarMarkup(avatarPlayer, 'avatar-sm') +
       '<span class="player-name">' + escapeHtml(name) + '</span>' +
       '<span class="player-score">' + (score == null ? '' : score) + '</span>' +
       '</div>'
