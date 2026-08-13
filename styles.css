@@ -1201,46 +1201,49 @@ dialog::backdrop {
 .avatar-action.danger { color: var(--danger); }
 .deck-player-head { display: flex; align-items: center; gap: 0.625rem; }
 
-/* ========== 主页（品牌门户） ========== */
+
+/* ========== 主页（右手杯 · 极简黑白） ========== */
 
 body.home-page {
   margin: 0;
   min-height: 100vh;
-  background: #0b1020;
-  color: #fff;
+  background: #fff;
+  color: #000;
   overflow-x: hidden;
 }
 
-/* 流体渐变背景：多层模糊光斑缓慢流动 */
-.home-bg {
+/* 二进制装饰列：左右两侧竖排 0/1，低对比度 */
+.bin-col {
   position: fixed;
-  inset: 0;
-  z-index: -2;
-  background-image:
-    radial-gradient(circle at 18% 28%, oklch(72% 0.24 305 / 0.55), transparent 46%),
-    radial-gradient(circle at 82% 18%, oklch(64% 0.22 258 / 0.5), transparent 42%),
-    radial-gradient(circle at 72% 82%, oklch(76% 0.2 345 / 0.42), transparent 46%),
-    radial-gradient(circle at 12% 88%, oklch(60% 0.2 195 / 0.42), transparent 42%);
-  background-size: 220% 220%, 240% 240%, 200% 200%, 230% 230%;
-  animation: home-flow 14s ease-in-out infinite alternate;
-}
-
-@keyframes home-flow {
-  from { background-position: 0% 0%, 100% 0%, 0% 100%, 100% 100%; }
-  to   { background-position: 100% 100%, 0% 100%, 100% 0%, 0% 0%; }
-}
-
-/* 细噪点质感：内联 SVG 图案 */
-.home-noise {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  opacity: 0.5;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E");
+  inset-block: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.9;
+  color: #000;
+  opacity: 0.07;
   pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+.bin-left  { inset-inline-start: 1.25rem; }
+.bin-right { inset-inline-end: 1.25rem; }
+
+.bin-col span {
+  display: block;
+  animation: bin-blink 3s steps(1) infinite;
+}
+.bin-col span:nth-child(2n) { animation-delay: 1.5s; }
+.bin-col span:nth-child(3n) { animation-delay: 0.75s; }
+
+@keyframes bin-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.15; }
 }
 
-/* 主内容：网格单格叠放（手在标题后方） */
+/* 主内容：网格单格叠放（像素手在标题后方） */
 .home-main {
   position: relative;
   display: grid;
@@ -1251,129 +1254,107 @@ body.home-page {
 
 .home-hero {
   grid-area: 1 / 1;
-  inline-size: min(78vw, 560px);
-  opacity: 0.55;
-  animation: hand-float 7s ease-in-out infinite alternate;
+  opacity: 0.16;
 }
 
-.hand-svg {
+/* 像素点阵手：SVG 1×1 方块 */
+.pixel-hand {
   display: block;
-  inline-size: 100%;
+  inline-size: min(58vw, 320px);
   block-size: auto;
   overflow: hidden;
 }
+.pixel-hand rect { fill: #000; }
 
-/* 线稿样式：白描边、圆头圆角 */
-.hand-svg path,
-.hand-svg rect,
-.hand-svg line {
-  fill: none;
-  stroke: oklch(100% 0 0 / 0.92);
-  stroke-linecap: round;
-  stroke-linejoin: round;
+/* 部分像素缓慢闪烁（二进制流动感） */
+.pixel-hand .blink { animation: px-blink 2.4s steps(1) infinite; }
+.pixel-hand .blink:nth-child(2n) { animation-delay: 1.2s; }
+
+@keyframes px-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
 }
 
-.hand-svg .card-frame { stroke-width: 2; }
-.hand-svg .card-inner { stroke-width: 1.2; opacity: 0.65; }
-.hand-svg .card-line  { stroke-width: 1.2; opacity: 0.65; }
-.hand-svg .finger     { stroke-width: 3.5; }
-.hand-svg .finger.back { opacity: 0.45; }
-.hand-svg .thumb      { stroke-width: 3.5; }
-
-/* 双层描边：底层常显，亮点段沿线条流动如不断描画 */
-.hand-svg .hand-glow path,
-.hand-svg .hand-glow rect,
-.hand-svg .hand-glow line {
-  stroke: oklch(100% 0 0 / 0.55);
-  stroke-dasharray: 60 300;
-  animation: hand-flow 6s linear infinite;
-}
-
-@keyframes hand-flow {
-  from { stroke-dashoffset: 720; }
-  to   { stroke-dashoffset: 0; }
-}
-
-@keyframes hand-float {
-  from { transform: translateY(-7px); }
-  to   { transform: translateY(7px); }
-}
-
-/* 标题与入口（压在图形前方） */
+/* 标题与入口 */
 .home-copy {
   grid-area: 1 / 1;
   text-align: center;
-  padding-block-start: 24vh;
+  padding-block-start: 26vh;
 }
 
 .home-title {
   margin: 0;
-  font-size: clamp(3rem, 11vw, 6.5rem);
+  font-size: clamp(3.2rem, 12vw, 7.5rem);
   font-weight: 900;
-  letter-spacing: 0.06em;
-  line-height: 1.05;
-  background: linear-gradient(180deg, #fff 45%, oklch(86% 0.09 300 / 0.75));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  line-height: 1.08;
+  color: #000;
   animation: home-rise 700ms var(--ease) both;
 }
 
 .home-sub {
-  margin: 1.1rem 0 2.6rem;
-  font-size: clamp(0.8rem, 1.6vw, 1rem);
+  margin: 1.4rem 0 0;
+  font-size: clamp(0.7rem, 1.6vw, 0.95rem);
   font-weight: 600;
-  letter-spacing: 0.5em;
-  text-indent: 0.5em;
-  white-space: nowrap;
-  color: oklch(90% 0.03 300 / 0.75);
+  letter-spacing: 0.45em;
+  text-indent: 0.45em;
+  color: #000;
+  opacity: 0.55;
   animation: home-rise 700ms 120ms var(--ease) both;
+}
+
+/* 标题下细黑线：循环从左向右绘制 */
+.home-line {
+  inline-size: min(58vw, 460px);
+  block-size: 2px;
+  background: #000;
+  margin: 2.4rem auto 2.8rem;
+  transform-origin: left center;
+  animation: line-draw 3s var(--ease) infinite;
+}
+
+@keyframes line-draw {
+  0%   { transform: scaleX(0); }
+  55%  { transform: scaleX(1); }
+  100% { transform: scaleX(1); }
 }
 
 .home-cta {
   display: inline-block;
-  padding: 0.9rem 2.6rem;
-  border-radius: 999px;
-  border: 1px solid oklch(100% 0 0 / 0.55);
-  background: oklch(100% 0 0 / 0.08);
-  -webkit-backdrop-filter: blur(10px);
-  backdrop-filter: blur(10px);
+  padding: 0.95rem 3rem;
+  background: #000;
   color: #fff;
   font-size: 1.05rem;
   font-weight: 700;
-  letter-spacing: 0.2em;
-  text-indent: 0.2em;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
   text-decoration: none;
+  border: 1px solid #000;
   transition:
-    background 200ms var(--ease),
-    border-color 200ms var(--ease),
-    box-shadow 200ms var(--ease),
-    transform 200ms var(--ease);
+    background 180ms var(--ease),
+    color 180ms var(--ease);
   animation: home-rise 700ms 240ms var(--ease) both;
 }
 
 .home-cta:hover {
-  background: oklch(100% 0 0 / 0.18);
-  border-color: oklch(100% 0 0 / 0.9);
-  box-shadow: 0 0 34px oklch(72% 0.2 300 / 0.5);
-  transform: translateY(-2px);
+  background: #fff;
+  color: #000;
 }
 
 @keyframes home-rise {
-  from { opacity: 0; transform: translateY(18px); }
+  from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
 /* 无障碍：减少动效偏好时停用全部动画 */
 @media (prefers-reduced-motion: reduce) {
-  body.home-page .home-bg,
-  body.home-page .home-hero,
+  body.home-page .bin-col span,
+  body.home-page .pixel-hand .blink,
   body.home-page .home-title,
   body.home-page .home-sub,
-  body.home-page .home-cta,
-  body.home-page .hand-svg .hand-glow path,
-  body.home-page .hand-svg .hand-glow rect,
-  body.home-page .hand-svg .hand-glow line {
+  body.home-page .home-line,
+  body.home-page .home-cta {
     animation: none;
   }
 }
