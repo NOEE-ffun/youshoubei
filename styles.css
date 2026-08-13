@@ -1337,3 +1337,36 @@ dialog::backdrop {
     animation: none;
   }
 }
+
+/* ========== 页面切换过渡（跨文档 View Transitions） ========== */
+
+/* 旧页轻微上移淡出，新页自下淡入——切换不再生硬白屏 */
+::view-transition-old(root) {
+  animation: vt-leave 180ms var(--ease-out) both;
+}
+
+::view-transition-new(root) {
+  animation: vt-enter 260ms var(--ease-out) both;
+}
+
+@keyframes vt-leave {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes vt-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* 无障碍：减少动效偏好时跳过页面过渡 */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
