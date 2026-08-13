@@ -19,9 +19,14 @@
     </section>
   </main>
 
-  <!-- 选手跑马灯：联动赛程页填写的选手信息 -->
+  <!-- 选手跑马灯：双行反向滚动，联动赛程页填写的选手信息 -->
   <div class="home-marquee" aria-label="参赛选手">
-    <div class="marquee-track" id="marquee-track"></div>
+    <div class="marquee-row">
+      <div class="marquee-track" id="marquee-track"></div>
+    </div>
+    <div class="marquee-row">
+      <div class="marquee-track marquee-track-reverse" id="marquee-track-reverse"></div>
+    </div>
   </div>
 
   <script src="bracket-model.js"></script>

@@ -1271,7 +1271,7 @@ dialog::backdrop {
   min-height: calc(100vh - 4rem);
   display: grid;
   place-items: center;
-  padding: 2rem 1.5rem 8rem;
+  padding: 2rem 1.5rem 12rem;
 }
 
 /* 毛玻璃标题卡片：与对局卡片同风格 */
@@ -1296,22 +1296,33 @@ dialog::backdrop {
   color: var(--text);
 }
 
-/* 选手跑马灯：毛玻璃条，横向无缝滚动 */
+/* 选手跑马灯：双行反向滚动，毛玻璃条，横向无缝滚动 */
 .home-marquee {
   position: fixed;
   inset-inline: 0;
   inset-block-end: 0;
+  display: grid;
+  gap: 0.75rem;
   padding: 1rem 0 1.5rem;
   overflow: hidden;
   pointer-events: none;
   z-index: 10;
 }
 
+.marquee-row {
+  overflow: hidden;
+}
+
 .marquee-track {
   display: flex;
-  gap: 1.25rem;
+  gap: 1.5rem;
   inline-size: max-content;
-  animation: marquee 26s linear infinite;
+  animation: marquee 30s linear infinite;
+}
+
+/* 第二行反向滚动 */
+.marquee-track-reverse {
+  animation-direction: reverse;
 }
 
 .home-marquee:hover .marquee-track {
@@ -1326,19 +1337,19 @@ dialog::backdrop {
 .marquee-item {
   display: flex;
   align-items: center;
-  gap: 0.625rem;
+  gap: 0.875rem;
   background: var(--surface-glass);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 0.5rem 1.1rem 0.5rem 0.6rem;
+  padding: 0.7rem 1.6rem 0.7rem 0.75rem;
   box-shadow: var(--shadow-sm);
 }
 
 .marquee-name {
-  font-weight: 700;
-  font-size: 0.95rem;
+  font-weight: 800;
+  font-size: 1.15rem;
   color: var(--text);
   white-space: nowrap;
 }
