@@ -15,6 +15,21 @@
     }[ch]));
   }
 
+  /* 比赛已分出冠亚季军时,返回 playerId → 奖牌信息 的映射;未结束返回空 Map */
+  function medalMap(record) {
+    const map = new Map();
+    if (!record || !Array.isArray(record.players)) return map;
+    const standings = BracketModel.deriveStandings(
+      record.players.map((p) => p.id),
+      record.scores || {}
+    );
+    if (!standings.champion) return map;
+    if (standings.champion) map.set(standings.champion, { type: 'gold', emoji: '🥇' });
+    if (standings.runnerUp) map.set(standings.runnerUp, { type: 'silver', emoji: '🥈' });
+    if (standings.thirdPlace) map.set(standings.thirdPlace, { type: 'bronze', emoji: '🥉' });
+    return map;
+  }
+
   function renderMarquee() {
     const app = window.TournamentApp;
     const record = app && app.current;
@@ -27,12 +42,17 @@
       }
       return;
     }
-    const items = players.map((player) =>
-      '<div class="marquee-item">' +
-      avatarMarkup(player, 'avatar-lg') +
-      '<span class="marquee-name">' + escapeHtml(player.name) + '</span>' +
-      '</div>'
-    ).join('');
+    const medalOf = medalMap(record);
+    const items = players.map((player) => {
+      const medal = medalOf.get(player.id);
+      return (
+        '<div class="marquee-item' + (medal ? ' medal-' + medal.type : '') + '">' +
+        (medal ? '<span class="medal-badge">' + medal.emoji + '</span>' : '') +
+        avatarMarkup(player, 'avatar-lg') +
+        '<span class="marquee-name">' + escapeHtml(player.name) + '</span>' +
+        '</div>'
+      );
+    }).join('');
     /* 无缝滚动：内容重复两份，轨道平移 -50% 即一个完整循环 */
     const doubled = items + items;
     const track = document.getElementById('marquee-track');
