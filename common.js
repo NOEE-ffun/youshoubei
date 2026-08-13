@@ -152,18 +152,53 @@
     return response.json();
   }
 
-  async function cloudPutWorkspace(workspace) {
+  /* 合并冲突消解：云端为底，本地记录按 id 覆盖，activeId 取本地 */
+  function mergeWorkspace(latest, local) {
+    const byId = new Map();
+    for (const t of (latest && latest.tournaments) || []) byId.set(t.id, t);
+    for (const t of (local && local.tournaments) || []) byId.set(t.id, t);
+    return {
+      activeId: (local && local.activeId) || (latest && latest.activeId) || null,
+      tournaments: [...byId.values()]
+    };
+  }
+
+  /* 云端写队列：同一页面内串行化，避免并发写乱序覆盖 */
+  let cloudWriteQueue = Promise.resolve();
+
+  async function cloudPutWorkspace(workspace, options) {
     if (!appInstance.adminToken) throw new Error('需要管理口令');
-    const response = await fetch('/api/data', {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + appInstance.adminToken
-      },
-      body: JSON.stringify(workspace)
-    });
-    if (response.status === 401) throw new Error('管理口令错误');
-    if (!response.ok) throw new Error((await apiErrorMessage(response)) || '保存云端数据失败');
+    const opts = options || {};
+    const run = async () => {
+      let payload = workspace;
+      if (!opts.noMerge) {
+        /* 写前合并：先拉取云端最新，避免过期快照覆盖其他页面的修改；
+         * 读取失败则取消保存，绝不基于未知状态覆盖云端 */
+        let latest;
+        try {
+          latest = await cloudGetWorkspace();
+        } catch (error) {
+          throw new Error('无法确认云端最新数据，已取消保存以免覆盖：' +
+            (error && error.message ? error.message : error));
+        }
+        payload = mergeWorkspace(latest, workspace);
+      }
+      const response = await fetch('/api/data', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + appInstance.adminToken
+        },
+        body: JSON.stringify(payload)
+      });
+      if (response.status === 401) throw new Error('管理口令错误');
+      if (!response.ok) throw new Error((await apiErrorMessage(response)) || '保存云端数据失败');
+      /* 上传成功后本地快照与上传内容对齐 */
+      cloudWorkspace = payload;
+    };
+    const result = cloudWriteQueue.then(run, run);
+    cloudWriteQueue = result.catch(() => {});
+    return result;
   }
 
   async function uploadCloudImage(blob) {
@@ -201,22 +236,26 @@
 
   async function storageDelete(id) {
     if (mode === 'cloud') {
-      cloudWorkspace.tournaments = cloudWorkspace.tournaments.filter((t) => t.id !== id);
-      if (cloudWorkspace.activeId === id) {
-        cloudWorkspace.activeId = (cloudWorkspace.tournaments[0] || {}).id || null;
+      /* 基于云端最新数据删除（noMerge），避免删除“复活” */
+      const latest = await cloudGetWorkspace();
+      latest.tournaments = latest.tournaments.filter((t) => t.id !== id);
+      if (latest.activeId === id) {
+        latest.activeId = (latest.tournaments[0] || {}).id || null;
       }
-      await cloudPutWorkspace(cloudWorkspace);
+      await cloudPutWorkspace(latest, { noMerge: true });
+      cloudWorkspace = latest;
       return;
     }
     return idbDelete(id);
   }
 
   async function setActiveId(id) {
+    /* activeId 先同步写入 localStorage（页面跳转/上传取消也不丢），
+     * 云端上传异步进行；另一页面（主页/赛程）立即可读正确比赛 */
+    localStorage.setItem(LS_ACTIVE, id);
     if (mode === 'cloud') {
       cloudWorkspace.activeId = id;
       if (appInstance.isAdmin()) await cloudPutWorkspace(cloudWorkspace);
-    } else {
-      localStorage.setItem(LS_ACTIVE, id);
     }
     await refreshApp();
   }
@@ -866,8 +905,9 @@
 
   async function refreshApp() {
     const all = await storageGetAll();
+    /* activeId 优先取 localStorage（本机最近切换，即时一致），云端兜底（跨设备） */
     const activeId = mode === 'cloud'
-      ? (cloudWorkspace && cloudWorkspace.activeId)
+      ? (localStorage.getItem(LS_ACTIVE) || (cloudWorkspace && cloudWorkspace.activeId))
       : localStorage.getItem(LS_ACTIVE);
     const record = all.find((t) => t.id === activeId) || all[0];
     if (record && typeof BracketModel !== 'undefined' && BracketModel.ensureMatchDecks) {
@@ -915,7 +955,6 @@
       migrateCloudToLocal
     };
     window.TournamentApp = appInstance;
-    await ensureFirstTournament();
     mode = await detectMode();
     if (mode === 'cloud') {
       try {
@@ -931,6 +970,11 @@
         mode = 'local';
         cloudWorkspace = null;
       }
+    }
+    /* 仅本地模式需要本地兜底初始化；云端模式不得触碰 localStorage/IndexedDB，
+     * 否则会覆盖用户刚切换的 activeId（主页/赛程显示错乱） */
+    if (mode === 'local') {
+      await ensureFirstTournament();
     }
     appInstance.mode = mode;
     await refreshApp();
