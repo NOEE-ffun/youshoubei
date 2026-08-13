@@ -7,81 +7,25 @@
   <title>右手杯</title>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="home-page">
-  <!-- 二进制装饰列（左右两侧） -->
-  <div class="bin-col bin-left" aria-hidden="true">
-        <span>0</span>
-        <span>0</span>
-        <span>1</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>1</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>1</span>
-        <span>0</span>
-        <span>1</span>
-        <span>1</span>
-        <span>0</span>
-        <span>0</span>
-        <span>1</span>
-        <span>1</span>
-  </div>
-  <div class="bin-col bin-right" aria-hidden="true">
-        <span>1</span>
-        <span>0</span>
-        <span>1</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>1</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>1</span>
-        <span>1</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>1</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>0</span>
-        <span>1</span>
-        <span>0</span>
-        <span>0</span>
-  </div>
+<body>
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <div id="bg-layer" aria-hidden="true"></div>
+  <header id="app-header"></header>
 
-  <main class="home-main">
-    <!-- 细线手 logo（lucide hand，ISC 许可） -->
-    <div class="home-hero" aria-hidden="true">
-      <svg class="hand-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-        fill="none" stroke="currentColor" stroke-width="1.5"
-        stroke-linecap="round" stroke-linejoin="round">
-      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
-      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
-      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
-      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
-      </svg>
-    </div>
-
-    <!-- 标题与入口 -->
-    <div class="home-copy">
-      <p class="home-eyebrow">RIGHT HAND CUP</p>
+  <main class="home-main" id="main-content" tabindex="-1">
+    <!-- 毛玻璃标题卡片：仅右手杯三个字 -->
+    <section class="home-card" aria-label="右手杯">
       <h1 class="home-title">右手杯</h1>
-      <div class="home-line" aria-hidden="true"></div>
-      <a class="home-cta" href="schedule.html">进入赛程</a>
-    </div>
+    </section>
   </main>
+
+  <!-- 选手跑马灯：联动赛程页填写的选手信息 -->
+  <div class="home-marquee" aria-label="参赛选手">
+    <div class="marquee-track" id="marquee-track"></div>
+  </div>
+
+  <script src="bracket-model.js"></script>
+  <script src="common.js"></script>
+  <script src="home.js"></script>
 </body>
 </html>

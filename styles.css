@@ -1264,154 +1264,92 @@ dialog::backdrop {
 
 
 
-/* ========== 主页（右手杯 · 排版驱动） ========== */
 
-body.home-page {
-  margin: 0;
-  min-height: 100vh;
-  background: #fff;
-  color: #000;
-  overflow-x: hidden;
-}
+/* ========== 主页（右手杯 · 与赛程页统一的毛玻璃卡片风格） ========== */
 
-/* 二进制装饰列：左右两侧竖排 0/1，低对比度 */
-.bin-col {
-  position: fixed;
-  inset-block: 2.5rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.72rem;
-  line-height: 1.9;
-  color: #000;
-  opacity: 0.07;
-  pointer-events: none;
-  user-select: none;
-  z-index: 0;
-}
-.bin-left  { inset-inline-start: 1.25rem; }
-.bin-right { inset-inline-end: 1.25rem; }
-
-.bin-col span {
-  display: block;
-  animation: bin-blink 3s steps(1) infinite;
-}
-.bin-col span:nth-child(2n) { animation-delay: 1.5s; }
-.bin-col span:nth-child(3n) { animation-delay: 0.75s; }
-
-@keyframes bin-blink {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.15; }
-}
-
-/* 主内容：上下排列（图形在上，标题在下），不叠放 */
 .home-main {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2rem;
-  min-height: 100vh;
-  padding: 3rem 1.5rem;
-  text-align: center;
+  min-height: calc(100vh - 4rem);
+  display: grid;
+  place-items: center;
+  padding: 2rem 1.5rem 8rem;
 }
 
-/* 细线手 logo：克制的装饰，不喧宾夺主 */
-.home-hero {
-  opacity: 0.9;
-  animation: home-rise 320ms var(--ease-out) both;
-}
-
-.hand-logo {
-  display: block;
-  inline-size: clamp(84px, 12vw, 128px);
-  block-size: auto;
-  color: #000;
-}
-
-/* 标题与入口：逐级 stagger 入场 */
-.home-eyebrow {
-  margin: 0 0 0.75rem;
-  font-size: clamp(0.7rem, 1.4vw, 0.85rem);
-  font-weight: 600;
-  letter-spacing: 0.5em;
-  text-indent: 0.5em;
-  color: #000;
-  opacity: 0.5;
-  animation: home-rise 320ms 90ms var(--ease-out) both;
+/* 毛玻璃标题卡片：与对局卡片同风格 */
+.home-card {
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 3rem 5rem;
+  animation: rise var(--dur-slow) var(--ease-out) both;
 }
 
 .home-title {
   margin: 0;
-  font-size: clamp(3.2rem, 12vw, 7rem);
+  font-size: clamp(3rem, 10vw, 5.5rem);
   font-weight: 900;
-  letter-spacing: 0.32em;
-  text-indent: 0.32em;
-  line-height: 1.08;
-  color: #000;
-  animation: home-rise 320ms 180ms var(--ease-out) both;
+  letter-spacing: 0.18em;
+  text-indent: 0.18em;
+  line-height: 1.1;
+  color: var(--text);
 }
 
-.home-line {
-  inline-size: 72px;
-  block-size: 2px;
-  background: #000;
-  margin: 1.8rem auto 2.4rem;
-  transform-origin: left center;
-  animation:
-    line-draw 900ms 260ms var(--ease-out) both;
+/* 选手跑马灯：毛玻璃条，横向无缝滚动 */
+.home-marquee {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  padding: 1rem 0 1.5rem;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 10;
 }
 
-@keyframes line-draw {
-  from { transform: scaleX(0); }
-  to   { transform: scaleX(1); }
+.marquee-track {
+  display: flex;
+  gap: 1.25rem;
+  inline-size: max-content;
+  animation: marquee 26s linear infinite;
 }
 
-.home-cta {
-  display: inline-block;
-  padding: 0.9rem 2.9rem;
-  background: #000;
-  color: #fff;
-  font-size: 1.05rem;
+.home-marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.marquee-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  background: var(--surface-glass);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem 0.5rem 0.6rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.marquee-name {
   font-weight: 700;
-  letter-spacing: 0.3em;
-  text-indent: 0.3em;
-  text-decoration: none;
-  border: 1px solid #000;
-  transition:
-    background var(--dur-ui) var(--ease-out),
-    color var(--dur-ui) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
-  animation: home-rise 320ms 340ms var(--ease-out) both;
+  font-size: 0.95rem;
+  color: var(--text);
+  white-space: nowrap;
 }
 
-.home-cta:hover {
-  background: #fff;
-  color: #000;
-}
-
-.home-cta:active {
-  transform: scale(0.97);
-}
-
-@keyframes home-rise {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* 无障碍：减少动效偏好时保留淡入，去掉位移与循环 */
+/* 无障碍：减少动效偏好时停止滚动，保留静态展示 */
 @media (prefers-reduced-motion: reduce) {
-  body.home-page .bin-col span {
+  .marquee-track {
     animation: none;
   }
-  body.home-page .home-hero,
-  body.home-page .home-eyebrow,
-  body.home-page .home-title,
-  body.home-page .home-line,
-  body.home-page .home-cta {
-    animation: fade-in 200ms var(--ease-out) both;
+  .home-card {
+    animation: fade-in var(--dur-ui) var(--ease-out) both;
   }
   @keyframes fade-in {
     from { opacity: 0; }
