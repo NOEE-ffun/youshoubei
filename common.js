@@ -274,19 +274,10 @@
     const local = await idbGetAll();
     const tournaments = [];
     for (const record of local) {
-      const copy = {
-        ...record,
-        background: record.background,
-        players: record.players.map((player) => ({
-          ...player,
-          decks: Array.isArray(player.decks)
-            ? player.decks.map((deck) => ({
-                ...deck,
-                images: Array.isArray(deck.images) ? deck.images.slice() : []
-              }))
-            : undefined
-        }))
-      };
+      /* 深拷贝后由 BracketModel.ensureMatchDecks 统一完成旧版 players[].decks
+       * → matchDecks 的迁移（与赛程页加载走同一路径，避免两份迁移实现）；
+       * 迁移完再剔除旧字段，避免把冗余结构上传云端。 */
+      const copy = structuredClone(record);
       if (typeof BracketModel !== 'undefined' && BracketModel.ensureMatchDecks) {
         BracketModel.ensureMatchDecks(copy);
       }
@@ -294,8 +285,6 @@
         if (player.avatar && typeof player.avatar !== 'string') {
           player.avatar = await uploadCloudImage(player.avatar);
         }
-      }
-      for (const player of copy.players) {
         delete player.decks;
       }
       for (const matchId of Object.keys(copy.matchDecks || {})) {
@@ -838,6 +827,48 @@
   /* 跨文件暴露：bracket.js（选手名单）与 deck-modal.js（卡组弹窗）渲染头像 */
   window.avatarMarkup = avatarMarkup;
 
+  /* ---------- 跨文件共享工具 ----------
+   * escapeHtml/debounce/canEdit/save/medalMap 原在 bracket.js、deck-modal.js、home.js
+   * 各复制一份，改一处漏三处；统一收敛到此处，经 window.TournamentUtils 暴露。 */
+
+  function debounce(fn, wait) {
+    let timer = null;
+    return function () {
+      clearTimeout(timer);
+      timer = setTimeout(fn, wait);
+    };
+  }
+
+  function canEdit() {
+    const app = window.TournamentApp;
+    return !(app && app.mode === 'cloud' && !app.isAdmin());
+  }
+
+  function save() {
+    /* 保存失败必须可见：云端未解锁/口令失效时 alert 提示，避免“看似保存实则丢失” */
+    return window.TournamentApp.storagePut(window.TournamentApp.current).catch((error) => {
+      console.error('[save] 失败:', error);
+      alert('保存失败：' + (error && error.message ? error.message : error));
+    });
+  }
+
+  /* 比赛已分出冠亚季军时，返回 playerId → 奖牌信息 的映射；未结束返回空 Map */
+  function medalMap(record) {
+    const map = new Map();
+    if (!record || !Array.isArray(record.players)) return map;
+    const standings = BracketModel.deriveStandings(
+      record.players.map((p) => p.id),
+      record.scores || {}
+    );
+    if (!standings.champion) return map;
+    if (standings.champion) map.set(standings.champion, { type: 'gold', emoji: '🥇' });
+    if (standings.runnerUp) map.set(standings.runnerUp, { type: 'silver', emoji: '🥈' });
+    if (standings.thirdPlace) map.set(standings.thirdPlace, { type: 'bronze', emoji: '🥉' });
+    return map;
+  }
+
+  window.TournamentUtils = { escapeHtml, debounce, canEdit, save, medalMap };
+
   function applyBackground(record) {
     const layer = document.getElementById('bg-layer');
     if (!layer) return;
@@ -944,9 +975,10 @@
       openManage: openManageDialog,
       sidebarHidden,
       setSidebarHidden,
-      idbPut: storagePut,
-      idbGetAll: storageGetAll,
-      idbDelete: storageDelete,
+      /* 存储适配器：本地模式走 IndexedDB，云端模式走 Vercel Blob */
+      storagePut,
+      storageGetAll,
+      storageDelete,
       isAdmin,
       setAdminToken,
       setActiveId,

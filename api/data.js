@@ -4,6 +4,8 @@ const crypto = require('node:crypto');
 const { list, put } = require('@vercel/blob');
 
 const DATA_PATH = 'data.json';
+/* data.json 只含文本数据（图片存 Blob 为 URL），1MB 上限绰绰有余，防内存被打爆 */
+const MAX_BODY = 1024 * 1024;
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
@@ -43,7 +45,7 @@ module.exports = async function handler(req, res) {
   if (req.method === 'PUT') {
     const authed = isAuthorized(req);
     if (authed === null) {
-      sendJson(res, 500, { error: 'ADMIN_TOKEN 未配置' });
+      sendJson(res, 403, { error: '管理功能未配置（ADMIN_TOKEN）' });
       return;
     }
     if (!authed) {
@@ -52,7 +54,15 @@ module.exports = async function handler(req, res) {
     }
 
     let raw = '';
-    for await (const chunk of req) raw += chunk;
+    let bodySize = 0;
+    for await (const chunk of req) {
+      bodySize += chunk.length;
+      if (bodySize > MAX_BODY) {
+        sendJson(res, 413, { error: '数据过大' });
+        return;
+      }
+      raw += chunk;
+    }
     let workspace;
     try {
       workspace = JSON.parse(raw);
