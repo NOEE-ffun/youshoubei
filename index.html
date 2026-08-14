@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="view-transition" content="same-origin">
+  <meta name="description" content="右手杯——8 人双败淘汰卡牌赛事：选手、赛程、比分与卡组一览。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>右手杯</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
   <link rel="prefetch" href="schedule.html">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -15,11 +18,14 @@
   <header id="app-header"></header>
 
   <!-- 主页主内容为空壳：标题卡片已于 2026-08-14 移除，主视觉为下方跑马灯；
-       main 保留作为“跳过链接”的跳转目标并撑起页面高度 -->
-  <main class="home-main" id="main-content" tabindex="-1"></main>
+       main 保留作为“跳过链接”的跳转目标并撑起页面高度，
+       内含对读屏/SEO 可见的页面主标题 -->
+  <main class="home-main" id="main-content" tabindex="-1">
+    <h1 class="visually-hidden">右手杯</h1>
+  </main>
 
   <!-- 选手跑马灯：双行反向滚动，联动赛程页填写的选手信息 -->
-  <div class="home-marquee" aria-label="参赛选手">
+  <div class="home-marquee" role="group" aria-label="参赛选手">
     <div class="marquee-row">
       <div class="marquee-track" id="marquee-track"></div>
     </div>
@@ -28,8 +34,8 @@
     </div>
   </div>
 
-  <script src="bracket-model.js"></script>
-  <script src="common.js"></script>
-  <script src="home.js"></script>
+  <script src="bracket-model.js" defer></script>
+  <script src="common.js" defer></script>
+  <script src="home.js" defer></script>
 </body>
 </html>

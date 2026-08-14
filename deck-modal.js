@@ -5,8 +5,9 @@
   let currentMatchId = null;
   let pendingTarget = null;
 
-  /* 共享工具（escapeHtml/debounce/canEdit/save）统一来自 common.js */
-  const { escapeHtml, debounce, canEdit, save } = window.TournamentUtils;
+  /* 共享工具（escapeHtml/debounce/canEdit/save/avatarMarkup/cssUrl/notify 等）统一来自 common.js */
+  const { escapeHtml, debounce, canEdit, save, avatarMarkup, cssUrl, notify, errMsg } =
+    window.TournamentUtils;
 
   function buildDialog() {
     dialog = document.createElement('dialog');
@@ -122,7 +123,7 @@
     return (
       '<div class="image-slot-wrap">' +
       '<button type="button" class="image-slot" data-view="' + key + '"' +
-      ' style="background-image:url(' + window.TournamentApp.blobUrl(image) + ')"' +
+      ' style="background-image:' + cssUrl(window.TournamentApp.blobUrl(image)) + '"' +
       ' aria-label="放大查看 ' + label + '"></button>' +
       (editable
         ? '<span class="slot-actions">' +
@@ -149,7 +150,7 @@
         else input.value = deck.name;
         save();
       };
-      input.addEventListener('change', commit);
+      /* 仅保留 debounce 的 input 监听，避免与 change 叠加导致双重保存 */
       input.addEventListener('input', debounce(commit, 500));
     });
 
@@ -226,7 +227,7 @@
       await save();
       render();
     } catch (error) {
-      alert(error.message);
+      notify(errMsg(error), 'danger');
     }
   }
 
