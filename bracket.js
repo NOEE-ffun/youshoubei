@@ -1,13 +1,18 @@
 (function () {
   'use strict';
 
-  /* 共享工具（escapeHtml/debounce/canEdit/save/medalMap）统一来自 common.js */
-  const { escapeHtml, debounce, canEdit, save, medalMap } = window.TournamentUtils;
+  /* 共享工具（escapeHtml/debounce/canEdit/save/medalMap/avatarMarkup/notify 等）统一来自 common.js */
+  const { escapeHtml, debounce, canEdit, save, medalMap, avatarMarkup, notify, uiConfirm } =
+    window.TournamentUtils;
 
   function renderAll() {
     if (!window.TournamentApp || !window.TournamentApp.current) return;
     if (typeof BracketModel !== 'undefined' && BracketModel.ensureMatchDecks) {
       BracketModel.ensureMatchDecks(window.TournamentApp.current);
+    }
+    /* 旧数据可能缺 scores 字段，统一在此兜底 */
+    if (!window.TournamentApp.current.scores) {
+      window.TournamentApp.current.scores = {};
     }
     document.getElementById('reset-scores-btn').disabled = !canEdit();
     renderSidebar();
@@ -102,7 +107,8 @@
         else input.value = player.name;
         save();
       };
-      input.addEventListener('change', commit);
+      /* 仅保留 debounce 的 input 监听：失焦后 debounce 仍会触发，
+       * 叠加 change 会导致同一输入保存两次（云端模式下多一次 PUT） */
       input.addEventListener('input', debounce(commit, 500));
     });
     bindRosterAvatars();
@@ -150,7 +156,7 @@
     const played = match.played;
     const ready = Boolean(match.a && match.b);
     const editable = canEdit();
-    const current = record.scores[match.id];
+    const current = (record.scores || {})[match.id];
     const isActive = (a, b) => current && current.a === a && current.b === b ? ' active' : '';
     const scoreButtons = BracketModel.getScoreOptions(match.id).map(([a, b]) =>
       '<button type="button" class="score-btn' + isActive(a, b) + '" data-score="' + a + ',' + b + '"' +
@@ -178,13 +184,13 @@
     );
   }
 
-  function columnGroup(matches) {
+  function columnGroup(matches, names, record) {
     const rounds = [...new Set(matches.map((m) => m.round))];
     return rounds.map((round) => {
       const list = matches.filter((m) => m.round === round);
       return (
         '<div class="bracket-col">' +
-        list.map((m) => matchCard(m, currentNames(), currentRecord())).join('') +
+        list.map((m) => matchCard(m, names, record)).join('') +
         '</div>'
       );
     }).join('');
@@ -194,19 +200,17 @@
     return window.TournamentApp.current;
   }
 
-  function currentNames() {
-    return new Map(currentRecord().players.map((p) => [p.id, p.name]));
-  }
-
   function renderBracket() {
     const record = currentRecord();
+    /* 名字表与记录只算一次，全部卡片复用，避免每张卡重建 Map */
+    const names = new Map(record.players.map((p) => [p.id, p.name]));
     const seeds = record.players.map((p) => p.id);
-    const matches = BracketModel.resolveAll(seeds, record.scores);
+    const matches = BracketModel.resolveAll(seeds, record.scores || {});
     const groups = BracketModel.groupByPhase(matches);
 
-    document.getElementById('wb-flow').innerHTML = columnGroup(groups.wb);
-    document.getElementById('lb-flow').innerHTML = columnGroup(groups.lb);
-    document.getElementById('gf-flow').innerHTML = columnGroup(groups.gf);
+    document.getElementById('wb-flow').innerHTML = columnGroup(groups.wb, names, record);
+    document.getElementById('lb-flow').innerHTML = columnGroup(groups.lb, names, record);
+    document.getElementById('gf-flow').innerHTML = columnGroup(groups.gf, names, record);
   }
 
   function bindBracket() {
@@ -234,8 +238,8 @@
   function bindToolbar() {
     document.getElementById('reset-scores-btn').addEventListener('click', async () => {
       const record = currentRecord();
-      if (!Object.keys(record.scores).length) return;
-      if (!confirm('确定清空所有比分吗？选手与卡组会保留。')) return;
+      if (!record.scores || !Object.keys(record.scores).length) return;
+      if (!(await uiConfirm('确定清空所有比分吗？选手与卡组会保留。'))) return;
       record.scores = {};
       await save();
       renderAll();
@@ -270,7 +274,7 @@
         await save();
         renderAll();
       } catch (error) {
-        alert(error.message);
+        notify(window.TournamentUtils.errMsg(error), 'danger');
       }
     });
   }
@@ -303,5 +307,7 @@
   bindSidebar();
   bindBracket();
   bindToolbar();
-  window.TournamentAppInit('schedule');
+  window.TournamentAppInit('schedule').catch((error) => {
+    if (window.TournamentApp) window.TournamentApp.fatalError(error);
+  });
 })();

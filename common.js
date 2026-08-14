@@ -81,6 +81,23 @@
     }[ch]));
   }
 
+  function errMsg(error) {
+    return error && error.message ? error.message : String(error);
+  }
+
+  /* 图片 URL 白名单：仅放行本地 Blob、HTTPS 与 data:image（云端数据可能被篡改，
+   * 异常协议或带引号的 URL 不得进入属性或 CSS url()） */
+  function safeUrl(url) {
+    const value = String(url || '').trim();
+    if (!/^(blob:|https:|data:image\/)/i.test(value)) return '';
+    return value;
+  }
+
+  /* CSS url() 包装：白名单校验后剔除引号与反斜杠，防止逃逸出字符串 */
+  function cssUrl(url) {
+    return 'url("' + safeUrl(url).replace(/["\\]/g, '') + '")';
+  }
+
   function makeDefaultTournament(name) {
     const now = Date.now();
     const players = Array.from({ length: 8 }, (_, i) => ({
@@ -122,7 +139,7 @@
     try {
       const hasAbort = typeof AbortController !== 'undefined';
       const controller = hasAbort ? new AbortController() : null;
-      timer = setTimeout(() => controller && controller.abort(), 2500);
+      timer = setTimeout(() => controller && controller.abort(), 1200);
       const response = await fetch('/api/health', controller ? { signal: controller.signal } : {});
       clearTimeout(timer);
       timer = null;
@@ -152,11 +169,15 @@
     return response.json();
   }
 
-  /* 合并冲突消解：云端为底，本地记录按 id 覆盖，activeId 取本地 */
+  /* 合并冲突消解：同 id 记录取 updatedAt 较新者（相同取本地），activeId 取本地，
+   * 避免多设备并发时旧快照静默覆盖新修改 */
   function mergeWorkspace(latest, local) {
     const byId = new Map();
     for (const t of (latest && latest.tournaments) || []) byId.set(t.id, t);
-    for (const t of (local && local.tournaments) || []) byId.set(t.id, t);
+    for (const t of (local && local.tournaments) || []) {
+      const remote = byId.get(t.id);
+      if (!remote || (t.updatedAt || 0) >= (remote.updatedAt || 0)) byId.set(t.id, t);
+    }
     return {
       activeId: (local && local.activeId) || (latest && latest.activeId) || null,
       tournaments: [...byId.values()]
@@ -319,7 +340,7 @@
     await cloudPutWorkspace(workspace);
     cloudWorkspace = workspace;
     await refreshApp();
-    alert('已将 ' + workspace.tournaments.length + ' 场比赛上传到云端');
+    notify('已将 ' + workspace.tournaments.length + ' 场比赛上传到云端');
   }
 
   async function migrateCloudToLocal() {
@@ -329,7 +350,7 @@
     }
     const activeId = workspace.activeId || (workspace.tournaments[0] || {}).id;
     if (activeId) localStorage.setItem(LS_ACTIVE, activeId);
-    alert('已从云端拉取 ' + workspace.tournaments.length + ' 场比赛到本机');
+    notify('已从云端拉取 ' + workspace.tournaments.length + ' 场比赛到本机');
   }
 
   function compressImage(file, maxDim, quality) {
@@ -397,6 +418,78 @@
     });
   }
 
+  /* ---------- 轻量提示（toast）与非阻塞确认 ---------- */
+
+  let toastRegion = null;
+
+  function ensureToastRegion() {
+    if (!toastRegion) {
+      toastRegion = document.createElement('div');
+      toastRegion.className = 'toast-region';
+      toastRegion.setAttribute('aria-live', 'polite');
+      document.body.appendChild(toastRegion);
+    }
+    return toastRegion;
+  }
+
+  /* 自动消失的操作反馈；type 为 'danger' 时用于错误提示 */
+  function notify(message, type) {
+    const region = ensureToastRegion();
+    const toast = document.createElement('div');
+    toast.className = 'toast' + (type === 'danger' ? ' toast-danger' : '');
+    toast.textContent = message;
+    region.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('toast-out');
+      setTimeout(() => toast.remove(), 300);
+    }, 3600);
+    return toast;
+  }
+
+  let confirmDialog = null;
+
+  function buildConfirmDialog() {
+    confirmDialog = document.createElement('dialog');
+    confirmDialog.id = 'confirm-dialog';
+    confirmDialog.setAttribute('aria-labelledby', 'confirm-title');
+    confirmDialog.innerHTML =
+      '<div class="dialog-head">' +
+      '  <h2 id="confirm-title">请确认</h2>' +
+      '</div>' +
+      '<div class="dialog-body">' +
+      '  <p class="confirm-text"></p>' +
+      '  <div class="dialog-actions">' +
+      '    <button type="button" class="btn btn-secondary" data-confirm-cancel>取消</button>' +
+      '    <button type="button" class="btn btn-danger" data-confirm-ok>确定</button>' +
+      '  </div>' +
+      '</div>';
+    confirmDialog.querySelector('[data-confirm-ok]').addEventListener('click', () => {
+      confirmDialog.__ok = true;
+      confirmDialog.close();
+    });
+    confirmDialog.querySelector('[data-confirm-cancel]').addEventListener('click', () => {
+      confirmDialog.close();
+    });
+    /* Esc 触发 cancel 默认行为同样会走到 close，统一在 close 里结算 */
+    confirmDialog.addEventListener('close', () => {
+      const resolve = confirmDialog.__resolve;
+      confirmDialog.__resolve = null;
+      if (resolve) resolve(Boolean(confirmDialog.__ok));
+    });
+    document.body.appendChild(confirmDialog);
+  }
+
+  /* 返回 Promise<boolean>：确定为 true，取消/按 Esc/点击遮罩为 false */
+  function uiConfirm(message) {
+    return new Promise((resolve) => {
+      if (!confirmDialog) buildConfirmDialog();
+      confirmDialog.__ok = false;
+      confirmDialog.__resolve = resolve;
+      confirmDialog.querySelector('.confirm-text').textContent = message;
+      confirmDialog.showModal();
+    });
+  }
+
   /* ---------- 灯箱 ---------- */
 
   let lightbox = null;
@@ -449,6 +542,22 @@
       show();
     }
 
+    /* 焦点圈定：Tab 循环限制在灯箱按钮内，不落到遮罩后的页面上 */
+    function trapFocus(event) {
+      const focusables = [close, prev, next].filter((el) => !el.hidden);
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && (active === first || !lightbox.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !lightbox.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
     close.addEventListener('click', closeLightbox);
     prev.addEventListener('click', () => step(-1));
     next.addEventListener('click', () => step(1));
@@ -460,6 +569,7 @@
       if (event.key === 'Escape') closeLightbox();
       if (event.key === 'ArrowLeft') step(-1);
       if (event.key === 'ArrowRight') step(1);
+      if (event.key === 'Tab') trapFocus(event);
     });
 
     lightbox.__show = show;
@@ -565,7 +675,7 @@
       try {
         await storagePut(record);
       } catch (error) {
-        alert('新建比赛失败：' + (error && error.message ? error.message : error));
+        notify('新建比赛失败：' + errMsg(error), 'danger');
         return;
       }
       await setActiveId(record.id);
@@ -577,7 +687,7 @@
     settingsDialog.querySelector('#settings-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       if (mode === 'cloud' && !appInstance.isAdmin()) {
-        alert('请先输入管理口令并解锁');
+        notify('请先输入管理口令并解锁', 'danger');
         return;
       }
       const record = appInstance.current;
@@ -592,7 +702,7 @@
       try {
         await storagePut(record);
       } catch (error) {
-        alert('保存设置失败：' + (error && error.message ? error.message : error));
+        notify('保存设置失败：' + errMsg(error), 'danger');
         return;
       }
       applyBackground(record);
@@ -618,10 +728,10 @@
         if (mode === 'cloud') image = await uploadCloudImage(image);
         pendingBackground = image;
         const preview = settingsDialog.querySelector('#bg-preview');
-        preview.style.backgroundImage = 'url(' + blobUrl(pendingBackground) + ')';
+        preview.style.backgroundImage = cssUrl(blobUrl(pendingBackground));
         preview.setAttribute('aria-label', '背景图预览');
       } catch (error) {
-        alert(error.message);
+        notify(errMsg(error), 'danger');
       } finally {
         event.target.value = '';
       }
@@ -661,7 +771,7 @@
         await migrateLocalToCloud();
         syncSettingsAdminState();
       } catch (error) {
-        alert(error.message);
+        notify(errMsg(error), 'danger');
       }
     });
 
@@ -669,7 +779,7 @@
       try {
         await migrateCloudToLocal();
       } catch (error) {
-        alert(error.message);
+        notify(errMsg(error), 'danger');
       }
     });
   }
@@ -718,27 +828,36 @@
 
     list.querySelectorAll('.manage-item-name').forEach((input) => {
       input.addEventListener('change', async () => {
-        const id = input.closest('.manage-item').querySelector('[data-switch]').dataset.switch;
-        const record = await storageGetAll().then((all) => all.find((t) => t.id === id));
-        if (!record) return;
-        record.name = input.value.trim() || record.name;
         try {
-          await storagePut(record);
+          const id = input.closest('.manage-item').querySelector('[data-switch]').dataset.switch;
+          const all = await storageGetAll();
+          const record = all.find((t) => t.id === id);
+          if (!record) return;
+          record.name = input.value.trim() || record.name;
+          try {
+            await storagePut(record);
+          } catch (error) {
+            notify('重命名失败：' + errMsg(error), 'danger');
+            return;
+          }
+          await refreshApp();
+          renderManageList();
+          document.dispatchEvent(new CustomEvent('ts:changed'));
         } catch (error) {
-          alert('重命名失败：' + (error && error.message ? error.message : error));
-          return;
+          notify('重命名失败：' + errMsg(error), 'danger');
         }
-        await refreshApp();
-        renderManageList();
-        document.dispatchEvent(new CustomEvent('ts:changed'));
       });
     });
 
     list.querySelectorAll('[data-switch]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        await setActiveId(btn.dataset.switch);
-        renderManageList();
-        document.dispatchEvent(new CustomEvent('ts:changed'));
+        try {
+          await setActiveId(btn.dataset.switch);
+          renderManageList();
+          document.dispatchEvent(new CustomEvent('ts:changed'));
+        } catch (error) {
+          notify('切换比赛失败：' + errMsg(error), 'danger');
+        }
       });
     });
 
@@ -747,28 +866,32 @@
         const id = btn.dataset.delete;
         const item = window.TournamentApp.list.find((t) => t.id === id);
         if (!item) return;
-        if (!confirm('确定删除比赛「' + item.name + '」吗？该操作不可恢复。')) return;
+        if (!(await uiConfirm('确定删除比赛「' + item.name + '」吗？该操作不可恢复。'))) return;
         try {
           await storageDelete(id);
         } catch (error) {
-          alert('删除失败：' + (error && error.message ? error.message : error));
+          notify('删除失败：' + errMsg(error), 'danger');
           return;
         }
-        const remaining = (await storageGetAll());
-        if (!remaining.length) {
-          const fresh = makeDefaultTournament('我的赛事');
-          try {
-            await storagePut(fresh);
-          } catch (error) {
-            alert('新建默认比赛失败：' + (error && error.message ? error.message : error));
-            return;
+        try {
+          const remaining = (await storageGetAll());
+          if (!remaining.length) {
+            const fresh = makeDefaultTournament('我的赛事');
+            try {
+              await storagePut(fresh);
+            } catch (error) {
+              notify('新建默认比赛失败：' + errMsg(error), 'danger');
+              return;
+            }
+            remaining.push(fresh);
           }
-          remaining.push(fresh);
-        }
-        if (id === window.TournamentApp.current.id) {
-          await setActiveId(remaining[0].id);
-        } else {
-          await refreshApp();
+          if (id === window.TournamentApp.current.id) {
+            await setActiveId(remaining[0].id);
+          } else {
+            await refreshApp();
+          }
+        } catch (error) {
+          notify('删除后刷新失败：' + errMsg(error), 'danger');
         }
         renderManageList();
         document.dispatchEvent(new CustomEvent('ts:changed'));
@@ -792,7 +915,7 @@
     rulesInput.value = record.rules || '';
     pendingBackground = undefined;
     if (record.background) {
-      preview.style.backgroundImage = 'url(' + blobUrl(record.background) + ')';
+      preview.style.backgroundImage = cssUrl(blobUrl(record.background));
       preview.setAttribute('aria-label', '背景图预览');
     } else {
       preview.style.backgroundImage = '';
@@ -810,11 +933,12 @@
 
   /* ---------- 背景与页头 ---------- */
 
-  /* 头像 HTML：有图显示图片，无图显示首字符占位（颜色按选手 id 确定性取） */
+  /* 头像 HTML：有图显示图片（URL 经白名单校验），无图显示首字符占位（颜色按选手 id 确定性取） */
   function avatarMarkup(player, sizeClass) {
     const cls = 'avatar ' + sizeClass;
     if (player && player.avatar) {
-      return '<img class="' + cls + '" src="' + blobUrl(player.avatar) + '"' +
+      return '<img class="' + cls + '" loading="lazy" src="' +
+        escapeHtml(safeUrl(blobUrl(player.avatar))) + '"' +
         ' alt="' + escapeHtml(player.name || '') + ' 的头像">';
     }
     const initial = String((player && player.name) || '?').trim().charAt(0) || '?';
@@ -824,8 +948,6 @@
     return '<span class="' + cls + ' avatar-fallback" style="background:' + color + '">' +
       escapeHtml(initial) + '</span>';
   }
-  /* 跨文件暴露：bracket.js（选手名单）与 deck-modal.js（卡组弹窗）渲染头像 */
-  window.avatarMarkup = avatarMarkup;
 
   /* ---------- 跨文件共享工具 ----------
    * escapeHtml/debounce/canEdit/save/medalMap 原在 bracket.js、deck-modal.js、home.js
@@ -845,10 +967,10 @@
   }
 
   function save() {
-    /* 保存失败必须可见：云端未解锁/口令失效时 alert 提示，避免“看似保存实则丢失” */
+    /* 保存失败必须可见：云端未解锁/口令失效时 toast 提示，避免“看似保存实则丢失” */
     return window.TournamentApp.storagePut(window.TournamentApp.current).catch((error) => {
       console.error('[save] 失败:', error);
-      alert('保存失败：' + (error && error.message ? error.message : error));
+      notify('保存失败：' + errMsg(error), 'danger');
     });
   }
 
@@ -867,13 +989,25 @@
     return map;
   }
 
-  window.TournamentUtils = { escapeHtml, debounce, canEdit, save, medalMap };
+  window.TournamentUtils = {
+    escapeHtml,
+    errMsg,
+    safeUrl,
+    cssUrl,
+    debounce,
+    canEdit,
+    save,
+    medalMap,
+    avatarMarkup,
+    notify,
+    uiConfirm
+  };
 
   function applyBackground(record) {
     const layer = document.getElementById('bg-layer');
     if (!layer) return;
     if (record && record.background) {
-      layer.style.backgroundImage = 'url(' + blobUrl(record.background) + ')';
+      layer.style.backgroundImage = cssUrl(blobUrl(record.background));
     } else {
       layer.style.backgroundImage = '';
     }
@@ -891,7 +1025,7 @@
     ).join('');
     placeholder.innerHTML =
       '<div class="header-inner">' +
-      '  <a class="brand" href="index.html">赛制面板</a>' +
+      '  <a class="brand" href="index.html">右手杯</a>' +
       '  <span class="header-title" title="' + escapeHtml(active.name) + '">' + escapeHtml(active.name) + '</span>' +
       '  <nav class="main-nav" aria-label="页面导航">' +
       '    <a href="index.html" data-page="home">主页</a>' +
@@ -909,12 +1043,16 @@
     if (currentLink) currentLink.setAttribute('aria-current', 'page');
 
     placeholder.querySelector('#tournament-switch').addEventListener('change', async (event) => {
-      await setActiveId(event.target.value);
-      document.dispatchEvent(new CustomEvent('ts:changed'));
+      try {
+        await setActiveId(event.target.value);
+        document.dispatchEvent(new CustomEvent('ts:changed'));
+      } catch (error) {
+        notify('切换比赛失败：' + errMsg(error), 'danger');
+      }
     });
     const manageBtn = placeholder.querySelector('#manage-btn');
     manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
-    placeholder.querySelector('#manage-btn').addEventListener('click', openManageDialog);
+    manageBtn.addEventListener('click', openManageDialog);
     placeholder.querySelector('#settings-btn').addEventListener('click', () => openSettingsDialog(false));
   }
 
@@ -934,6 +1072,41 @@
     }
   }
 
+  /* 旧快照的 ObjectURL 回收：每次重读记录都会得到新的 Blob 对象，
+   * 切换/保存后上一快照的 URL 不再被 DOM 引用，统一释放避免长会话累积泄漏 */
+  let lastSnapshotUrls = [];
+
+  function collectSnapshotUrls(record) {
+    const urls = [];
+    const push = (ref) => {
+      if (ref && typeof ref !== 'string') {
+        const url = urlCache.get(ref);
+        if (url) urls.push(url);
+      }
+    };
+    if (!record) return urls;
+    for (const player of record.players || []) push(player.avatar);
+    for (const decks of Object.values(record.matchDecks || {})) {
+      for (const deckList of Object.values(decks || {})) {
+        for (const deck of deckList || []) {
+          for (const image of deck.images || []) push(image);
+        }
+      }
+    }
+    push(record.background);
+    /* 设置弹窗中已选但未保存的背景仍被预览引用，不能回收 */
+    if (pendingBackground && typeof pendingBackground !== 'string') push(pendingBackground);
+    return urls;
+  }
+
+  function releaseStaleBlobUrls(record) {
+    const keep = new Set(collectSnapshotUrls(record));
+    for (const url of lastSnapshotUrls) {
+      if (!keep.has(url)) URL.revokeObjectURL(url);
+    }
+    lastSnapshotUrls = [...keep];
+  }
+
   async function refreshApp() {
     const all = await storageGetAll();
     /* activeId 优先取 localStorage（本机最近切换，即时一致），云端兜底（跨设备） */
@@ -948,6 +1121,7 @@
     appInstance.list = all.map((t) => ({ id: t.id, name: t.name, updatedAt: t.updatedAt }));
     applyBackground(record);
     renderHeader();
+    releaseStaleBlobUrls(record);
     return record;
   }
 
@@ -957,6 +1131,23 @@
 
   function setSidebarHidden(hidden) {
     localStorage.setItem(LS_SIDEBAR, hidden ? '1' : '0');
+  }
+
+  /* 初始化失败横幅：IndexedDB 打开失败/云端数据损坏时给出可见提示，替代静默白屏 */
+  function showFatalError(error) {
+    console.error('[init] 初始化失败:', error);
+    if (document.getElementById('init-error')) return;
+    const banner = document.createElement('div');
+    banner.id = 'init-error';
+    banner.className = 'init-error';
+    banner.setAttribute('role', 'alert');
+    banner.textContent = '数据加载失败，请刷新重试（' + errMsg(error) + '）';
+    const header = document.getElementById('app-header');
+    if (header && header.parentNode) {
+      header.parentNode.insertBefore(banner, header.nextSibling);
+    } else {
+      document.body.prepend(banner);
+    }
   }
 
   async function init(activePage) {
@@ -984,32 +1175,38 @@
       setActiveId,
       uploadImage: uploadCloudImage,
       migrateLocalToCloud,
-      migrateCloudToLocal
+      migrateCloudToLocal,
+      fatalError: showFatalError
     };
     window.TournamentApp = appInstance;
-    mode = await detectMode();
-    if (mode === 'cloud') {
-      try {
-        cloudWorkspace = await cloudGetWorkspace();
-        if (!cloudWorkspace.tournaments || !cloudWorkspace.tournaments.length) {
-          const fresh = makeDefaultTournament('我的赛事');
-          cloudWorkspace = { tournaments: [fresh], activeId: fresh.id };
+    try {
+      mode = await detectMode();
+      if (mode === 'cloud') {
+        try {
+          cloudWorkspace = await cloudGetWorkspace();
+          if (!cloudWorkspace.tournaments || !cloudWorkspace.tournaments.length) {
+            const fresh = makeDefaultTournament('我的赛事');
+            cloudWorkspace = { tournaments: [fresh], activeId: fresh.id };
+          }
+          if (!cloudWorkspace.activeId || !cloudWorkspace.tournaments.some((t) => t.id === cloudWorkspace.activeId)) {
+            cloudWorkspace.activeId = cloudWorkspace.tournaments[0].id;
+          }
+        } catch (error) {
+          mode = 'local';
+          cloudWorkspace = null;
         }
-        if (!cloudWorkspace.activeId || !cloudWorkspace.tournaments.some((t) => t.id === cloudWorkspace.activeId)) {
-          cloudWorkspace.activeId = cloudWorkspace.tournaments[0].id;
-        }
-      } catch (error) {
-        mode = 'local';
-        cloudWorkspace = null;
       }
+      /* 仅本地模式需要本地兜底初始化；云端模式不得触碰 localStorage/IndexedDB，
+       * 否则会覆盖用户刚切换的 activeId（主页/赛程显示错乱） */
+      if (mode === 'local') {
+        await ensureFirstTournament();
+      }
+      appInstance.mode = mode;
+      await refreshApp();
+    } catch (error) {
+      showFatalError(error);
+      return;
     }
-    /* 仅本地模式需要本地兜底初始化；云端模式不得触碰 localStorage/IndexedDB，
-     * 否则会覆盖用户刚切换的 activeId（主页/赛程显示错乱） */
-    if (mode === 'local') {
-      await ensureFirstTournament();
-    }
-    appInstance.mode = mode;
-    await refreshApp();
     document.dispatchEvent(new CustomEvent('ts:ready'));
   }
 

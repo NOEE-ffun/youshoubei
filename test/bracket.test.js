@@ -88,7 +88,7 @@ const flippedResolved = resolveAll(seeds, flipped);
 assert.equal(flippedResolved.find((m) => m.id === 'wb_r2_1').a, 'P2');
 assert.equal(flippedResolved.find((m) => m.id === 'lb_r1_1').a, 'P1');
 
-// 5. 胜者组决赛败者不应被淘汰：打完胜者组后，败者应进入败者组决赛 A 位
+// 6. 胜者组决赛败者不应被淘汰：打完胜者组后，败者应进入败者组决赛 A 位
 const wbOnly = scores([
   ['wb_r1_1', 2, 0],
   ['wb_r1_2', 2, 0],
@@ -103,7 +103,7 @@ const wbOnlyLbFinal = wbOnlyResolved.find((m) => m.id === 'lb_final');
 assert.equal(wbOnlyLbFinal.a, 'P5', '胜者组决赛败者应进入败者组决赛');
 assert.equal(wbOnlyLbFinal.b, null, '败者组半决赛未赛时，B 位应为待定');
 
-// 6. 完整赛程：P1 最终夺冠，P2 为亚军，P5 为季军
+// 7. 完整赛程：P1 最终夺冠，P2 为亚军，P5 为季军
 const full = scores([
   ['wb_r1_1', 2, 0],
   ['wb_r1_2', 2, 0],
@@ -139,13 +139,13 @@ assert.equal(standings.champion, 'P1');
 assert.equal(standings.runnerUp, 'P2');
 assert.equal(standings.thirdPlace, 'P5');
 
-// 7. 反向结果：总决赛 P2 获胜，P2 夺冠、P1 亚军、P5 季军
+// 8. 反向结果：总决赛 P2 获胜，P2 夺冠、P1 亚军、P5 季军
 const p2Wins = { ...full, grand_final: { a: 2, b: 3 } };
 assert.equal(deriveStandings(seeds, p2Wins).champion, 'P2');
 assert.equal(deriveStandings(seeds, p2Wins).runnerUp, 'P1');
 assert.equal(deriveStandings(seeds, p2Wins).thirdPlace, 'P5');
 
-// 8. 按对局补齐卡组：旧版选手卡组迁移到各对局，BO5 补第三套
+// 9. 按对局补齐卡组：旧版选手卡组迁移到各对局，BO5 补第三套
 const legacyRecord = {
   players: [
     { id: 'P1', name: 'P1', decks: [{ id: 'd1', name: '主卡组', images: ['img-a'] }, { id: 'd2', name: '备卡组', images: [] }] },
@@ -191,7 +191,7 @@ const preserved = ensureMatchDecks({
 });
 assert.equal(preserved.matchDecks.wb_r1_1.P1[0].name, '自定卡组', '已有条目不应被覆盖');
 
-// 9. 旧数据迁移/修复后，所有对局的卡组 id 必须全局唯一
+// 10. 旧数据迁移/修复后，所有对局的卡组 id 必须全局唯一
 const duplicateRecord = {
   players: legacyRecord.players,
   scores: full,
@@ -224,15 +224,15 @@ assert.equal(new Set(allDeckIds).size, allDeckIds.length, '迁移后卡组 id �
 assert.equal(duplicateRecord.matchDecks.wb_r1_1.P1[0].id, 'd1', '第一次出现的 id 应保留');
 assert.notEqual(duplicateRecord.matchDecks.wb_r2_1.P1[0].id, 'd1', '重复的 id 应被替换');
 
-// 10. 修复幂等：再次补齐不会改变已经唯一的 id
+// 11. 修复幂等：再次补齐不会改变已经唯一的 id
 const repairedSnapshot = JSON.stringify(duplicateRecord.matchDecks);
 ensureMatchDecks(duplicateRecord);
 assert.equal(JSON.stringify(duplicateRecord.matchDecks), repairedSnapshot, '重复调用不应改变卡组 id');
 
-// 11. 头像占位色：确定性 + 在色板范围内
+// 12. 头像占位色：确定性 + 在色板范围内
 const { AVATAR_COLORS, avatarColor } = require('../bracket-model.js');
 assert.equal(avatarColor('P1'), avatarColor('P1'), '同一选手颜色应稳定');
 assert.ok(AVATAR_COLORS.includes(avatarColor('P1')), '颜色应来自色板');
 assert.equal(AVATAR_COLORS.length, 8, '色板应有 8 色');
 
-console.log('bracket-model 全部 11 组测试通过 ✓');
+console.log('bracket-model 全部 12 组测试通过 ✓');

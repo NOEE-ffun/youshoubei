@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="view-transition" content="same-origin">
-  <title>赛程 - 赛制面板</title>
+  <meta name="description" content="右手杯赛程：胜者组、败者组与总决赛对阵、比分及卡组展示。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>赛程 - 右手杯</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
   <link rel="prefetch" href="index.html">
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -18,7 +21,7 @@
     <aside class="rules-sidebar" id="rules-sidebar" aria-label="赛制规则">
       <div class="rules-sidebar-head">
         <h2>赛制规则</h2>
-        <button type="button" id="rules-toggle" class="btn btn-ghost btn-sm rules-toggle" aria-expanded="true">收起</button>
+        <button type="button" id="rules-toggle" class="btn btn-ghost btn-sm rules-toggle">收起</button>
       </div>
       <div class="rules-body">
         <p class="rules-text" id="rules-text"></p>
@@ -40,7 +43,7 @@
         <button type="button" id="reset-scores-btn" class="btn btn-danger btn-sm">重置比分</button>
       </div>
 
-      <section aria-labelledby="roster-title">
+      <section class="bracket-section" aria-labelledby="roster-title">
         <h2 class="section-title" id="roster-title">
           选手名单
           <span class="phase-tag">按顺序配对 1v2 · 3v4 · 5v6 · 7v8</span>
@@ -48,7 +51,7 @@
         <div class="roster-grid" id="roster-grid"></div>
       </section>
 
-      <section aria-labelledby="wb-title">
+      <section class="bracket-section" aria-labelledby="wb-title">
         <h2 class="section-title" id="wb-title">
           胜者组
           <span class="phase-tag">失利进败者组</span>
@@ -56,7 +59,7 @@
         <div class="bracket-flow" id="wb-flow" style="--rounds: 3"></div>
       </section>
 
-      <section aria-labelledby="lb-title">
+      <section class="bracket-section" aria-labelledby="lb-title">
         <h2 class="section-title" id="lb-title">
           败者组
           <span class="phase-tag">再败出局</span>
@@ -64,7 +67,7 @@
         <div class="bracket-flow" id="lb-flow" style="--rounds: 4"></div>
       </section>
 
-      <section aria-labelledby="gf-title">
+      <section class="bracket-section" aria-labelledby="gf-title">
         <h2 class="section-title" id="gf-title">
           总决赛
           <span class="phase-tag">BO5</span>
@@ -74,9 +77,9 @@
     </main>
   </div>
 
-  <script src="bracket-model.js"></script>
-  <script src="common.js"></script>
-  <script src="deck-modal.js"></script>
-  <script src="bracket.js"></script>
+  <script src="bracket-model.js" defer></script>
+  <script src="common.js" defer></script>
+  <script src="deck-modal.js" defer></script>
+  <script src="bracket.js" defer></script>
 </body>
 </html>

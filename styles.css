@@ -4,7 +4,19 @@
   --bg: #f4f6fb;
   --surface: #ffffff;
   /* 半透明卡片表面：透出背景图；配合 backdrop-filter 模糊保证文字可读 */
+  --surface-glass: rgba(255, 255, 255, 0.7);
   --surface-glass: oklch(100% 0 0 / 0.7);
+  /* 玻璃卡片悬停表面与深色遮罩家族 */
+  --surface-glass-hover: rgba(255, 255, 255, 0.85);
+  --surface-glass-hover: oklch(100% 0 0 / 0.85);
+  --scrim: rgba(23, 30, 51, 0.82);
+  --scrim: oklch(22% 0.02 262 / 0.82);
+  --scrim-strong: rgba(23, 30, 51, 0.95);
+  --scrim-strong: oklch(22% 0.02 262 / 0.95);
+  --scrim-heavy: rgba(16, 21, 40, 0.9);
+  --scrim-heavy: oklch(12% 0.02 262 / 0.9);
+  --overlay: rgba(28, 35, 56, 0.45);
+  --overlay: oklch(18% 0.02 262 / 0.45);
   --surface-2: #eef1f8;
   --surface-3: #e2e7f2;
   --text: #1c2434;
@@ -16,6 +28,9 @@
   --accent-strong: oklch(47% 0.17 262);
   --accent-soft: #e8eeff;
   --accent-soft: oklch(95% 0.03 262);
+  /* 拖拽态斑马纹强调色（比 accent-soft 略深） */
+  --accent-stripe: #d9e2f9;
+  --accent-stripe: oklch(93% 0.04 262);
   --danger: #d64545;
   --danger: oklch(58% 0.2 25);
   --danger-soft: #fdecec;
@@ -29,6 +44,8 @@
   --radius-lg: 1.25rem;
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
   --shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 30px rgb(15 23 42 / 0.07);
+  --shadow-lg: 0 24px 80px rgb(15 23 42 / 0.25);
+  --focus-ring: 0 0 0 3px rgba(96, 125, 240, 0.55);
   --focus-ring: 0 0 0 3px oklch(75% 0.12 262 / 0.55);
   --font:
     system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB",
@@ -83,13 +100,6 @@ body {
   background-size: cover;
 }
 
-#bg-layer::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: oklch(96% 0.01 262 / 0);
-}
-
 /* 通用可访问性工具 */
 .visually-hidden {
   position: absolute;
@@ -120,13 +130,25 @@ body {
   transform: translateY(0);
 }
 
+/* 初始化失败横幅（IndexedDB/云端数据读取失败时替代白屏） */
+.init-error {
+  position: relative;
+  z-index: 60;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid var(--danger);
+}
+
 :focus-visible {
   outline: none;
   box-shadow: var(--focus-ring);
 }
 
-/* 页头 */
-.app-header {
+/* 页头（HTML 中页头元素仅带 id，由 common.js 填充内容） */
+#app-header {
   position: sticky;
   top: 0;
   z-index: 50;
@@ -289,6 +311,7 @@ body {
 }
 
 .btn-danger:hover {
+  background: #f8e4e4;
   background: oklch(from var(--danger) l c h / 0.14);
 }
 
@@ -309,7 +332,7 @@ body {
   align-items: start;
 }
 
-@media (width >= 64rem) {
+@media (min-width: 64rem) {
   .page-wrap {
     grid-template-columns: 19rem 1fr;
   }
@@ -333,18 +356,25 @@ main > h1 {
   letter-spacing: -0.01em;
 }
 
-/* 侧边栏（赛制规则） */
-.rules-sidebar {
+/* 玻璃卡片公共底：半透明表面 + 毛玻璃 + 细边框 + 浅投影，各组件只补充自身差异 */
+.rules-sidebar,
+.roster-item,
+.match-card,
+.marquee-item {
   background: var(--surface-glass);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
+}
+
+/* 侧边栏（赛制规则） */
+.rules-sidebar {
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
-@media (width >= 64rem) {
+@media (min-width: 64rem) {
   .rules-sidebar {
     position: sticky;
     top: 5.5rem;
@@ -405,6 +435,7 @@ main > h1 {
   );
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
+  border: 1px solid #b8c8f7;
   border: 1px solid oklch(from var(--accent) l c h / 0.35);
   border-radius: var(--radius);
   padding: 0.875rem 1.25rem;
@@ -414,10 +445,6 @@ main > h1 {
 
 .champion-banner[hidden] {
   display: none;
-}
-
-.champion-banner strong {
-  font-size: 1.1rem;
 }
 
 .champion-banner .medal {
@@ -436,17 +463,12 @@ main > h1 {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--surface-glass);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 0.55rem 0.75rem;
-  box-shadow: var(--shadow-sm);
 }
 
 .roster-item:hover {
-  background: oklch(100% 0 0 / 0.85);
+  background: var(--surface-glass-hover);
 }
 
 .roster-index {
@@ -464,7 +486,6 @@ main > h1 {
 }
 
 .roster-item input,
-.player-name-input,
 .deck-name-input {
   font: inherit;
   color: var(--text);
@@ -477,13 +498,11 @@ main > h1 {
 }
 
 .roster-item input:hover,
-.player-name-input:hover,
 .deck-name-input:hover {
   border-color: var(--border);
 }
 
 .roster-item input:focus,
-.player-name-input:focus,
 .deck-name-input:focus {
   border-color: var(--accent);
   background: var(--surface);
@@ -503,7 +522,7 @@ main > h1 {
 }
 
 .section-title .phase-tag {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   color: var(--accent);
@@ -519,7 +538,7 @@ main > h1 {
   align-items: start;
 }
 
-@media (width >= 48rem) {
+@media (min-width: 48rem) {
   .bracket-flow {
     grid-template-columns: repeat(var(--rounds, 3), minmax(0, 1fr));
     gap: 1.5rem;
@@ -535,12 +554,7 @@ main > h1 {
 
 /* 对局卡片 */
 .match-card {
-  background: var(--surface-glass);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
   padding: 0.75rem;
   transition:
     border-color var(--dur-ui) var(--ease-out),
@@ -549,10 +563,11 @@ main > h1 {
 }
 
 .match-card:hover {
-  background: oklch(100% 0 0 / 0.85);
+  background: var(--surface-glass-hover);
 }
 
 .match-card.played {
+  border-color: #aec0f6;
   border-color: oklch(from var(--accent) l c h / 0.4);
   box-shadow: var(--shadow);
 }
@@ -573,7 +588,7 @@ main > h1 {
 
 .match-state {
   flex-shrink: 0;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-muted);
   background: var(--surface-2);
@@ -583,7 +598,7 @@ main > h1 {
 
 .match-format {
   flex-shrink: 0;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--accent);
@@ -618,6 +633,7 @@ main > h1 {
 
 .match-player.winner {
   background: var(--accent-soft);
+  border-color: #aec0f6;
   border-color: oklch(from var(--accent) l c h / 0.4);
   font-weight: 700;
 }
@@ -703,50 +719,11 @@ main > h1 {
   color: var(--danger);
 }
 
-/* 卡组页 */
-.players-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.25rem;
-}
-
-@media (width >= 48rem) {
-  .players-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (width >= 64rem) {
-  .players-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-.player-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  padding: 1rem;
-  display: grid;
-  gap: 1rem;
-  align-content: start;
-}
-
-.player-card-head {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.player-card-head .roster-index {
-  flex-shrink: 0;
-}
-
+/* 卡组 */
 .deck {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: oklch(99% 0 0);
+  background: var(--surface);
   padding: 0.75rem;
   display: grid;
   gap: 0.625rem;
@@ -759,7 +736,7 @@ main > h1 {
   align-items: start;
 }
 
-@media (width >= 48rem) {
+@media (min-width: 48rem) {
   .deck-dialog-body {
     grid-template-columns: 1fr 1fr;
   }
@@ -824,8 +801,8 @@ button.image-slot {
     -45deg,
     var(--surface-2),
     var(--surface-2) 8px,
-    oklch(96% 0.01 262) 8px,
-    oklch(96% 0.01 262) 16px
+    var(--surface-3) 8px,
+    var(--surface-3) 16px
   );
   transition:
     border-color var(--dur-ui) var(--ease-out),
@@ -844,9 +821,10 @@ button.image-slot {
     -45deg,
     var(--accent-soft),
     var(--accent-soft) 8px,
-    oklch(93% 0.04 262) 8px,
-    oklch(93% 0.04 262) 16px
+    var(--accent-stripe) 8px,
+    var(--accent-stripe) 16px
   );
+  box-shadow: 0 0 0 3px rgba(53, 99, 233, 0.3);
   box-shadow: 0 0 0 3px oklch(from var(--accent) l c h / 0.3);
   transform: scale(1.02);
 }
@@ -877,10 +855,10 @@ button.image-slot {
 
 .slot-action {
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: #fff;
-  background: oklch(22% 0.02 262 / 0.82);
+  background: var(--scrim);
   border: 0;
   border-radius: 999px;
   padding: 0.2rem 0.5rem;
@@ -889,10 +867,11 @@ button.image-slot {
 }
 
 .slot-action:hover {
-  background: oklch(22% 0.02 262 / 0.95);
+  background: var(--scrim-strong);
 }
 
 .slot-action.danger {
+  background: #d64545;
   background: oklch(from var(--danger) l c h / 0.85);
 }
 
@@ -904,7 +883,7 @@ button.image-slot {
 dialog {
   border: 0;
   border-radius: var(--radius-lg);
-  box-shadow: 0 24px 80px rgb(15 23 42 / 0.25);
+  box-shadow: var(--shadow-lg);
   padding: 0;
   inline-size: min(92vw, 34rem);
   max-block-size: min(85vh, 46rem);
@@ -927,7 +906,7 @@ dialog[open] {
 }
 
 dialog::backdrop {
-  background: oklch(18% 0.02 262 / 0.45);
+  background: var(--overlay);
   animation: backdrop-in var(--dur-ui) var(--ease-out);
 }
 
@@ -1016,6 +995,7 @@ dialog::backdrop {
 }
 
 .manage-item.is-active {
+  border-color: #90a9f3;
   border-color: oklch(from var(--accent) l c h / 0.55);
   background: var(--accent-soft);
 }
@@ -1041,7 +1021,7 @@ dialog::backdrop {
 }
 
 .active-badge {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   color: var(--accent);
 }
@@ -1081,12 +1061,65 @@ dialog::backdrop {
   min-inline-size: 10rem;
 }
 
+/* 轻量提示（toast）：右下角自动消失，替代阻塞式 alert */
+.toast-region {
+  position: fixed;
+  inset-block-end: 1.25rem;
+  inset-inline: 1.25rem;
+  display: grid;
+  justify-content: center;
+  gap: 0.5rem;
+  z-index: 300;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--text);
+  color: var(--surface);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  animation: toast-in var(--dur-slow) var(--ease-out);
+}
+
+.toast-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.toast-out {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 确认弹窗（替代阻塞式 confirm） */
+.confirm-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 /* 灯箱：淡入 + 图片缩放入场 */
 .lightbox {
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: oklch(12% 0.02 262 / 0.9);
+  background: var(--scrim-heavy);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1170,7 +1203,6 @@ dialog::backdrop {
 
 /* 动效与无障碍偏好：入场克制快速（UI < 300ms） */
 .match-card,
-.player-card,
 .rules-sidebar,
 .champion-banner {
   animation: rise var(--dur-slow) var(--ease-out) both;
@@ -1204,7 +1236,7 @@ dialog::backdrop {
   }
 }
 
-@media (width < 30rem) {
+@media (max-width: 30rem) {
   .deck-images {
     grid-template-columns: 1fr;
   }
@@ -1218,6 +1250,7 @@ dialog::backdrop {
   flex: none;
   background: var(--surface-3);
 }
+
 .avatar-fallback {
   display: inline-flex;
   align-items: center;
@@ -1227,31 +1260,50 @@ dialog::backdrop {
   line-height: 1;
   user-select: none;
 }
-.avatar-lg { width: 48px; height: 48px; font-size: 1.25rem; }
-.avatar-md { width: 28px; height: 28px; font-size: 0.8125rem; }
-.avatar-sm { width: 24px; height: 24px; font-size: 0.6875rem; }
+
+.avatar-lg {
+  inline-size: 3rem;
+  block-size: 3rem;
+  font-size: 1.25rem;
+}
+
+.avatar-md {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  font-size: 0.8125rem;
+}
+
+.avatar-sm {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  font-size: 0.75rem;
+}
+
 .roster-avatar {
   position: relative;
   display: flex;
   align-items: center;
 }
+
 .roster-avatar .avatar-actions {
   position: absolute;
   inset-inline-start: 50%;
   transform: translateX(-50%);
-  top: -6px;
+  inset-block-start: -0.375rem;
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
   opacity: 0;
   transition: opacity var(--dur-ui) var(--ease-out);
 }
+
 .roster-avatar:hover .avatar-actions,
 .roster-avatar:focus-within .avatar-actions {
   opacity: 1;
 }
+
 .avatar-action {
-  font-size: 0.6875rem;
-  padding: 2px 6px;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
@@ -1259,11 +1311,16 @@ dialog::backdrop {
   cursor: pointer;
   box-shadow: var(--shadow-sm);
 }
-.avatar-action.danger { color: var(--danger); }
-.deck-player-head { display: flex; align-items: center; gap: 0.625rem; }
 
+.avatar-action.danger {
+  color: var(--danger);
+}
 
-
+.deck-player-head {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
 
 /* ========== 主页（右手杯 · 跑马灯主视觉） ========== */
 
@@ -1299,6 +1356,13 @@ dialog::backdrop {
   pointer-events: auto;
 }
 
+/* 无缝滚动的复制半区：自身为嵌套 flex（保持轨道总宽与间距不变）。
+   不用 display:contents——部分浏览器会忽略其上的 aria-hidden，导致读屏重复朗读 */
+.marquee-track > .marquee-copy {
+  display: flex;
+  gap: 1.5rem;
+}
+
 /* 第二行反向滚动 */
 .marquee-track-reverse {
   animation-direction: reverse;
@@ -1319,14 +1383,9 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   gap: 1rem;
-  min-block-size: 94px;
-  background: var(--surface-glass);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border);
+  min-block-size: 5.875rem;
   border-radius: 1rem;
   padding: 0.6rem 1.6rem 0.6rem 0.875rem;
-  box-shadow: var(--shadow-sm);
   transition:
     transform var(--dur-fast) var(--ease-out),
     background var(--dur-ui) var(--ease-out),

@@ -3,10 +3,10 @@
 
   /* 主页跑马灯：读取当前比赛选手（名字 + 头像），横向无缝滚动展示。
    * 数据联动复用 common.js 的存储层（window.TournamentApp），
-   * 头像渲染复用全局 avatarMarkup。 */
+   * 头像渲染复用 TournamentUtils.avatarMarkup。 */
 
-  /* 共享工具（escapeHtml/medalMap）统一来自 common.js */
-  const { escapeHtml, medalMap } = window.TournamentUtils;
+  /* 共享工具（escapeHtml/medalMap/avatarMarkup）统一来自 common.js */
+  const { escapeHtml, medalMap, avatarMarkup } = window.TournamentUtils;
 
   function renderMarquee() {
     const app = window.TournamentApp;
@@ -31,8 +31,9 @@
         '</div>'
       );
     }).join('');
-    /* 无缝滚动：内容重复两份，轨道平移 -50% 即一个完整循环 */
-    const doubled = items + items;
+    /* 无缝滚动：内容重复两份，轨道平移 -50% 即一个完整循环；
+       复制的后半区对读屏隐藏，避免名单被朗读两遍 */
+    const doubled = items + '<div class="marquee-copy" aria-hidden="true">' + items + '</div>';
     const track = document.getElementById('marquee-track');
     const reverseTrack = document.getElementById('marquee-track-reverse');
     if (track) track.innerHTML = doubled;
@@ -46,5 +47,7 @@
   });
 
   /* 初始化数据层（复用 common.js：IndexedDB/云端读取、页头渲染） */
-  window.TournamentAppInit('home');
+  window.TournamentAppInit('home').catch((error) => {
+    if (window.TournamentApp) window.TournamentApp.fatalError(error);
+  });
 })();

@@ -1,4 +1,4 @@
-# 8 人 BO3 双败淘汰赛制网站
+# 右手杯——8 人 BO3 双败淘汰赛制网站
 
 这个网站服务一场 8 人卡牌比赛，赛程页面管对阵和比分，卡组按对局记录。比分填完，晋级名单和最终名次自动更新，不需要手动安排下一轮。
 
@@ -27,7 +27,7 @@ npm start
 ## 代码结构
 
 - `bracket-model.js`：赛制纯逻辑（对阵解析、比分合法性、名次派生），浏览器/Node 双端可用，有单元测试
-- `common.js`：存储层（IndexedDB/云端适配）、页头/弹窗/灯箱、跨文件共享工具（`window.TournamentUtils`：escapeHtml/debounce/canEdit/save/medalMap）
+- `common.js`：存储层（IndexedDB/云端适配）、页头/弹窗/灯箱/toast 提示，跨文件共享工具（`window.TournamentUtils`：escapeHtml/errMsg/safeUrl/cssUrl/debounce/canEdit/save/medalMap/avatarMarkup/notify/uiConfirm）
 - `bracket.js`：赛程页渲染与交互
 - `deck-modal.js`：卡组弹窗
 - `home.js`：主页跑马灯

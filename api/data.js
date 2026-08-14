@@ -37,7 +37,7 @@ module.exports = async function handler(req, res) {
       sendJson(res, 200, workspace || { tournaments: [], activeId: null });
     } catch (error) {
       console.error('[data] GET 失败:', error.message);
-      sendJson(res, 500, { error: '读取云端数据失败: ' + error.message });
+      sendJson(res, 500, { error: '读取云端数据失败：' + error.message });
     }
     return;
   }
@@ -53,7 +53,9 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    let raw = '';
+    /* 逐块收集 Buffer 后一次性解码：中文等多字节字符跨 chunk 时，
+     * 逐块 utf8 解码会产生 U+FFFD 替换符损坏数据 */
+    const chunks = [];
     let bodySize = 0;
     for await (const chunk of req) {
       bodySize += chunk.length;
@@ -61,11 +63,11 @@ module.exports = async function handler(req, res) {
         sendJson(res, 413, { error: '数据过大' });
         return;
       }
-      raw += chunk;
+      chunks.push(chunk);
     }
     let workspace;
     try {
-      workspace = JSON.parse(raw);
+      workspace = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       if (!workspace || !Array.isArray(workspace.tournaments)) throw new Error('数据格式不正确');
     } catch (error) {
       sendJson(res, 400, { error: '数据格式不正确' });
@@ -82,7 +84,7 @@ module.exports = async function handler(req, res) {
       sendJson(res, 200, { ok: true });
     } catch (error) {
       console.error('[data] PUT 失败:', error.message);
-      sendJson(res, 500, { error: '保存云端数据失败: ' + error.message });
+      sendJson(res, 500, { error: '保存云端数据失败：' + error.message });
     }
     return;
   }
