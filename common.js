@@ -93,9 +93,11 @@
     return value;
   }
 
-  /* CSS url() 包装：白名单校验后剔除引号与反斜杠，防止逃逸出字符串 */
+  /* CSS url() 包装：白名单校验后剔除各类引号与反斜杠，防止逃逸出字符串。
+   * 用单引号包裹——deck-modal 会把结果拼进双引号 HTML 属性，
+   * 双引号会提前截断属性值（卡组缩略图曾因此全部失效） */
   function cssUrl(url) {
-    return 'url("' + safeUrl(url).replace(/["\\]/g, '') + '")';
+    return "url('" + safeUrl(url).replace(/["'\\]/g, '') + "')";
   }
 
   function makeDefaultTournament(name) {
