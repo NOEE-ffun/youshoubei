@@ -1332,13 +1332,10 @@ dialog::backdrop {
     box-shadow var(--dur-ui) var(--ease-out);
 }
 
-/* 悬停高亮（仅精细指针设备）：放大、背景提实、强调描边 */
+/* 悬停高亮（仅精细指针设备）：只放大，保持毛玻璃质感不变 */
 @media (hover: hover) and (pointer: fine) {
   .marquee-item:hover {
     transform: scale(1.06);
-    background: oklch(100% 0 0 / 0.95);
-    border-color: var(--accent);
-    box-shadow: var(--shadow);
   }
 }
 
