@@ -1267,6 +1267,8 @@ dialog::backdrop {
 
 /* ========== 主页（右手杯 · 跑马灯主视觉） ========== */
 
+/* 主页 main 无实际内容（标题卡片已移除），仅撑起页面高度；
+   跑马灯是 fixed 定位不占文档流，去掉 min-height 背景会不够高 */
 .home-main {
   min-height: calc(100vh - 4rem);
 }

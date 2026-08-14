@@ -5,30 +5,8 @@
    * 数据联动复用 common.js 的存储层（window.TournamentApp），
    * 头像渲染复用全局 avatarMarkup。 */
 
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>"']/g, (ch) => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    }[ch]));
-  }
-
-  /* 比赛已分出冠亚季军时,返回 playerId → 奖牌信息 的映射;未结束返回空 Map */
-  function medalMap(record) {
-    const map = new Map();
-    if (!record || !Array.isArray(record.players)) return map;
-    const standings = BracketModel.deriveStandings(
-      record.players.map((p) => p.id),
-      record.scores || {}
-    );
-    if (!standings.champion) return map;
-    if (standings.champion) map.set(standings.champion, { type: 'gold', emoji: '🥇' });
-    if (standings.runnerUp) map.set(standings.runnerUp, { type: 'silver', emoji: '🥈' });
-    if (standings.thirdPlace) map.set(standings.thirdPlace, { type: 'bronze', emoji: '🥉' });
-    return map;
-  }
+  /* 共享工具（escapeHtml/medalMap）统一来自 common.js */
+  const { escapeHtml, medalMap } = window.TournamentUtils;
 
   function renderMarquee() {
     const app = window.TournamentApp;

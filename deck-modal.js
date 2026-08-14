@@ -5,36 +5,8 @@
   let currentMatchId = null;
   let pendingTarget = null;
 
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>"']/g, (ch) => ({
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;'
-    }[ch]));
-  }
-
-  function debounce(fn, wait) {
-    let timer = null;
-    return function () {
-      clearTimeout(timer);
-      timer = setTimeout(fn, wait);
-    };
-  }
-
-  function canEdit() {
-    const app = window.TournamentApp;
-    return !(app.mode === 'cloud' && !app.isAdmin());
-  }
-
-  function save() {
-    /* 保存失败必须可见：云端未解锁/口令失效时 alert 提示 */
-    return window.TournamentApp.idbPut(window.TournamentApp.current).catch((error) => {
-      console.error('[save] 失败:', error);
-      alert('保存失败：' + (error && error.message ? error.message : error));
-    });
-  }
+  /* 共享工具（escapeHtml/debounce/canEdit/save）统一来自 common.js */
+  const { escapeHtml, debounce, canEdit, save } = window.TournamentUtils;
 
   function buildDialog() {
     dialog = document.createElement('dialog');
@@ -135,7 +107,8 @@
   }
 
   function imageSlot(playerId, deck, deckIndex, slotIndex, editable) {
-    const key = currentMatchId + '-' + playerId + '-' + deckIndex + '-' + slotIndex;
+    /* 键统一为 | 分隔（与 data-deck-key 一致）：matchId|playerId|deckIndex|slotIndex */
+    const key = [currentMatchId, playerId, deckIndex, slotIndex].join('|');
     const image = deck.images[slotIndex];
     if (!image) {
       return (
@@ -213,7 +186,7 @@
 
     body.querySelectorAll('[data-view]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const [matchId, playerId, deckIndex, slotIndex] = btn.dataset.view.split('-');
+        const [matchId, playerId, deckIndex, slotIndex] = btn.dataset.view.split('|');
         const deck = window.TournamentApp.current.matchDecks[matchId][playerId][Number(deckIndex)];
         const items = deck.images.map((image, i) => ({
           src: window.TournamentApp.blobUrl(image),
@@ -230,7 +203,7 @@
 
     body.querySelectorAll('[data-delete]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        const [matchId, playerId, deckIndex, slotIndex] = btn.dataset.delete.split('-');
+        const [matchId, playerId, deckIndex, slotIndex] = btn.dataset.delete.split('|');
         window.TournamentApp.current.matchDecks[matchId][playerId][Number(deckIndex)].images
           .splice(Number(slotIndex), 1);
         await save();
@@ -241,7 +214,7 @@
 
   async function addImage(targetKey, file) {
     if (!file || !targetKey) return;
-    const [matchId, playerId, deckIndex, slotIndex] = targetKey.split('-');
+    const [matchId, playerId, deckIndex, slotIndex] = targetKey.split('|');
     try {
       const blob = await window.TournamentApp.compressImage(file, 1600);
       const deck = window.TournamentApp.current.matchDecks[matchId][playerId][Number(deckIndex)];
