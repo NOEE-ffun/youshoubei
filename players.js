@@ -45,34 +45,11 @@
     grid.querySelectorAll('[data-delete-player]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.deletePlayer;
-        if (!(await uiConfirm('确定删除该选手吗？所有比赛中的引用会一并移除。'))) return;
+        if (!(await uiConfirm('确定从选手库删除该选手吗？历史比赛记录不会被删除，但该选手会显示为“待定”。'))) return;
         try {
-          // 清理所有比赛中的引用，避免出现悬空选手 id
-          const tournaments = await app.storageGetAll();
-          for (const t of tournaments || []) {
-            if (!t) continue;
-            let changed = false;
-            if (Array.isArray(t.roster) && t.roster.includes(id)) {
-              t.roster = t.roster.filter((x) => x !== id);
-              changed = true;
-            }
-            for (const card of (t.canvas && t.canvas.cards) || []) {
-              for (const slot of card.slots || []) {
-                if (slot && slot.type === 'player' && slot.playerId === id) {
-                  slot.type = 'empty';
-                  delete slot.playerId;
-                  changed = true;
-                }
-              }
-            }
-            if (changed) {
-              t.updatedAt = Date.now();
-              await app.storagePut(t);
-            }
-          }
+          // 只删除选手库条目，保留所有历史比赛数据
           app.players = (app.players || []).filter((x) => x.id !== id);
           await app.storagePutPlayers(app.players);
-          if (app.current) await app.setActiveId(app.current.id);
           render();
         } catch (error) {
           notify(errMsg(error), 'danger');

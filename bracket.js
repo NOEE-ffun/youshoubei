@@ -146,7 +146,8 @@
     if (!record.scores) record.scores = {};
     if (!record.canvas) record.canvas = { cards: [] };
     if (typeof CanvasModel !== 'undefined' && CanvasModel.deriveRoster && record.canvas) {
-      record.roster = CanvasModel.deriveRoster(record.canvas);
+      const known = new Set((window.TournamentApp.players || []).map((p) => p.id));
+      record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => known.has(id));
     }
     renderChampion();
     renderCanvas();
@@ -370,7 +371,8 @@
     const board = document.getElementById('canvas-board');
     if (!board) return;
     if (record && record.canvas && typeof CanvasModel !== 'undefined' && CanvasModel.deriveRoster) {
-      record.roster = CanvasModel.deriveRoster(record.canvas);
+      const known = new Set((window.TournamentApp.players || []).map((p) => p.id));
+      record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => known.has(id));
     }
     const canvas = record.canvas || { cards: [] };
     const resolved = (typeof CanvasModel !== 'undefined' && CanvasModel.resolveCanvas)
