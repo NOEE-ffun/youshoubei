@@ -24,6 +24,7 @@
   let appInstance = null;
   let mode = 'local';
   let cloudWorkspace = null;
+  let cloudFallbackReason = null;
 
   function openDb() {
     if (!dbPromise) {
@@ -272,7 +273,13 @@
         body: JSON.stringify(payload)
       });
       if (response.status === 401) throw new Error('管理口令错误');
-      if (!response.ok) throw new Error((await apiErrorMessage(response)) || '保存云端数据失败');
+      if (!response.ok) {
+        const message = (await apiErrorMessage(response)) || '保存云端数据失败';
+        if (/suspended|quota|exceed|满额|额度/i.test(message)) {
+          throw new Error('Vercel Blob 存储额度已用尽或已暂停，请在 Vercel 控制台恢复 / 升级 Blob 后重试。');
+        }
+        throw new Error(message);
+      }
       /* 上传成功后本地快照与上传内容对齐 */
       cloudWorkspace = payload;
     };
@@ -292,7 +299,13 @@
       body: blob
     });
     if (response.status === 401) throw new Error('管理口令错误');
-    if (!response.ok) throw new Error((await apiErrorMessage(response)) || '图片上传失败');
+    if (!response.ok) {
+      const message = (await apiErrorMessage(response)) || '图片上传失败';
+      if (/suspended|quota|exceed|满额|额度/i.test(message)) {
+        throw new Error('Vercel Blob 存储额度已用尽或已暂停，请在 Vercel 控制台恢复 / 升级 Blob 后重试。');
+      }
+      throw new Error(message);
+    }
     const data = await response.json();
     return data.url;
   }
@@ -1540,6 +1553,7 @@
         } catch (error) {
           mode = 'local';
           cloudWorkspace = null;
+          cloudFallbackReason = errMsg(error);
         }
       }
       /* 仅本地模式需要本地兜底初始化；云端模式不得触碰 localStorage/IndexedDB，
@@ -1549,6 +1563,9 @@
       }
       appInstance.mode = mode;
       await refreshApp();
+      if (cloudFallbackReason) {
+        notify('云端数据不可用，已切换到本机数据：' + cloudFallbackReason, 'danger');
+      }
     } catch (error) {
       showFatalError(error);
       return;
