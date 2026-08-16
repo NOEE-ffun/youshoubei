@@ -1459,7 +1459,9 @@
       if (JSON.stringify(record) !== before) dirtyRecords.push(record);
     }
     players = [...playerMap.values()];
-    if (dirtyRecords.length || !players.length) {
+    // 云端只读访客不允许写库：迁移/推导只放在内存里，避免初始化直接失败
+    const canWrite = mode !== 'cloud' || (appInstance && appInstance.isAdmin());
+    if (canWrite && (dirtyRecords.length || !players.length)) {
       try {
         await storagePutPlayers(players);
       } catch (error) {
@@ -1467,8 +1469,10 @@
       }
     }
     // 只回写发生变化的比赛，避免每次刷新都全量写库
-    for (const record of dirtyRecords) {
-      await storagePut(record);
+    if (canWrite) {
+      for (const record of dirtyRecords) {
+        await storagePut(record);
+      }
     }
 
     /* activeId 优先取 localStorage（本机最近切换，即时一致），云端兜底（跨设备） */
