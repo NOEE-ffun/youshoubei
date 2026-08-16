@@ -356,6 +356,21 @@
     await idbPutMeta(META_PLAYERS, players || []);
   }
 
+  async function storageDeletePlayer(id) {
+    if (!id) return;
+    if (mode === 'cloud') {
+      // 云端不能用 mergeWorkspace 删除：合并逻辑只增不删，会导致选手复活。
+      // 因此读取最新 workspace 后，用 noMerge 精确删除该选手。
+      const latest = await cloudGetWorkspace();
+      latest.players = (latest.players || []).filter((p) => p.id !== id);
+      await cloudPutWorkspace(latest, { noMerge: true });
+      cloudWorkspace = latest;
+      return;
+    }
+    const players = (await idbGetMeta(META_PLAYERS)) || [];
+    await idbPutMeta(META_PLAYERS, players.filter((p) => p.id !== id));
+  }
+
   async function setActiveId(id) {
     /* activeId 先同步写入 localStorage（页面跳转/上传取消也不丢），
      * 云端上传异步进行；另一页面（主页/赛程）立即可读正确比赛 */
@@ -975,8 +990,8 @@
         if (!(await uiConfirm('确定从全局选手库删除该选手吗？历史比赛记录不会被删除，但该选手会显示为“待定”。'))) return;
         try {
           // 只删除选手库条目，保留所有历史比赛数据
+          await storageDeletePlayer(id);
           appInstance.players = (appInstance.players || []).filter((p) => p.id !== id);
-          await storagePutPlayers(appInstance.players);
           renderPlayerLibrary();
           renderRosterEditor();
           renderManageList();
@@ -1459,7 +1474,9 @@
       if (JSON.stringify(record) !== before) dirtyRecords.push(record);
     }
     players = [...playerMap.values()];
-    if (dirtyRecords.length || !players.length) {
+    // 云端只读访客不允许写库：迁移/推导只放在内存里，避免初始化直接失败
+    const canWrite = mode !== 'cloud' || (appInstance && appInstance.isAdmin());
+    if (canWrite && (dirtyRecords.length || !players.length)) {
       try {
         await storagePutPlayers(players);
       } catch (error) {
@@ -1467,8 +1484,10 @@
       }
     }
     // 只回写发生变化的比赛，避免每次刷新都全量写库
-    for (const record of dirtyRecords) {
-      await storagePut(record);
+    if (canWrite) {
+      for (const record of dirtyRecords) {
+        await storagePut(record);
+      }
     }
 
     /* activeId 优先取 localStorage（本机最近切换，即时一致），云端兜底（跨设备） */
@@ -1536,6 +1555,7 @@
       storageDelete,
       storageGetPlayers,
       storagePutPlayers,
+      storageDeletePlayer,
       isAdmin,
       setAdminToken,
       setActiveId,
