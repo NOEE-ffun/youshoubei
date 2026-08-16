@@ -1,10 +1,9 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { list, put } = require('@vercel/blob');
+const { DATA_PATH, readJson, writeJson } = require('./oss');
 
-const DATA_PATH = 'data.json';
-/* data.json 只含文本数据（图片存 Blob 为 URL），1MB 上限绰绰有余，防内存被打爆 */
+/* data.json 只含文本数据（图片存 OSS 为 URL），1MB 上限绰绰有余，防内存被打爆 */
 const MAX_BODY = 1024 * 1024;
 
 function sendJson(res, status, payload) {
@@ -22,12 +21,7 @@ function isAuthorized(req) {
 }
 
 async function readWorkspace() {
-  const result = await list({ prefix: DATA_PATH });
-  const blob = result.blobs && result.blobs[0];
-  if (!blob) return null;
-  const response = await fetch(blob.url);
-  if (!response.ok) throw new Error('读取 data.json 失败');
-  return response.json();
+  return readJson(DATA_PATH);
 }
 
 module.exports = async function handler(req, res) {
@@ -75,12 +69,7 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-      await put(DATA_PATH, JSON.stringify(workspace), {
-        access: 'public',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: 'application/json; charset=utf-8'
-      });
+      await writeJson(DATA_PATH, workspace);
       sendJson(res, 200, { ok: true });
     } catch (error) {
       console.error('[data] PUT 失败:', error.message);

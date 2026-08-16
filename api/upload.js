@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { put } = require('@vercel/blob');
+const { uploadImageBuffer, publicUrl } = require('./oss');
 
 const MAX_SIZE = 5 * 1024 * 1024;
 
@@ -79,15 +79,11 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const pathname = 'images/' + crypto.randomUUID() + EXT_BY_TYPE[imageType];
+  const key = 'images/' + crypto.randomUUID() + EXT_BY_TYPE[imageType];
 
   try {
-    const blob = await put(pathname, buffer, {
-      access: 'public',
-      addRandomSuffix: false,
-      contentType: imageType
-    });
-    sendJson(res, 200, { url: blob.url });
+    await uploadImageBuffer(key, buffer, imageType);
+    sendJson(res, 200, { url: publicUrl(key) });
   } catch (error) {
     console.error('[upload] 失败:', error.message);
     sendJson(res, 500, { error: '图片上传失败：' + error.message });

@@ -9,6 +9,7 @@
     "test": "node test/bracket.test.js && node test/canvas.test.js && node test/migration-smoke.test.js"
   },
   "dependencies": {
-    "@vercel/blob": "^2.6.1"
+    "@vercel/blob": "^2.6.1",
+    "ali-oss": "^6.23.0"
   }
 }
