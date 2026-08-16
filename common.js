@@ -881,9 +881,21 @@
         return;
       }
       if (!cloudWorkspace) {
-        status.textContent = '云端数据未就绪';
-        syncSettingsAdminState(true);
-        return;
+        if (mode !== 'cloud') {
+          status.textContent = '当前为本机模式，未连接云端：' + (cloudFallbackReason || '云端不可用');
+          syncSettingsAdminState(true);
+          return;
+        }
+        try {
+          cloudWorkspace = await cloudGetWorkspace();
+          if (!cloudWorkspace.players) cloudWorkspace.players = [];
+          if (!cloudWorkspace.tournaments) cloudWorkspace.tournaments = [];
+          if (!cloudWorkspace.activeId) cloudWorkspace.activeId = (cloudWorkspace.tournaments[0] || {}).id || null;
+        } catch (error) {
+          status.textContent = '云端数据读取失败：' + errMsg(error);
+          syncSettingsAdminState(true);
+          return;
+        }
       }
       try {
         await cloudPutWorkspace(cloudWorkspace);
