@@ -5,81 +5,69 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="view-transition" content="same-origin">
-  <meta name="description" content="右手杯赛程：胜者组、败者组与总决赛对阵、比分及卡组展示。">
+  <meta name="description" content="右手杯比赛：可查看与编辑赛程、比分及卡组。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-  <title>赛程 - 右手杯</title>
+  <title>比赛 - 右手杯</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
   <link rel="prefetch" href="index.html">
+  <link rel="prefetch" href="library.html">
+  <link rel="prefetch" href="players.html">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-page="schedule">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
   <div id="bg-layer" aria-hidden="true"></div>
   <header id="app-header"></header>
+  <aside id="app-sidebar" class="app-sidebar" aria-label="主导航"></aside>
 
-  <div class="page-wrap" id="page-wrap">
-    <aside class="rules-sidebar" id="rules-sidebar" aria-label="赛制规则">
-      <div class="rules-sidebar-head">
-        <h2>赛制规则</h2>
-        <button type="button" id="rules-toggle" class="btn btn-ghost btn-sm rules-toggle">收起</button>
-      </div>
-      <div class="rules-body">
-        <p class="rules-text" id="rules-text"></p>
-        <button type="button" id="rules-edit" class="btn btn-secondary btn-sm">编辑规则</button>
-      </div>
-    </aside>
-
+  <div class="layout-body layout-body-canvas" id="canvas-layout">
     <main id="main-content" tabindex="-1">
-      <h1>赛程</h1>
-
       <div class="champion-banner" id="champion-banner" hidden>
         <span class="medal" aria-hidden="true">🏆</span>
         <span id="champion-text"></span>
       </div>
 
-      <div class="toolbar">
-        <button type="button" id="show-rules-btn" class="btn btn-secondary btn-sm" hidden>查看规则</button>
-        <span class="spacer" aria-hidden="true"></span>
-        <button type="button" id="reset-scores-btn" class="btn btn-danger btn-sm">重置比分</button>
+      <div class="canvas-wrap-full">
+        <div class="canvas-hint" id="canvas-hint">查看模式</div>
+        <div class="canvas-scroll canvas-scroll-full" id="canvas-scroll">
+          <div class="canvas-stage" id="canvas-stage">
+            <div class="canvas-board" id="canvas-board"></div>
+          </div>
+        </div>
+
+        <div class="canvas-lock" id="canvas-lock" hidden>
+          <div class="canvas-lock-card">
+            <h2>需要管理员密码</h2>
+            <p>比赛编辑需要管理员权限。</p>
+            <input type="password" id="canvas-lock-password" placeholder="管理员密码" autocomplete="off">
+            <div class="dialog-actions">
+              <button type="button" id="canvas-lock-cancel" class="btn btn-secondary btn-sm">取消</button>
+              <button type="button" id="canvas-lock-submit" class="btn btn-primary">解锁编辑</button>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <section class="bracket-section" aria-labelledby="roster-title">
-        <h2 class="section-title" id="roster-title">
-          选手名单
-          <span class="phase-tag">按顺序配对 1v2 · 3v4 · 5v6 · 7v8</span>
-        </h2>
-        <div class="roster-grid" id="roster-grid"></div>
-      </section>
-
-      <section class="bracket-section" aria-labelledby="wb-title">
-        <h2 class="section-title" id="wb-title">
-          胜者组
-          <span class="phase-tag">失利进败者组</span>
-        </h2>
-        <div class="bracket-flow" id="wb-flow" style="--rounds: 3"></div>
-      </section>
-
-      <section class="bracket-section" aria-labelledby="lb-title">
-        <h2 class="section-title" id="lb-title">
-          败者组
-          <span class="phase-tag">再败出局</span>
-        </h2>
-        <div class="bracket-flow" id="lb-flow" style="--rounds: 4"></div>
-      </section>
-
-      <section class="bracket-section" aria-labelledby="gf-title">
-        <h2 class="section-title" id="gf-title">
-          总决赛
-          <span class="phase-tag">BO5</span>
-        </h2>
-        <div class="bracket-flow" id="gf-flow" style="--rounds: 1"></div>
-      </section>
     </main>
+
+    <aside class="edit-toolbar" id="edit-toolbar" aria-label="编辑工具" hidden>
+      <button type="button" class="tool-btn is-active" data-tool="select" title="选择 / 拖拽"><img class="icon" src="icons/open_with.svg" alt="选择 / 拖拽"></button>
+      <button type="button" class="tool-btn" data-tool="link" title="连线"><img class="icon" src="icons/link.svg" alt="连线"></button>
+      <button type="button" class="tool-btn" data-tool="add" title="添加卡片"><img class="icon" src="icons/add.svg" alt="添加卡片"></button>
+      <button type="button" class="tool-btn" data-tool="format-size" title="画布大小"><img class="icon" src="icons/format_size.svg" alt="画布大小"></button>
+      <button type="button" class="tool-btn" data-tool="zoom" title="缩放模式"><img class="icon" src="icons/search.svg" alt="缩放模式"></button>
+      <button type="button" class="tool-btn" data-tool="zoom-in" title="放大"><img class="icon" src="icons/zoom_in.svg" alt="放大"></button>
+      <button type="button" class="tool-btn" data-tool="zoom-out" title="缩小"><img class="icon" src="icons/zoom_out.svg" alt="缩小"></button>
+      <button type="button" class="tool-btn" data-tool="fit" title="适应画布"><img class="icon" src="icons/fit_screen.svg" alt="适应画布"></button>
+      <button type="button" class="tool-btn" data-tool="delete" title="批量删除模式"><img class="icon" src="icons/delete_sweep.svg" alt="批量删除模式"></button>
+      <button type="button" class="tool-btn danger" id="edit-delete-selected-btn" title="删除选中卡片" hidden><img class="icon" src="icons/delete.svg" alt="删除选中卡片"></button>
+      <button type="button" class="tool-btn" data-tool="save" title="保存"><img class="icon" src="icons/save.svg" alt="保存"></button>
+    </aside>
   </div>
 
-  <script src="bracket-model.js" defer></script>
+  <script src="canvas-model.js" defer></script>
   <script src="common.js" defer></script>
   <script src="deck-modal.js" defer></script>
+  <script src="canvas-editor.js" defer></script>
   <script src="bracket.js" defer></script>
 </body>
 </html>

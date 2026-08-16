@@ -1,18 +1,19 @@
 (function () {
   'use strict';
 
-  /* 主页跑马灯：读取当前比赛选手（名字 + 头像），横向无缝滚动展示。
-   * 数据联动复用 common.js 的存储层（window.TournamentApp），
-   * 头像渲染复用 TournamentUtils.avatarMarkup。 */
+  /* 主页：跑马灯 + 比赛背景幻灯片渐变 */
 
-  /* 共享工具（escapeHtml/medalMap/avatarMarkup）统一来自 common.js */
-  const { escapeHtml, medalMap, avatarMarkup } = window.TournamentUtils;
+  const { escapeHtml, medalMap, avatarMarkup, safeUrl } = window.TournamentUtils;
+
+  let slideTimer = null;
+  let slideIndex = 0;
+  let slideBackgrounds = [];
 
   function renderMarquee() {
     const app = window.TournamentApp;
     const record = app && app.current;
-    if (!record || !Array.isArray(record.players)) return;
-    const players = record.players;
+    if (!app) return;
+    const players = (app.players || []).slice();
     if (!players.length) {
       for (const id of ['marquee-track', 'marquee-track-reverse']) {
         const track = document.getElementById(id);
@@ -20,7 +21,7 @@
       }
       return;
     }
-    const medalOf = medalMap(record);
+    const medalOf = record ? medalMap(record) : new Map();
     const items = players.map((player) => {
       const medal = medalOf.get(player.id);
       return (
@@ -31,8 +32,6 @@
         '</div>'
       );
     }).join('');
-    /* 无缝滚动：内容重复两份，轨道平移 -50% 即一个完整循环；
-       复制的后半区对读屏隐藏，避免名单被朗读两遍 */
     const doubled = items + '<div class="marquee-copy" aria-hidden="true">' + items + '</div>';
     const track = document.getElementById('marquee-track');
     const reverseTrack = document.getElementById('marquee-track-reverse');
@@ -40,13 +39,53 @@
     if (reverseTrack) reverseTrack.innerHTML = doubled;
   }
 
+  async function loadSlideshowBackgrounds() {
+    try {
+      const all = await window.TournamentApp.storageGetAll();
+      slideBackgrounds = (all || [])
+        .map((t) => t && t.background)
+        .filter(Boolean);
+    } catch (error) {
+      slideBackgrounds = [];
+    }
+    const el = document.getElementById('home-slideshow');
+    if (!el) return;
+    if (!slideBackgrounds.length) {
+      if (slideTimer) clearInterval(slideTimer);
+      el.innerHTML = '';
+      el.style.backgroundImage = 'linear-gradient(135deg, #1e293b, #0f172a)';
+      return;
+    }
+    showSlide();
+    if (slideTimer) clearInterval(slideTimer);
+    slideTimer = setInterval(showSlide, 5000);
+  }
+
+  function showSlide() {
+    const el = document.getElementById('home-slideshow');
+    if (!el) return;
+    if (!slideBackgrounds.length) return;
+    const url = window.TournamentApp.blobUrl(slideBackgrounds[slideIndex % slideBackgrounds.length]);
+    const layer = document.createElement('div');
+    layer.className = 'slideshow-layer';
+    layer.style.backgroundImage = "url('" + safeUrl(url) + "')";
+    el.appendChild(layer);
+    requestAnimationFrame(() => layer.classList.add('show'));
+    setTimeout(() => {
+      el.querySelectorAll('.slideshow-layer:not(:last-child)').forEach((old) => old.remove());
+    }, 1000);
+    slideIndex += 1;
+  }
+
   document.addEventListener('ts:ready', () => {
     renderMarquee();
-    /* 选手信息变更时（改名/换头像）联动刷新 */
-    document.addEventListener('ts:changed', renderMarquee);
+    loadSlideshowBackgrounds();
+    document.addEventListener('ts:changed', () => {
+      renderMarquee();
+      loadSlideshowBackgrounds();
+    });
   });
 
-  /* 初始化数据层（复用 common.js：IndexedDB/云端读取、页头渲染） */
   window.TournamentAppInit('home').catch((error) => {
     if (window.TournamentApp) window.TournamentApp.fatalError(error);
   });

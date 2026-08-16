@@ -5,46 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="view-transition" content="same-origin">
-  <meta name="description" content="右手杯——画布式自定义赛程与选手库。">
+  <meta name="description" content="右手杯选手库：新增、删除、修改选手卡片。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-  <title>主页 - 右手杯</title>
+  <title>选手库 - 右手杯</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
+  <link rel="prefetch" href="index.html">
   <link rel="prefetch" href="schedule.html">
   <link rel="prefetch" href="library.html">
-  <link rel="prefetch" href="players.html">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body data-page="home">
+<body data-page="players">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
   <div id="bg-layer" aria-hidden="true"></div>
   <header id="app-header"></header>
   <aside id="app-sidebar" class="app-sidebar" aria-label="主导航"></aside>
 
   <div class="layout-body">
-    <main class="home-main" id="main-content" tabindex="-1">
-      <h1 class="visually-hidden">右手杯主页</h1>
-
-      <div class="home-hero">
-        <div class="home-slideshow" id="home-slideshow" aria-hidden="true"></div>
-        <div class="home-content">
-          <div class="home-marquee" role="group" aria-label="参赛选手">
-            <div class="marquee-row">
-              <div class="marquee-track" id="marquee-track"></div>
-            </div>
-            <div class="marquee-row">
-              <div class="marquee-track marquee-track-reverse" id="marquee-track-reverse"></div>
-            </div>
-          </div>
-          <div class="home-actions">
-            <a class="btn btn-primary btn-lg" href="library.html">查看比赛</a>
-          </div>
-        </div>
+    <main id="main-content" tabindex="-1">
+      <h1>选手库</h1>
+      <div class="lock-banner" id="players-lock-banner" hidden>需要管理员密码才能修改选手库。</div>
+      <div class="players-toolbar">
+        <form id="add-player-form" class="dialog-actions">
+          <input type="text" id="new-player-name" placeholder="选手名称" required>
+          <button type="submit" class="btn btn-primary btn-sm">新增选手</button>
+        </form>
       </div>
+      <div class="players-grid" id="players-grid"></div>
     </main>
   </div>
 
   <script src="canvas-model.js" defer></script>
   <script src="common.js" defer></script>
-  <script src="home.js" defer></script>
+  <script src="players.js" defer></script>
 </body>
 </html>
