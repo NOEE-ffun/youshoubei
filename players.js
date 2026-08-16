@@ -47,9 +47,9 @@
         const id = btn.dataset.deletePlayer;
         if (!(await uiConfirm('确定从选手库删除该选手吗？历史比赛记录不会被删除，但该选手会显示为“待定”。'))) return;
         try {
-          // 只删除选手库条目，保留所有历史比赛数据
+          // 使用专门删除方法：云端采用 noMerge 精确删除，避免刷新后选手复活
+          await app.storageDeletePlayer(id);
           app.players = (app.players || []).filter((x) => x.id !== id);
-          await app.storagePutPlayers(app.players);
           render();
         } catch (error) {
           notify(errMsg(error), 'danger');
