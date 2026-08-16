@@ -777,10 +777,9 @@
       const input = manageDialog.querySelector('#new-tournament-name');
       const template = manageDialog.querySelector('#new-tournament-template');
       const name = input.value.trim() || '我的赛事';
-      const allPlayers = (appInstance && appInstance.players) || [];
       let record;
       if (template && template.value === 'double') {
-        record = makeDefaultTournament(name, allPlayers.slice(0, 8).map((p) => p.id));
+        record = makeDefaultTournament(name);
       } else {
         record = makeBlankTournament(name);
       }

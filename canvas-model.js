@@ -446,7 +446,6 @@
 
   function createDefaultTournament(name, roster) {
     const now = Date.now();
-    const r = roster || [];
     return {
       id: uid('t'),
       name: (name && name.trim()) || '我的赛事',
@@ -457,8 +456,9 @@
       background: null,
       createdAt: now,
       updatedAt: now,
-      roster: r.slice(),
-      canvas: createDefaultCanvas(r),
+      // 新建比赛不再自动填入选手，所有种子位保持待定
+      roster: [],
+      canvas: createDefaultCanvas([]),
       scores: {},
       matchDecks: {}
     };
