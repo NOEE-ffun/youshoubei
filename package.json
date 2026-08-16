@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/bracket.test.js"
+    "test": "node test/bracket.test.js && node test/canvas.test.js && node test/migration-smoke.test.js"
   },
   "dependencies": {
     "@vercel/blob": "^2.6.1"

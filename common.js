@@ -2,8 +2,10 @@
   'use strict';
 
   const DB_NAME = 'tournament-site';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const STORE = 'tournaments';
+  const META_STORE = 'meta';
+  const META_PLAYERS = 'globalPlayers';
   const LS_ACTIVE = 'ts:activeTournamentId';
   const LS_SIDEBAR = 'ts:rulesSidebarHidden';
   const LS_ADMIN_TOKEN = 'ts:adminToken';
@@ -31,6 +33,9 @@
           const db = request.result;
           if (!db.objectStoreNames.contains(STORE)) {
             db.createObjectStore(STORE, { keyPath: 'id' });
+          }
+          if (!db.objectStoreNames.contains(META_STORE)) {
+            db.createObjectStore(META_STORE, { keyPath: 'key' });
           }
         };
         request.onsuccess = () => resolve(request.result);
@@ -67,6 +72,24 @@
     }));
   }
 
+  function idbGetMeta(key) {
+    return openDb().then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(META_STORE, 'readonly');
+      const request = tx.objectStore(META_STORE).get(key);
+      request.onsuccess = () => resolve(request.result ? request.result.value : null);
+      request.onerror = () => reject(request.error);
+    }));
+  }
+
+  function idbPutMeta(key, value) {
+    return openDb().then((db) => new Promise((resolve, reject) => {
+      const tx = db.transaction(META_STORE, 'readwrite');
+      tx.objectStore(META_STORE).put({ key, value });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    }));
+  }
+
   function uid(prefix) {
     return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   }
@@ -79,6 +102,11 @@
       '"': '&quot;',
       "'": '&#39;'
     }[ch]));
+  }
+
+  function iconMarkup(name, alt) {
+    return '<img class="icon" src="icons/' + escapeHtml(name) + '.svg" alt="' +
+      escapeHtml(alt || '') + '" aria-hidden="true">';
   }
 
   function errMsg(error) {
@@ -100,23 +128,45 @@
     return "url('" + safeUrl(url).replace(/["'\\]/g, '') + "')";
   }
 
-  function makeDefaultTournament(name) {
-    const now = Date.now();
-    const players = Array.from({ length: 8 }, (_, i) => ({
+  function makeDefaultPlayers() {
+    return Array.from({ length: 8 }, (_, i) => ({
       id: uid('p'),
-      name: '选手 ' + (i + 1)
+      name: '选手 ' + (i + 1),
+      avatar: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     }));
-    return {
-      id: uid('t'),
-      name: (name && name.trim()) || '我的赛事',
-      rules: DEFAULT_RULES,
-      createdAt: now,
-      updatedAt: now,
-      players,
-      scores: {},
-      matchDecks: {},
-      background: null
-    };
+  }
+
+  function makeDefaultTournament(name, roster) {
+    const r = roster || [];
+    const record = (typeof CanvasModel !== 'undefined' && CanvasModel.createDefaultTournament)
+      ? CanvasModel.createDefaultTournament(name, r)
+      : {
+          id: uid('t'),
+          name: (name && name.trim()) || '我的赛事',
+          status: 'upcoming',
+          startTime: null,
+          liveUrl: '',
+          rules: DEFAULT_RULES,
+          background: null,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          roster: r.slice(),
+          canvas: { cards: [] },
+          scores: {},
+          matchDecks: {}
+        };
+    record.rules = DEFAULT_RULES;
+    return record;
+  }
+
+  function makeBlankTournament(name) {
+    const record = (typeof CanvasModel !== 'undefined' && CanvasModel.createBlankTournament)
+      ? CanvasModel.createBlankTournament(name)
+      : makeDefaultTournament(name, []);
+    record.rules = DEFAULT_RULES;
+    return record;
   }
 
   /* ---------- 图片工具 ---------- */
@@ -180,8 +230,15 @@
       const remote = byId.get(t.id);
       if (!remote || (t.updatedAt || 0) >= (remote.updatedAt || 0)) byId.set(t.id, t);
     }
+    const playerMap = new Map();
+    for (const p of (latest && latest.players) || []) playerMap.set(p.id, p);
+    for (const p of (local && local.players) || []) {
+      const remote = playerMap.get(p.id);
+      if (!remote || (p.updatedAt || 0) >= (remote.updatedAt || 0)) playerMap.set(p.id, p);
+    }
     return {
       activeId: (local && local.activeId) || (latest && latest.activeId) || null,
+      players: [...playerMap.values()],
       tournaments: [...byId.values()]
     };
   }
@@ -272,6 +329,20 @@
     return idbDelete(id);
   }
 
+  async function storageGetPlayers() {
+    if (mode === 'cloud') return (cloudWorkspace && cloudWorkspace.players) || [];
+    return (await idbGetMeta(META_PLAYERS)) || [];
+  }
+
+  async function storagePutPlayers(players) {
+    if (mode === 'cloud') {
+      cloudWorkspace.players = players || [];
+      await cloudPutWorkspace(cloudWorkspace);
+      return;
+    }
+    await idbPutMeta(META_PLAYERS, players || []);
+  }
+
   async function setActiveId(id) {
     /* activeId 先同步写入 localStorage（页面跳转/上传取消也不丢），
      * 云端上传异步进行；另一页面（主页/赛程）立即可读正确比赛 */
@@ -295,20 +366,21 @@
 
   async function migrateLocalToCloud() {
     const local = await idbGetAll();
+    const localPlayers = (await idbGetMeta(META_PLAYERS)) || [];
+    const playerMap = new Map(localPlayers.map((p) => [p.id, p]));
     const tournaments = [];
     for (const record of local) {
-      /* 深拷贝后由 BracketModel.ensureMatchDecks 统一完成旧版 players[].decks
-       * → matchDecks 的迁移（与赛程页加载走同一路径，避免两份迁移实现）；
-       * 迁移完再剔除旧字段，避免把冗余结构上传云端。 */
       const copy = structuredClone(record);
-      if (typeof BracketModel !== 'undefined' && BracketModel.ensureMatchDecks) {
-        BracketModel.ensureMatchDecks(copy);
+      if (typeof CanvasModel !== 'undefined' && CanvasModel.migrateLegacyTournament) {
+        CanvasModel.migrateLegacyTournament(copy, playerMap);
       }
-      for (const player of copy.players) {
+      if (typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
+        CanvasModel.ensureCanvasDecks(copy);
+      }
+      for (const player of playerMap.values()) {
         if (player.avatar && typeof player.avatar !== 'string') {
           player.avatar = await uploadCloudImage(player.avatar);
         }
-        delete player.decks;
       }
       for (const matchId of Object.keys(copy.matchDecks || {})) {
         for (const playerId of Object.keys(copy.matchDecks[matchId])) {
@@ -328,15 +400,22 @@
       tournaments.push(copy);
     }
 
+    let players = [...playerMap.values()];
+    if (!players.length) {
+      players = makeDefaultPlayers();
+      playerMap.clear();
+      for (const p of players) playerMap.set(p.id, p);
+    }
+    if (!tournaments.length) {
+      const fresh = makeDefaultTournament('我的赛事', players.map((p) => p.id));
+      tournaments.push(fresh);
+    }
+
     const workspace = {
+      players,
       tournaments,
       activeId: localStorage.getItem(LS_ACTIVE) || (tournaments[0] || {}).id || null
     };
-    if (!workspace.tournaments.length) {
-      const fresh = makeDefaultTournament('我的赛事');
-      workspace.tournaments.push(fresh);
-      workspace.activeId = fresh.id;
-    }
     if (!workspace.activeId) workspace.activeId = workspace.tournaments[0].id;
 
     await cloudPutWorkspace(workspace);
@@ -347,6 +426,7 @@
 
   async function migrateCloudToLocal() {
     const workspace = await cloudGetWorkspace();
+    await idbPutMeta(META_PLAYERS, workspace.players || []);
     for (const record of workspace.tournaments) {
       await idbPut(record);
     }
@@ -609,9 +689,16 @@
       '  <form id="create-tournament-form" class="dialog-actions">' +
       '    <label class="visually-hidden" for="new-tournament-name">新比赛名称</label>' +
       '    <input type="text" id="new-tournament-name" placeholder="新比赛名称" required>' +
+      '    <select id="new-tournament-template" aria-label="新建模板">' +
+      '      <option value="blank">空白画布</option>' +
+      '      <option value="double">8 人双败模板</option>' +
+      '    </select>' +
       '    <button type="submit" class="btn btn-primary btn-sm">新建比赛</button>' +
       '  </form>' +
-      '  <div id="manage-list" class="manage-list" aria-label="已有比赛列表"></div>' +
+      '  <div class="manage-subsection">' +
+      '    <h3>比赛列表</h3>' +
+      '    <div id="manage-list" class="manage-list" aria-label="已有比赛列表"></div>' +
+      '  </div>' +
       '</div>';
     document.body.appendChild(manageDialog);
 
@@ -628,6 +715,22 @@
       '    <div class="form-field">' +
       '      <label for="settings-name">比赛名称</label>' +
       '      <input type="text" id="settings-name" required>' +
+      '    </div>' +
+      '    <div class="form-field">' +
+      '      <label for="settings-status">赛事状态</label>' +
+      '      <select id="settings-status">' +
+      '        <option value="upcoming">未开始</option>' +
+      '        <option value="ongoing">进行中</option>' +
+      '        <option value="finished">已结束</option>' +
+      '      </select>' +
+      '    </div>' +
+      '    <div class="form-field">' +
+      '      <label for="settings-live-url">直播链接</label>' +
+      '      <input type="url" id="settings-live-url" placeholder="https://..." autocomplete="off">' +
+      '    </div>' +
+      '    <div class="form-field">' +
+      '      <label for="settings-start-time">开赛时间</label>' +
+      '      <input type="datetime-local" id="settings-start-time">' +
       '    </div>' +
       '    <div class="form-field">' +
       '      <label for="settings-rules">赛制规则</label>' +
@@ -672,8 +775,15 @@
     manageDialog.querySelector('#create-tournament-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       const input = manageDialog.querySelector('#new-tournament-name');
+      const template = manageDialog.querySelector('#new-tournament-template');
       const name = input.value.trim() || '我的赛事';
-      const record = makeDefaultTournament(name);
+      const allPlayers = (appInstance && appInstance.players) || [];
+      let record;
+      if (template && template.value === 'double') {
+        record = makeDefaultTournament(name, allPlayers.slice(0, 8).map((p) => p.id));
+      } else {
+        record = makeBlankTournament(name);
+      }
       try {
         await storagePut(record);
       } catch (error) {
@@ -695,8 +805,16 @@
       const record = appInstance.current;
       const nameInput = settingsDialog.querySelector('#settings-name');
       const rulesInput = settingsDialog.querySelector('#settings-rules');
+      const statusInput = settingsDialog.querySelector('#settings-status');
+      const liveUrlInput = settingsDialog.querySelector('#settings-live-url');
+      const startTimeInput = settingsDialog.querySelector('#settings-start-time');
       record.name = nameInput.value.trim() || '我的赛事';
       record.rules = rulesInput.value;
+      record.status = statusInput ? statusInput.value : (record.status || 'upcoming');
+      record.liveUrl = liveUrlInput ? liveUrlInput.value.trim() : (record.liveUrl || '');
+      record.startTime = startTimeInput && startTimeInput.value
+        ? new Date(startTimeInput.value).toISOString()
+        : (record.startTime || null);
       if (pendingBackground !== undefined) {
         record.background = pendingBackground;
       }
@@ -795,6 +913,9 @@
     const migration = settingsDialog.querySelector('#migration-actions');
     const fields = [
       settingsDialog.querySelector('#settings-name'),
+      settingsDialog.querySelector('#settings-status'),
+      settingsDialog.querySelector('#settings-live-url'),
+      settingsDialog.querySelector('#settings-start-time'),
       settingsDialog.querySelector('#settings-rules'),
       settingsDialog.querySelector('#bg-upload'),
       settingsDialog.querySelector('#bg-remove'),
@@ -812,6 +933,101 @@
     for (const field of fields) field.disabled = !admin;
   }
 
+  function renderPlayerLibrary() {
+    if (!manageDialog) return;
+    const list = manageDialog.querySelector('#player-library-list');
+    if (!list) return;
+    const players = (appInstance && appInstance.players) || [];
+    list.innerHTML = players.map((p) =>
+      '<div class="player-library-item">' +
+      avatarMarkup(p, 'avatar-sm') +
+      '<span>' + escapeHtml(p.name) + '</span>' +
+      '<button type="button" class="btn btn-danger btn-sm" data-delete-player="' + p.id + '">删除</button>' +
+      '</div>'
+    ).join('') || '<p class="hint">暂无选手，先添加一位。</p>';
+    list.querySelectorAll('[data-delete-player]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.deletePlayer;
+        if (!(await uiConfirm('确定从全局选手库删除该选手吗？所有比赛中的引用会一并移除。'))) return;
+        try {
+          const all = await storageGetAll();
+          for (const record of all || []) {
+            if (!record) continue;
+            let changed = false;
+            if (Array.isArray(record.roster) && record.roster.includes(id)) {
+              record.roster = record.roster.filter((x) => x !== id);
+              changed = true;
+            }
+            for (const card of (record.canvas && record.canvas.cards) || []) {
+              for (const slot of card.slots || []) {
+                if (slot && slot.type === 'player' && slot.playerId === id) {
+                  slot.type = 'empty';
+                  delete slot.playerId;
+                  changed = true;
+                }
+              }
+            }
+            if (changed) {
+              record.updatedAt = Date.now();
+              await storagePut(record);
+            }
+          }
+          appInstance.players = (appInstance.players || []).filter((p) => p.id !== id);
+          await storagePutPlayers(appInstance.players);
+          await refreshApp();
+          renderPlayerLibrary();
+          renderRosterEditor();
+          renderManageList();
+          document.dispatchEvent(new CustomEvent('ts:changed'));
+        } catch (error) {
+          notify('删除选手失败：' + errMsg(error), 'danger');
+        }
+      });
+    });
+  }
+
+  function renderRosterEditor() {
+    if (!manageDialog) return;
+    const list = manageDialog.querySelector('#roster-editor-list');
+    if (!list) return;
+    const record = appInstance && appInstance.current;
+    if (!record) return;
+    const players = (appInstance && appInstance.players) || [];
+    const rosterSet = new Set(record.roster || []);
+    list.innerHTML = players.map((p) =>
+      '<label class="roster-toggle">' +
+      '<input type="checkbox" data-roster-toggle="' + p.id + '"' + (rosterSet.has(p.id) ? ' checked' : '') + '> ' +
+      escapeHtml(p.name) +
+      '</label>'
+    ).join('') || '<p class="hint">全局选手库为空。</p>';
+    list.querySelectorAll('[data-roster-toggle]').forEach((input) => {
+      input.addEventListener('change', async () => {
+        const record = appInstance.current;
+        if (!record) return;
+        const id = input.dataset.rosterToggle;
+        if (!Array.isArray(record.roster)) record.roster = [];
+        if (input.checked) {
+          if (!record.roster.includes(id)) record.roster.push(id);
+        } else {
+          record.roster = record.roster.filter((x) => x !== id);
+          for (const card of (record.canvas && record.canvas.cards) || []) {
+            for (const slot of card.slots || []) {
+              if (slot && slot.type === 'player' && slot.playerId === id) {
+                slot.type = 'empty';
+                delete slot.playerId;
+              }
+            }
+          }
+        }
+        record.updatedAt = Date.now();
+        await storagePut(record);
+        renderRosterEditor();
+        renderManageList();
+        document.dispatchEvent(new CustomEvent('ts:changed'));
+      });
+    });
+  }
+
   function renderManageList() {
     if (!manageDialog) return;
     const list = manageDialog.querySelector('#manage-list');
@@ -823,6 +1039,7 @@
         (active ? '<span class="active-badge">当前</span>' : '') +
         '<input class="manage-item-name" value="' + escapeHtml(item.name) + '" aria-label="比赛名称">' +
         '<button type="button" class="btn btn-secondary btn-sm" data-switch="' + item.id + '">切换</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-copy="' + item.id + '">复制</button>' +
         '<button type="button" class="btn btn-danger btn-sm" data-delete="' + item.id + '">删除</button>' +
         '</div>'
       );
@@ -863,6 +1080,42 @@
       });
     });
 
+    list.querySelectorAll('[data-copy]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        try {
+          const all = await storageGetAll();
+          const source = all.find((t) => t.id === btn.dataset.copy);
+          if (!source) return;
+          const copy = structuredClone(source);
+          copy.id = uid('t');
+          copy.name = source.name + ' 副本';
+          copy.createdAt = Date.now();
+          copy.updatedAt = Date.now();
+          copy.scores = {};
+          copy.matchDecks = {};
+          const idMap = new Map();
+          for (const card of copy.canvas.cards || []) {
+            const newId = uid('c');
+            idMap.set(card.id, newId);
+            card.id = newId;
+          }
+          for (const card of copy.canvas.cards || []) {
+            for (const slot of card.slots || []) {
+              if (slot && slot.type === 'flow' && idMap.has(slot.cardId)) {
+                slot.cardId = idMap.get(slot.cardId);
+              }
+            }
+          }
+          await storagePut(copy);
+          await setActiveId(copy.id);
+          renderManageList();
+          document.dispatchEvent(new CustomEvent('ts:changed'));
+        } catch (error) {
+          notify('复制比赛失败：' + errMsg(error), 'danger');
+        }
+      });
+    });
+
     list.querySelectorAll('[data-delete]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.delete;
@@ -878,7 +1131,8 @@
         try {
           const remaining = (await storageGetAll());
           if (!remaining.length) {
-            const fresh = makeDefaultTournament('我的赛事');
+            const playerIds = (window.TournamentApp.players || []).slice(0, 8).map((p) => p.id);
+            const fresh = makeDefaultTournament('我的赛事', playerIds);
             try {
               await storagePut(fresh);
             } catch (error) {
@@ -907,14 +1161,29 @@
     manageDialog.showModal();
   }
 
+  function toDateTimeLocal(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
   function openSettingsDialog(focusRules) {
     buildDialogs();
     const record = window.TournamentApp.current;
     const nameInput = settingsDialog.querySelector('#settings-name');
     const rulesInput = settingsDialog.querySelector('#settings-rules');
+    const statusInput = settingsDialog.querySelector('#settings-status');
+    const liveUrlInput = settingsDialog.querySelector('#settings-live-url');
+    const startTimeInput = settingsDialog.querySelector('#settings-start-time');
     const preview = settingsDialog.querySelector('#bg-preview');
     nameInput.value = record.name;
     rulesInput.value = record.rules || '';
+    if (statusInput) statusInput.value = record.status || 'upcoming';
+    if (liveUrlInput) liveUrlInput.value = record.liveUrl || '';
+    if (startTimeInput) startTimeInput.value = toDateTimeLocal(record.startTime);
     pendingBackground = undefined;
     if (record.background) {
       preview.style.backgroundImage = cssUrl(blobUrl(record.background));
@@ -944,8 +1213,8 @@
         ' alt="' + escapeHtml(player.name || '') + ' 的头像">';
     }
     const initial = String((player && player.name) || '?').trim().charAt(0) || '?';
-    const color = (typeof BracketModel !== 'undefined' && BracketModel.avatarColor)
-      ? BracketModel.avatarColor(player ? player.id : '')
+    const color = (typeof CanvasModel !== 'undefined' && CanvasModel.avatarColor)
+      ? CanvasModel.avatarColor(player ? player.id : '')
       : '#3563e9';
     return '<span class="' + cls + ' avatar-fallback" style="background:' + color + '">' +
       escapeHtml(initial) + '</span>';
@@ -979,11 +1248,10 @@
   /* 比赛已分出冠亚季军时，返回 playerId → 奖牌信息 的映射；未结束返回空 Map */
   function medalMap(record) {
     const map = new Map();
-    if (!record || !Array.isArray(record.players)) return map;
-    const standings = BracketModel.deriveStandings(
-      record.players.map((p) => p.id),
-      record.scores || {}
-    );
+    if (!record || !record.canvas || !Array.isArray(record.roster)) return map;
+    const standings = (typeof CanvasModel !== 'undefined' && CanvasModel.deriveStandings)
+      ? CanvasModel.deriveStandings(record)
+      : { champion: null, runnerUp: null, thirdPlace: null };
     if (!standings.champion) return map;
     if (standings.champion) map.set(standings.champion, { type: 'gold', emoji: '🥇' });
     if (standings.runnerUp) map.set(standings.runnerUp, { type: 'silver', emoji: '🥈' });
@@ -993,6 +1261,7 @@
 
   window.TournamentUtils = {
     escapeHtml,
+    iconMarkup,
     errMsg,
     safeUrl,
     cssUrl,
@@ -1015,55 +1284,112 @@
     }
   }
 
+  function renderSidebar() {
+    const placeholder = document.getElementById('app-sidebar');
+    if (!placeholder) return;
+    const app = window.TournamentApp;
+    const active = app && app.activePage;
+    const items = [
+      { page: 'home', href: 'index.html', icon: 'home', label: '主页' },
+      { page: 'match', href: 'schedule.html', icon: 'emoji_events', label: '比赛' },
+      { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' }
+    ];
+    const isActive = (page) => {
+      if (page === 'match') return active === 'schedule' || active === 'match';
+      return active === page;
+    };
+    placeholder.innerHTML =
+      '<nav class="side-nav" aria-label="主导航">' +
+      items.map((item) =>
+        '<a class="side-link' + (isActive(item.page) ? ' is-active' : '') + '" href="' + item.href + '" data-page="' + item.page + '"' +
+        ' title="' + item.label + '" aria-label="' + item.label + '">' +
+        '<span class="side-icon" aria-hidden="true">' + iconMarkup(item.icon, item.label) + '</span>' +
+        '</a>'
+      ).join('') +
+      '</nav>';
+  }
+
   function renderHeader() {
     const app = window.TournamentApp;
     const placeholder = document.getElementById('app-header');
     if (!placeholder) return;
     const active = app.current;
+    const pageTitles = { home: '右手杯', players: '选手库' };
+    const headerTitle = pageTitles[app.activePage] || active.name;
     const options = app.list.map((item) =>
       '<option value="' + item.id + '"' + (item.id === active.id ? ' selected' : '') + '>' +
       escapeHtml(item.name) +
       '</option>'
     ).join('');
+    const isSchedule = app.activePage === 'schedule';
+    const showTournamentSwitch = app.activePage === 'schedule';
+    const scheduleActions = isSchedule
+      ? '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
+        '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
+        '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑">' + iconMarkup('edit', '编辑') + '</button>'
+      : '';
+    const tournamentSwitch = showTournamentSwitch
+      ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
+        '<select id="tournament-switch" class="header-select" title="切换比赛">' + options + '</select>'
+      : '';
     placeholder.innerHTML =
       '<div class="header-inner">' +
-      '  <a class="brand" href="index.html">右手杯</a>' +
-      '  <span class="header-title" title="' + escapeHtml(active.name) + '">' + escapeHtml(active.name) + '</span>' +
-      '  <nav class="main-nav" aria-label="页面导航">' +
-      '    <a href="index.html" data-page="home">主页</a>' +
-      '    <a href="schedule.html" data-page="schedule">赛程</a>' +
-      '  </nav>' +
+      '  <span class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</span>' +
       '  <div class="header-actions">' +
-      '    <label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
-      '    <select id="tournament-switch" class="header-select" title="切换比赛">' + options + '</select>' +
-      '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm">管理</button>' +
-      '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm">设置</button>' +
+      tournamentSwitch +
+      scheduleActions +
+      '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm icon-btn" title="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
+      '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="设置">' + iconMarkup('settings', '设置') + '</button>' +
       '  </div>' +
       '</div>';
 
-    const currentLink = placeholder.querySelector('.main-nav a[data-page="' + app.activePage + '"]');
-    if (currentLink) currentLink.setAttribute('aria-current', 'page');
-
-    placeholder.querySelector('#tournament-switch').addEventListener('change', async (event) => {
-      try {
-        await setActiveId(event.target.value);
-        document.dispatchEvent(new CustomEvent('ts:changed'));
-      } catch (error) {
-        notify('切换比赛失败：' + errMsg(error), 'danger');
-      }
-    });
+    const switchSelect = placeholder.querySelector('#tournament-switch');
+    if (switchSelect) {
+      switchSelect.addEventListener('change', async (event) => {
+        try {
+          await setActiveId(event.target.value);
+          document.dispatchEvent(new CustomEvent('ts:changed'));
+        } catch (error) {
+          notify('切换比赛失败：' + errMsg(error), 'danger');
+        }
+      });
+    }
     const manageBtn = placeholder.querySelector('#manage-btn');
     manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
     manageBtn.addEventListener('click', openManageDialog);
     placeholder.querySelector('#settings-btn').addEventListener('click', () => openSettingsDialog(false));
+
+    const rulesBtn = placeholder.querySelector('#header-rules-btn');
+    if (rulesBtn) {
+      rulesBtn.addEventListener('click', () => {
+        if (window.BracketActions && window.BracketActions.openRules) window.BracketActions.openRules();
+      });
+    }
+    const rosterBtn = placeholder.querySelector('#header-roster-btn');
+    if (rosterBtn) {
+      rosterBtn.addEventListener('click', () => {
+        if (window.BracketActions && window.BracketActions.openRoster) window.BracketActions.openRoster();
+        else openManageDialog();
+      });
+    }
+    const editBtn = placeholder.querySelector('#header-edit-btn');
+    if (editBtn) {
+      editBtn.addEventListener('click', () => {
+        if (window.BracketActions && window.BracketActions.requestEdit) window.BracketActions.requestEdit();
+        else if (window.BracketActions && window.BracketActions.toggleEdit) window.BracketActions.toggleEdit();
+      });
+    }
   }
 
   /* ---------- 主流程 ---------- */
 
   async function ensureFirstTournament() {
     const all = await idbGetAll();
+    const players = (await idbGetMeta(META_PLAYERS)) || [];
     if (!all.length) {
-      const record = makeDefaultTournament('我的赛事');
+      const list = players.length ? players : makeDefaultPlayers();
+      if (!players.length) await idbPutMeta(META_PLAYERS, list);
+      const record = makeDefaultTournament('我的赛事', list.map((p) => p.id));
       await idbPut(record);
       localStorage.setItem(LS_ACTIVE, record.id);
       return;
@@ -1087,7 +1413,8 @@
       }
     };
     if (!record) return urls;
-    for (const player of record.players || []) push(player.avatar);
+    const app = window.TournamentApp;
+    for (const player of (app && app.players) || []) push(player.avatar);
     for (const decks of Object.values(record.matchDecks || {})) {
       for (const deckList of Object.values(decks || {})) {
         for (const deck of deckList || []) {
@@ -1110,19 +1437,49 @@
   }
 
   async function refreshApp() {
-    const all = await storageGetAll();
+    let all = await storageGetAll();
+    let players = await storageGetPlayers();
+    const playerMap = new Map((players || []).map((p) => [p.id, p]));
+    const dirtyRecords = [];
+
+    for (const record of all) {
+      if (!record) continue;
+      const before = JSON.stringify(record);
+      if (typeof CanvasModel !== 'undefined' && CanvasModel.migrateLegacyTournament) {
+        CanvasModel.migrateLegacyTournament(record, playerMap);
+      }
+      if (typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
+        CanvasModel.ensureCanvasDecks(record);
+      }
+      if (typeof CanvasModel !== 'undefined' && CanvasModel.deriveRoster && record.canvas) {
+        record.roster = CanvasModel.deriveRoster(record.canvas);
+      }
+      if (JSON.stringify(record) !== before) dirtyRecords.push(record);
+    }
+    players = [...playerMap.values()];
+    if (dirtyRecords.length || !players.length) {
+      try {
+        await storagePutPlayers(players);
+      } catch (error) {
+        console.error('[refreshApp] 保存全局选手失败:', error);
+      }
+    }
+    // 只回写发生变化的比赛，避免每次刷新都全量写库
+    for (const record of dirtyRecords) {
+      await storagePut(record);
+    }
+
     /* activeId 优先取 localStorage（本机最近切换，即时一致），云端兜底（跨设备） */
     const activeId = mode === 'cloud'
       ? (localStorage.getItem(LS_ACTIVE) || (cloudWorkspace && cloudWorkspace.activeId))
       : localStorage.getItem(LS_ACTIVE);
     const record = all.find((t) => t.id === activeId) || all[0];
-    if (record && typeof BracketModel !== 'undefined' && BracketModel.ensureMatchDecks) {
-      BracketModel.ensureMatchDecks(record);
-    }
     appInstance.current = record;
     appInstance.list = all.map((t) => ({ id: t.id, name: t.name, updatedAt: t.updatedAt }));
+    appInstance.players = players;
     applyBackground(record);
     renderHeader();
+    renderSidebar();
     releaseStaleBlobUrls(record);
     return record;
   }
@@ -1157,6 +1514,7 @@
       activePage,
       current: null,
       list: [],
+      players: [],
       mode: 'local',
       adminToken: localStorage.getItem(LS_ADMIN_TOKEN) || '',
       uid,
@@ -1166,12 +1524,16 @@
       openLightbox,
       openSettings: openSettingsDialog,
       openManage: openManageDialog,
+      renderHeader,
+      renderSidebar,
       sidebarHidden,
       setSidebarHidden,
       /* 存储适配器：本地模式走 IndexedDB，云端模式走 Vercel Blob */
       storagePut,
       storageGetAll,
       storageDelete,
+      storageGetPlayers,
+      storagePutPlayers,
       isAdmin,
       setAdminToken,
       setActiveId,
@@ -1186,9 +1548,14 @@
       if (mode === 'cloud') {
         try {
           cloudWorkspace = await cloudGetWorkspace();
+          if (!cloudWorkspace.players) {
+            cloudWorkspace.players = [];
+          }
           if (!cloudWorkspace.tournaments || !cloudWorkspace.tournaments.length) {
-            const fresh = makeDefaultTournament('我的赛事');
-            cloudWorkspace = { tournaments: [fresh], activeId: fresh.id };
+            const list = cloudWorkspace.players.length ? cloudWorkspace.players : makeDefaultPlayers();
+            cloudWorkspace.players = list;
+            const fresh = makeDefaultTournament('我的赛事', list.map((p) => p.id));
+            cloudWorkspace = { players: cloudWorkspace.players, tournaments: [fresh], activeId: fresh.id };
           }
           if (!cloudWorkspace.activeId || !cloudWorkspace.tournaments.some((t) => t.id === cloudWorkspace.activeId)) {
             cloudWorkspace.activeId = cloudWorkspace.tournaments[0].id;

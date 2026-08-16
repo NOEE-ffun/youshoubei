@@ -4,8 +4,8 @@
   let dialog = null;
   let currentMatchId = null;
   let pendingTarget = null;
+  let readOnly = false;
 
-  /* 共享工具（escapeHtml/debounce/canEdit/save/avatarMarkup/cssUrl/notify 等）统一来自 common.js */
   const { escapeHtml, debounce, canEdit, save, avatarMarkup, cssUrl, notify, errMsg } =
     window.TournamentUtils;
 
@@ -35,33 +35,46 @@
     document.addEventListener('drop', (event) => event.preventDefault());
   }
 
+  function cardDef() {
+    const record = window.TournamentApp.current;
+    return (record.canvas.cards || []).find((c) => c.id === currentMatchId) || null;
+  }
+
   function matchContext() {
     const app = window.TournamentApp;
     const record = app.current;
-    const seeds = record.players.map((p) => p.id);
-    const names = new Map(record.players.map((p) => [p.id, p.name]));
-    const match = BracketModel.resolveMatch(
-      BracketModel.MATCH_BY_ID[currentMatchId],
-      seeds,
-      record.scores || {}
-    );
-    return { record, match, names };
+    const card = cardDef();
+    const match = (typeof CanvasModel !== 'undefined' && CanvasModel.resolveCardById)
+      ? CanvasModel.resolveCardById(record.canvas, record.roster || [], record.scores || {}, currentMatchId)
+      : null;
+    const names = new Map((app.players || []).map((p) => [p.id, p.name]));
+    return { record, match, card, names };
   }
 
-  function open(matchId) {
+  function canModify() {
+    return canEdit() && !readOnly;
+  }
+
+  function open(matchId, options) {
     if (!dialog) buildDialog();
     currentMatchId = matchId;
-    if (typeof BracketModel !== 'undefined' && BracketModel.ensureMatchDecks) {
-      BracketModel.ensureMatchDecks(window.TournamentApp.current);
+    readOnly = Boolean(options && options.readOnly);
+    if (!readOnly && typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
+      CanvasModel.ensureCanvasDecks(window.TournamentApp.current);
     }
     render();
     dialog.showModal();
   }
 
   function render() {
-    const { match, names } = matchContext();
+    const { match, card, names } = matchContext();
+    if (!match || !card) {
+      dialog.querySelector('#deck-dialog-title').textContent = '本局卡组';
+      dialog.querySelector('#deck-dialog-body').innerHTML = '<p class="hint">未找到这张对局。</p>';
+      return;
+    }
     dialog.querySelector('#deck-dialog-title').textContent =
-      match.label + ' · ' + BracketModel.getFormatLabel(match.id);
+      (match.label || card.label || '对局') + ' · ' + (match.format || card.format || 'BO3');
     const body = dialog.querySelector('#deck-dialog-body');
     body.innerHTML = [0, 1].map((side) => playerColumn(side, match, names)).join('');
     bindEvents();
@@ -78,9 +91,9 @@
       );
     }
     const record = window.TournamentApp.current;
-    const decks = (record.matchDecks[match.id] && record.matchDecks[match.id][playerId]) || [];
-    const editable = canEdit();
-    const avatarPlayer = record.players.find((p) => p.id === playerId);
+    const decks = (record.matchDecks[currentMatchId] && record.matchDecks[currentMatchId][playerId]) || [];
+    const editable = canModify();
+    const avatarPlayer = (window.TournamentApp.players || []).find((p) => p.id === playerId);
     return (
       '<section class="deck-player" data-player="' + playerId + '">' +
       '<h3 class="deck-player-head">' +
@@ -108,7 +121,6 @@
   }
 
   function imageSlot(playerId, deck, deckIndex, slotIndex, editable) {
-    /* 键统一为 | 分隔（与 data-deck-key 一致）：matchId|playerId|deckIndex|slotIndex */
     const key = [currentMatchId, playerId, deckIndex, slotIndex].join('|');
     const image = deck.images[slotIndex];
     if (!image) {
@@ -150,13 +162,12 @@
         else input.value = deck.name;
         save();
       };
-      /* 仅保留 debounce 的 input 监听，避免与 change 叠加导致双重保存 */
       input.addEventListener('input', debounce(commit, 500));
     });
 
     body.querySelectorAll('[data-add], [data-replace]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        if (!canEdit()) return;
+        if (!canModify()) return;
         pendingTarget = btn.dataset.add || btn.dataset.replace;
         dialog.querySelector('#deck-file-input').click();
       });
@@ -164,12 +175,12 @@
 
     body.querySelectorAll('[data-add]').forEach((btn) => {
       btn.addEventListener('dragenter', (event) => {
-        if (!canEdit()) return;
+        if (!canModify()) return;
         event.preventDefault();
         btn.classList.add('drag-over');
       });
       btn.addEventListener('dragover', (event) => {
-        if (!canEdit()) return;
+        if (!canModify()) return;
         event.preventDefault();
         if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
       });
@@ -177,7 +188,7 @@
         if (!btn.contains(event.relatedTarget)) btn.classList.remove('drag-over');
       });
       btn.addEventListener('drop', (event) => {
-        if (!canEdit()) return;
+        if (!canModify()) return;
         event.preventDefault();
         btn.classList.remove('drag-over');
         const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
@@ -193,7 +204,6 @@
           src: window.TournamentApp.blobUrl(image),
           alt: '卡组图片 ' + (i + 1)
         }));
-        /* 弹窗会盖住放大图，先收起，关闭放大图后再恢复 */
         if (dialog.open) dialog.close();
         window.TournamentApp.openLightbox(items, Number(slotIndex), btn, () => {
           if (!dialog.open) dialog.showModal();
