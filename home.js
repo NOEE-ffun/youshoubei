@@ -3,21 +3,24 @@
 
   /* 主页：跑马灯 + 比赛背景幻灯片渐变 */
 
-  const { escapeHtml, medalMap, avatarMarkup, safeUrl, statusBadgeMarkup } = window.TournamentUtils;
+  const {
+    escapeHtml, iconMarkup, medalMap, avatarMarkup, safeUrl,
+    statusBadgeMarkup, formatStartTime
+  } = window.TournamentUtils;
 
   let slideTimer = null;
   let slideIndex = 0;
   let slideBackgrounds = [];
+  let slidePaused = false;
+  let slidePausedByFocus = false;
+  let marqueePaused = false;
+  let controlsBound = false;
 
-  /* 赛事身份：标题用比赛名（静态兜底「右手杯」），状态徽章 + 开赛时间 + 直播入口 */
-  function formatStartTime(value) {
-    if (!value) return '';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return '';
-    const pad = (n) => String(n).padStart(2, '0');
-    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  function reducedMotion() {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
+  /* 赛事身份：标题用比赛名（静态兜底「右手杯」），状态徽章 + 开赛时间 + 直播入口 */
   function renderIdentity() {
     const app = window.TournamentApp;
     const record = app && app.current;
@@ -61,11 +64,11 @@
     const items = players.map((player) => {
       const medal = medalOf.get(player.id);
       return (
-        '<div class="marquee-item' + (medal ? ' medal-' + medal.type : '') + '">' +
-        (medal ? '<span class="medal-badge">' + medal.emoji + '</span>' : '') +
+        '<a class="marquee-item' + (medal ? ' medal-' + medal.type : '') + '" href="players.html">' +
+        (medal ? '<span class="medal-badge">' + iconMarkup(medal.icon, '') + '</span>' : '') +
         avatarMarkup(player, 'avatar-lg') +
         '<span class="marquee-name">' + escapeHtml(player.name) + '</span>' +
-        '</div>'
+        '</a>'
       );
     }).join('');
     const doubled = items + '<div class="marquee-copy" aria-hidden="true">' + items + '</div>';
@@ -73,6 +76,43 @@
     const reverseTrack = document.getElementById('marquee-track-reverse');
     if (track) track.innerHTML = doubled;
     if (reverseTrack) reverseTrack.innerHTML = doubled;
+  }
+
+  /* ---------- 背景幻灯片：播放/暂停控件 + reduced-motion 静态终态 ---------- */
+
+  function renderSlideControl() {
+    const btn = document.getElementById('slideshow-pause');
+    if (!btn) return;
+    btn.hidden = !slideBackgrounds.length;
+    if (reducedMotion()) {
+      btn.disabled = true;
+      btn.setAttribute('aria-pressed', 'true');
+      btn.setAttribute('aria-label', '减少动态效果模式已停用背景轮播');
+      btn.innerHTML = iconMarkup('pause', '');
+      return;
+    }
+    btn.disabled = false;
+    const paused = slidePaused || slidePausedByFocus;
+    btn.setAttribute('aria-pressed', String(paused));
+    btn.setAttribute('aria-label', paused ? '播放背景轮播' : '暂停背景轮播');
+    btn.innerHTML = iconMarkup(paused ? 'play_arrow' : 'pause', '');
+  }
+
+  function syncSlideTimer() {
+    if (slideTimer) {
+      clearInterval(slideTimer);
+      slideTimer = null;
+    }
+    if (slideBackgrounds.length && !slidePaused && !slidePausedByFocus && !reducedMotion()) {
+      slideTimer = setInterval(() => showSlide(), 5000);
+    }
+  }
+
+  function setSlidePaused(paused, byFocus) {
+    if (byFocus) slidePausedByFocus = paused;
+    else slidePaused = paused;
+    renderSlideControl();
+    syncSlideTimer();
   }
 
   async function loadSlideshowBackgrounds() {
@@ -86,21 +126,21 @@
     }
     const el = document.getElementById('home-slideshow');
     if (!el) return;
+    renderSlideControl();
     if (!slideBackgrounds.length) {
       if (slideTimer) clearInterval(slideTimer);
+      slideTimer = null;
       el.innerHTML = '';
       el.style.backgroundImage = 'linear-gradient(135deg, var(--hero-fallback-a), var(--hero-fallback-b))';
       return;
     }
     showSlide();
-    if (slideTimer) clearInterval(slideTimer);
-    slideTimer = setInterval(showSlide, 5000);
+    syncSlideTimer();
   }
 
   function showSlide() {
     const el = document.getElementById('home-slideshow');
-    if (!el) return;
-    if (!slideBackgrounds.length) return;
+    if (!el || !slideBackgrounds.length) return;
     const url = window.TournamentApp.blobUrl(slideBackgrounds[slideIndex % slideBackgrounds.length]);
     const layer = document.createElement('div');
     layer.className = 'slideshow-layer';
@@ -113,13 +153,49 @@
     slideIndex += 1;
   }
 
+  /* ---------- 跑马灯暂停控件 ---------- */
+
+  function renderMarqueeControl() {
+    const btn = document.getElementById('marquee-pause');
+    const region = document.getElementById('home-marquee');
+    if (!btn || !region) return;
+    region.classList.toggle('is-paused', marqueePaused);
+    btn.setAttribute('aria-pressed', String(marqueePaused));
+    btn.setAttribute('aria-label', marqueePaused ? '播放选手跑马灯' : '暂停选手跑马灯');
+    btn.innerHTML = iconMarkup(marqueePaused ? 'play_arrow' : 'pause', '');
+  }
+
+  function bindPauseControls() {
+    if (controlsBound) return;
+    controlsBound = true;
+    const slideBtn = document.getElementById('slideshow-pause');
+    if (slideBtn) {
+      slideBtn.addEventListener('click', () => {
+        setSlidePaused(!slidePaused, false);
+      });
+      /* UX #108：轮播控件获得焦点时暂停，避免键盘用户追不上轮播 */
+      slideBtn.addEventListener('focus', () => setSlidePaused(true, true));
+      slideBtn.addEventListener('blur', () => setSlidePaused(false, true));
+    }
+    const marqueeBtn = document.getElementById('marquee-pause');
+    if (marqueeBtn) {
+      marqueeBtn.addEventListener('click', () => {
+        marqueePaused = !marqueePaused;
+        renderMarqueeControl();
+      });
+    }
+  }
+
   document.addEventListener('ts:ready', () => {
+    bindPauseControls();
     renderIdentity();
     renderMarquee();
+    renderMarqueeControl();
     loadSlideshowBackgrounds();
     document.addEventListener('ts:changed', () => {
       renderIdentity();
       renderMarquee();
+      renderMarqueeControl();
       loadSlideshowBackgrounds();
     });
   });
