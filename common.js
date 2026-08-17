@@ -1493,22 +1493,25 @@
     const isSchedule = app.activePage === 'schedule';
     const showTournamentSwitch = app.activePage === 'schedule';
     const scheduleActions = isSchedule
-      ? '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
-        '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
-        '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑">' + iconMarkup('edit', '编辑') + '</button>'
+      ? '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
+        '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单" aria-label="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
+        '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>'
       : '';
     const tournamentSwitch = showTournamentSwitch
       ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
-        '<select id="tournament-switch" class="header-select" title="切换比赛">' + options + '</select>'
+        '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛">' + options + '</select>'
       : '';
     placeholder.innerHTML =
       '<div class="header-inner">' +
-      '  <span class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</span>' +
+      '  <div class="header-title-group">' +
+      '    <h1 class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</h1>' +
+      statusBadgeMarkup(active.status) +
+      '  </div>' +
       '  <div class="header-actions">' +
       tournamentSwitch +
       scheduleActions +
-      '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm icon-btn" title="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
-      '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="设置">' + iconMarkup('settings', '设置') + '</button>' +
+      '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm icon-btn" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
+      '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="设置" aria-label="设置">' + iconMarkup('settings', '设置') + '</button>' +
       '  </div>' +
       '</div>';
 

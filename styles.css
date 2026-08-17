@@ -1,3 +1,12 @@
+/* 自托管 Bebas Neue（仅数字/拉丁字形，记分牌质感；中文字符按系统黑体回退） */
+@font-face {
+  font-family: "Bebas Neue";
+  src: url("fonts/BebasNeue-latin-400.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
 :root {
   /* 设计令牌：浅色明快主题，单一蓝色强调色。
    * 颜色均为 hex（旧浏览器回退）+ oklch（现代浏览器主值）双写。 */
@@ -22,6 +31,8 @@
   --text: #1c2434;
   --text-muted: #5b6577;
   --border: #d9e0ec;
+  --border-soft: rgba(128, 128, 128, 0.12);
+  --warning-soft: #fff7d6;
   --accent: #3563e9;
   --accent: oklch(55% 0.18 262);
   --accent-strong: #244ec7;
@@ -45,6 +56,7 @@
   --radius-sm: 0.5rem;
   --radius: 0.875rem;
   --radius-lg: 1.25rem;
+  --radius-pill: 999px;
   --shadow-sm: 0 1px 2px rgb(15 23 42 / 0.05);
   --shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 10px 30px rgb(15 23 42 / 0.07);
   --shadow-lg: 0 24px 80px rgb(15 23 42 / 0.25);
@@ -53,15 +65,20 @@
   --font:
     system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  /* 展示字体：自托管 Bebas Neue 覆盖数字/拉丁，中文自动回落系统黑体 */
+  --font-display: "Bebas Neue", "Arial Narrow", var(--font);
   /* 缓动系统（emil-design-eng：内置缓动太弱，使用强自定义曲线） */
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
-  /* 时长：UI 动画保持在 300ms 内 */
+  /* 时长：UI 动画保持在 300ms 内；pulse/breathe 仅用于呼吸类状态动画 */
   --dur-fast: 120ms;
   --dur-ui: 200ms;
   --dur-slow: 300ms;
+  --dur-pulse: 1.2s;
+  --dur-breathe: 1.6s;
+  --dur-slideshow: 900ms;
 }
 
 * {
@@ -104,6 +121,10 @@ body {
 }
 
 /* 通用可访问性工具 */
+[hidden] {
+  display: none !important;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -181,14 +202,23 @@ body {
   text-decoration: none;
 }
 
+.header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-inline-size: 0;
+  flex: 1 1 auto;
+}
+
 .header-title {
+  margin: 0;
+  font: inherit;
   font-weight: 700;
   font-size: 1.05rem;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1 1 auto;
 }
 
 .main-nav {
@@ -196,7 +226,7 @@ body {
   gap: 0.25rem;
   background: var(--surface-2);
   padding: 0.25rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .main-nav a {
@@ -205,7 +235,7 @@ body {
   font-size: 0.9rem;
   font-weight: 600;
   padding: 0.375rem 0.875rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   transition:
     background var(--dur-ui) var(--ease-out),
     color var(--dur-ui) var(--ease-out);
@@ -223,6 +253,7 @@ body {
 
 .header-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
 }
@@ -234,7 +265,7 @@ body {
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.4rem 2rem 0.4rem 0.9rem;
   min-block-size: 2.5rem;
   max-inline-size: 13rem;
@@ -248,7 +279,7 @@ body {
   justify-content: center;
   gap: 0.375rem;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font: inherit;
   font-weight: 600;
   font-size: 0.9rem;
@@ -338,7 +369,7 @@ body {
   gap: 0.35rem;
   font-size: 0.78rem;
   font-weight: 700;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.25rem 0.65rem;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -368,7 +399,7 @@ body {
 }
 
 .status-badge.status-ongoing .status-dot {
-  animation: live-pulse 1.2s var(--ease-in-out) infinite;
+  animation: live-pulse var(--dur-pulse) var(--ease-in-out) infinite;
 }
 
 @keyframes live-pulse {
@@ -533,7 +564,7 @@ main > h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 700;
@@ -582,7 +613,7 @@ main > h1 {
   letter-spacing: 0.06em;
   color: var(--accent);
   background: var(--accent-soft);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.2rem 0.6rem;
 }
 
@@ -627,6 +658,25 @@ main > h1 {
   box-shadow: var(--shadow);
 }
 
+/* ongoing 赛事里未完赛的对局：危险色呼吸描边 + LIVE 小章 */
+.match-card.match-live {
+  border-color: var(--danger);
+  outline: 2px solid var(--danger);
+  outline-offset: 1px;
+  animation: match-live-breathe var(--dur-breathe) var(--ease-in-out) infinite;
+}
+
+.match-card.cycle {
+  border-color: var(--danger);
+  outline: 2px dashed var(--danger);
+  outline-offset: 2px;
+}
+
+@keyframes match-live-breathe {
+  0%, 100% { outline-color: var(--danger); }
+  50% { outline-color: oklch(from var(--danger) l c h / 0.25); }
+}
+
 .match-head {
   display: flex;
   align-items: baseline;
@@ -647,24 +697,35 @@ main > h1 {
   font-weight: 600;
   color: var(--text-muted);
   background: var(--surface-2);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.15rem 0.5rem;
 }
 
 .match-format {
   flex-shrink: 0;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
   color: var(--accent);
   background: var(--accent-soft);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.15rem 0.45rem;
 }
 
 .match-state.done {
   color: var(--success);
   background: var(--success-soft);
+}
+
+.match-state.live {
+  color: #fff;
+  background: var(--danger);
+}
+
+.match-state.cycle {
+  color: var(--danger);
+  background: var(--danger-soft);
 }
 
 .match-player {
@@ -694,7 +755,7 @@ main > h1 {
 }
 
 .match-player.loser {
-  opacity: 0.62;
+  color: var(--text-muted);
 }
 
 .player-name {
@@ -707,8 +768,10 @@ main > h1 {
 
 .player-score {
   flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
   font-variant-numeric: tabular-nums;
-  font-weight: 700;
+  font-weight: 400;
   min-inline-size: 1.5rem;
   text-align: center;
 }
@@ -727,12 +790,14 @@ main > h1 {
 
 .score-btn {
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.25rem 0.55rem;
   cursor: pointer;
   transition:
@@ -762,16 +827,31 @@ main > h1 {
   cursor: not-allowed;
 }
 
-.score-clear {
-  color: var(--danger);
-  border-color: transparent;
-  background: transparent;
+/* 比分预设按钮组 + 就地校验错误（UX #109） */
+.score-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-block: 0.65rem 0.25rem;
 }
 
-.score-clear:hover {
-  background: var(--danger-soft);
-  border-color: transparent;
+.score-presets[hidden] {
+  display: none;
+}
+
+.form-error {
+  margin: 0.35rem 0 0;
   color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid oklch(from var(--danger) l c h / 0.35);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.form-error[hidden] {
+  display: none;
 }
 
 /* 卡组 */
@@ -885,8 +965,13 @@ button.image-slot {
 }
 
 .image-slot .slot-plus {
-  font-size: 1.4rem;
-  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.image-slot .slot-plus .icon {
+  width: 1.4rem;
+  height: 1.4rem;
 }
 
 .image-slot .slot-actions {
@@ -915,7 +1000,7 @@ button.image-slot {
   color: #fff;
   background: var(--scrim);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.2rem 0.5rem;
   cursor: pointer;
   backdrop-filter: blur(4px);
@@ -1095,7 +1180,7 @@ dialog::backdrop {
   color: var(--text);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.45rem 0.9rem;
 }
 
@@ -1134,7 +1219,7 @@ dialog::backdrop {
   font-weight: 600;
   font-size: 0.9rem;
   padding: 0.6rem 1rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-shadow: var(--shadow);
   animation: toast-in var(--dur-slow) var(--ease-out);
 }
@@ -1223,7 +1308,7 @@ dialog::backdrop {
   align-items: center;
   justify-content: center;
   border: 1px solid oklch(100% 0 0 / 0.25);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: oklch(100% 0 0 / 0.12);
   color: #fff;
   font: inherit;
@@ -1237,6 +1322,12 @@ dialog::backdrop {
 
 .lightbox-btn:hover {
   background: oklch(100% 0 0 / 0.24);
+}
+
+.lightbox-btn .icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  filter: invert(1);
 }
 
 .lightbox-close {
@@ -1359,7 +1450,7 @@ dialog::backdrop {
 .avatar-action {
   font-size: 0.75rem;
   padding: 0.125rem 0.375rem;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -1423,8 +1514,9 @@ dialog::backdrop {
   animation-direction: reverse;
 }
 
-/* 悬停轨道任意位置即暂停滚动 */
-.marquee-track:hover {
+/* 悬停轨道或按暂停控件即暂停滚动（UX #108） */
+.marquee-track:hover,
+.home-marquee.is-paused .marquee-track {
   animation-play-state: paused;
 }
 
@@ -1439,13 +1531,20 @@ dialog::backdrop {
   align-items: center;
   gap: 1rem;
   min-block-size: 5.875rem;
-  border-radius: 1rem;
+  border-radius: var(--radius);
   padding: 0.6rem 1.6rem 0.6rem 0.875rem;
+  color: inherit;
+  text-decoration: none;
   transition:
     transform var(--dur-fast) var(--ease-out),
     background var(--dur-ui) var(--ease-out),
     border-color var(--dur-ui) var(--ease-out),
     box-shadow var(--dur-ui) var(--ease-out);
+}
+
+.marquee-item:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* 悬停高亮（仅精细指针设备）：只放大，保持毛玻璃质感不变 */
@@ -1481,9 +1580,15 @@ dialog::backdrop {
 }
 
 .medal-badge {
-  font-size: 1.15rem;
+  display: grid;
+  place-items: center;
   line-height: 1;
   flex-shrink: 0;
+}
+
+.medal-badge .icon {
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 /* 无障碍：减少动效偏好时停止滚动，保留静态展示 */
@@ -1491,6 +1596,74 @@ dialog::backdrop {
   .marquee-track {
     animation: none;
   }
+}
+
+/* 主页背景轮播与跑马灯共用的播放/暂停控件（UX #108） */
+.slideshow-pause,
+.marquee-pause {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid oklch(100% 0 0 / 0.45);
+  border-radius: var(--radius-pill);
+  background: oklch(100% 0 0 / 0.16);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
+  z-index: 11;
+  transition:
+    background var(--dur-ui) var(--ease-out),
+    border-color var(--dur-ui) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.slideshow-pause {
+  position: absolute;
+  inset-block-start: 0.75rem;
+  inset-inline-end: 1rem;
+}
+
+.slideshow-pause .icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  filter: invert(1);
+}
+
+.marquee-pause {
+  position: absolute;
+  inset-block-end: -0.5rem;
+  inset-inline-end: 1rem;
+  justify-self: end;
+  background: oklch(100% 0 0 / 0.72);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.marquee-pause .icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.slideshow-pause:hover,
+.marquee-pause:hover {
+  background: oklch(100% 0 0 / 0.3);
+}
+
+.marquee-pause:hover {
+  background: var(--surface-2);
+}
+
+.slideshow-pause:active,
+.marquee-pause:active {
+  transform: scale(0.95);
+}
+
+.slideshow-pause:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* ========== 页面切换过渡（跨文档 View Transitions） ========== */
@@ -1542,8 +1715,8 @@ dialog::backdrop {
   min-width: 600px;
   min-height: 400px;
   background-image:
-    linear-gradient(var(--border-soft, rgba(128,128,128,0.12)) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-soft, rgba(128,128,128,0.12)) 1px, transparent 1px);
+    linear-gradient(var(--border-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-soft) 1px, transparent 1px);
   background-size: 40px 40px;
   transition: background-color 0.2s ease;
 }
@@ -1574,6 +1747,7 @@ dialog::backdrop {
 .canvas-board.editing .canvas-card {
   cursor: move;
   box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+  touch-action: none;
 }
 
 .canvas-board.editing .canvas-card.selected {
@@ -1619,7 +1793,7 @@ dialog::backdrop {
 }
 
 .match-player.draw {
-  background: var(--warning-soft, #fff7d6);
+  background: var(--warning-soft);
 }
 
 .match-player.invalid {
@@ -1644,6 +1818,17 @@ dialog::backdrop {
   pointer-events: all;
   cursor: crosshair;
   z-index: 5;
+}
+
+/* 连线端口命中区扩到 24px（UX #104），视觉仍为 12px 圆点 */
+.card-ports .port::after {
+  content: "";
+  position: absolute;
+  inline-size: 24px;
+  block-size: 24px;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .card-ports .port-input {
@@ -1688,6 +1873,10 @@ dialog::backdrop {
 
 .score-form input {
   font: inherit;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  letter-spacing: 0.06em;
+  text-align: center;
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1695,6 +1884,11 @@ dialog::backdrop {
   color: var(--text);
   width: 100%;
   box-sizing: border-box;
+}
+
+.score-form input[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px oklch(from var(--danger) l c h / 0.18);
 }
 
 .score-colon {
@@ -1780,10 +1974,34 @@ dialog::backdrop {
   color: var(--text-muted);
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0.3rem 0.7rem;
   pointer-events: none;
   box-shadow: var(--shadow-sm);
+}
+
+/* 赛程页开赛时间（与右上角查看模式提示对称） */
+.canvas-meta {
+  position: absolute;
+  top: 0.75rem;
+  left: 1rem;
+  z-index: 20;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: oklch(100% 0 0 / 0.9);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.3rem 0.7rem;
+  pointer-events: none;
+  box-shadow: var(--shadow-sm);
+}
+
+.canvas-meta[hidden] {
+  display: none;
 }
 
 /* 画布右下角常驻缩放控件:查看/编辑态都可用 */
@@ -1800,7 +2018,7 @@ dialog::backdrop {
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-shadow: var(--shadow-sm);
 }
 
@@ -1814,7 +2032,7 @@ dialog::backdrop {
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -1830,8 +2048,10 @@ dialog::backdrop {
 
 .zoom-level {
   min-inline-size: 3rem;
-  font-size: 0.76rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
@@ -1896,8 +2116,8 @@ dialog::backdrop {
 }
 
 .side-link.is-active {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--accent);
+  color: #fff;
 }
 
 .side-icon {
@@ -2038,7 +2258,7 @@ dialog::backdrop {
   align-items: center;
   gap: 0.6rem;
   padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--border-soft, rgba(128,128,128,0.12));
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .roster-dropdown-item:last-child {
@@ -2104,7 +2324,7 @@ body[data-page="players"] #bg-layer {
   background-size: cover;
   background-position: center;
   opacity: 0;
-  transition: opacity 0.9s ease;
+  transition: opacity var(--dur-slideshow) ease;
 }
 
 .slideshow-layer.show {
@@ -2136,7 +2356,7 @@ body[data-page="players"] #bg-layer {
 }
 
 .home-content .home-marquee {
-  position: static;
+  position: relative;
   inset: auto;
   top: auto;
   transform: none;
@@ -2154,7 +2374,8 @@ body[data-page="players"] #bg-layer {
 
 .home-title {
   margin: 0;
-  font-size: clamp(2.25rem, 5vw, 3.5rem);
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.25rem);
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.15;
@@ -2174,13 +2395,19 @@ body[data-page="players"] #bg-layer {
   font-size: 0.95rem;
 }
 
-/* hero 深色语境的徽章覆写:玻璃底白字;进行中/已结束用实色强化 */
+/* hero 深色语境的徽章覆写:upcoming 灰/ongoing 红/finished 绿 */
 .home-meta .status-badge {
   background: oklch(100% 0 0 / 0.16);
   border-color: oklch(100% 0 0 / 0.4);
   color: #fff;
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
+}
+
+.home-meta .status-badge.status-upcoming {
+  background: oklch(72% 0.005 262 / 0.92);
+  border-color: transparent;
+  color: #1c2434;
 }
 
 .home-meta .status-badge.status-ongoing {
@@ -2199,6 +2426,9 @@ body[data-page="players"] #bg-layer {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  letter-spacing: 0.05em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -2505,7 +2735,7 @@ body[data-page="players"] #bg-layer {
   display: grid;
   place-items: center;
   border: 1px solid transparent;
-  border-radius: 0.55rem;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   font-size: 1.05rem;

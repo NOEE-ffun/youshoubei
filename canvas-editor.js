@@ -531,6 +531,12 @@
     return html;
   }
 
+  /* 连线来源卡片的可读名称：优先 label（如 胜者组 1/4 决赛 1） */
+  function flowSourceLabel(cardId) {
+    const source = findCard(cardId);
+    return source ? (source.label || source.id) : cardId;
+  }
+
   function openCardDialog(cardId) {
     const card = findCard(cardId);
     if (!card) return;
@@ -546,11 +552,11 @@
     cardDialog.querySelector('#card-slot-b').innerHTML = playerOptions(slotB && slotB.type === 'player' ? slotB.playerId : '');
     if (slotA && slotA.type === 'flow') {
       cardDialog.querySelector('#card-slot-a').insertAdjacentHTML('beforeend',
-        '<option value="__flow" selected>来自 ' + escapeHtml(slotA.cardId) + ' ' + (slotA.outcome === 'loser' ? '败者' : '胜者') + '</option>');
+        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotA.cardId)) + ' 的' + (slotA.outcome === 'loser' ? '败者' : '胜者') + '</option>');
     }
     if (slotB && slotB.type === 'flow') {
       cardDialog.querySelector('#card-slot-b').insertAdjacentHTML('beforeend',
-        '<option value="__flow" selected>来自 ' + escapeHtml(slotB.cardId) + ' ' + (slotB.outcome === 'loser' ? '败者' : '胜者') + '</option>');
+        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotB.cardId)) + ' 的' + (slotB.outcome === 'loser' ? '败者' : '胜者') + '</option>');
     }
     cardDialog.querySelector('#card-rank-winner').value = card.exitRanks && card.exitRanks.winner != null ? card.exitRanks.winner : '';
     cardDialog.querySelector('#card-rank-loser').value = card.exitRanks && card.exitRanks.loser != null ? card.exitRanks.loser : '';

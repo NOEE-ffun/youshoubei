@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { escapeHtml, avatarMarkup, safeUrl, cssUrl, debounce } = window.TournamentUtils;
+  const { escapeHtml, avatarMarkup, safeUrl, cssUrl, bindZoomDock, bindZoomWheel, bindZoomFitOnResize } = window.TournamentUtils;
 
   const CARD_WIDTH = 280;
   const CARD_HEIGHT = 176;
@@ -89,39 +89,17 @@
   }
 
   function bindLibZoom() {
-    const dock = document.getElementById('zoom-dock');
-    if (dock) {
-      dock.addEventListener('click', (event) => {
-        const btn = event.target.closest('.zoom-btn');
-        if (!btn) return;
-        const kind = btn.dataset.zoom;
-        if (kind === 'in') {
-          libUserZoomed = true;
-          libZoomAtCenter(1.15);
-        } else if (kind === 'out') {
-          libUserZoomed = true;
-          libZoomAtCenter(1 / 1.15);
-        } else if (kind === 'reset') {
-          libUserZoomed = true;
-          libSetZoom(1);
-        } else if (kind === 'fit') {
-          libUserZoomed = false;
-          libFit();
-        }
-      });
-    }
-    const sc = libScroll();
-    if (sc) {
-      sc.addEventListener('wheel', (event) => {
-        if (!event.ctrlKey && !event.metaKey) return;
-        event.preventDefault();
-        libUserZoomed = true;
-        libZoomAtCenter(Math.exp(-event.deltaY * 0.0018));
-      }, { passive: false });
-    }
-    window.addEventListener('resize', debounce(() => {
-      if (!libUserZoomed) libFit();
-    }, 200));
+    window.TournamentUtils.bindZoomDock({
+      onZoomIn: () => { libUserZoomed = true; libZoomAtCenter(1.15); },
+      onZoomOut: () => { libUserZoomed = true; libZoomAtCenter(1 / 1.15); },
+      onReset: () => { libUserZoomed = true; libSetZoom(1); },
+      onFit: () => { libUserZoomed = false; libFit(); }
+    });
+    window.TournamentUtils.bindZoomWheel('library-scroll', (factor) => {
+      libUserZoomed = true;
+      libZoomAtCenter(factor);
+    });
+    window.TournamentUtils.bindZoomFitOnResize(() => !libUserZoomed, libFit);
   }
 
   function renderSelect() {
@@ -161,14 +139,18 @@
   }
 
   function cardHtml(match) {
-    const stateText = match.invalid ? '无效' : match.draw ? '平局' : match.played ? '已结束' : (match.a && match.b ? '未开始' : '待定');
+    const ready = Boolean(match.a && match.b);
+    const cycle = Boolean(match.cycle);
+    const live = !match.played && ready && !match.invalid && !cycle && window.TournamentApp.current.status === 'ongoing';
+    const stateText = match.invalid ? '无效' : match.draw ? '平局' : cycle ? '连线成环' : live ? '进行中' : match.played ? '已结束' : ready ? '未开始' : '待定';
+    const stateClass = match.invalid ? ' invalid' : match.draw ? ' draw' : cycle ? ' cycle' : live ? ' live' : match.played ? ' done' : '';
     return (
-      '<article class="match-card canvas-card' + (match.played ? ' played' : '') + '" data-match="' + match.id + '"' +
+      '<article class="match-card canvas-card' + (match.played ? ' played' : '') + (cycle ? ' cycle' : '') + (live ? ' match-live' : '') + '" data-match="' + match.id + '"' +
       ' style="left:' + cardLeft(match) + 'px;top:' + cardTop(match) + 'px">' +
       '<header class="match-head">' +
       '<h3 class="match-title">' + escapeHtml(match.label || match.id) + '</h3>' +
       '<span class="match-format">' + escapeHtml(match.format || 'BO3') + '</span>' +
-      '<span class="match-state' + (match.played ? ' done' : '') + '">' + stateText + '</span>' +
+      '<span class="match-state' + stateClass + '">' + stateText + '</span>' +
       '</header>' +
       (match.phase ? '<div class="match-phase">' + escapeHtml(match.phase) + '</div>' : '') +
       playerRow(match, 0) +
