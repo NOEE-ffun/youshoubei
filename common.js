@@ -1538,6 +1538,9 @@
     lastSnapshotUrls = [...keep];
   }
 
+  /* 记录结构版本:已是最新的记录跳过迁移,免每条记录两次全量 JSON.stringify */
+  const SCHEMA_VERSION = 2;
+
   async function refreshApp() {
     let all = await storageGetAll();
     let players = await storageGetPlayers();
@@ -1546,17 +1549,22 @@
 
     for (const record of all) {
       if (!record) continue;
-      const before = JSON.stringify(record);
-      if (typeof CanvasModel !== 'undefined' && CanvasModel.migrateLegacyTournament) {
-        CanvasModel.migrateLegacyTournament(record, playerMap);
-      }
-      if (typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
-        CanvasModel.ensureCanvasDecks(record);
+      const needsMigration = record.schemaVersion !== SCHEMA_VERSION;
+      const before = needsMigration ? JSON.stringify(record) : JSON.stringify(record.roster || null);
+      if (needsMigration) {
+        if (typeof CanvasModel !== 'undefined' && CanvasModel.migrateLegacyTournament) {
+          CanvasModel.migrateLegacyTournament(record, playerMap);
+        }
+        if (typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
+          CanvasModel.ensureCanvasDecks(record);
+        }
+        record.schemaVersion = SCHEMA_VERSION;
       }
       if (typeof CanvasModel !== 'undefined' && CanvasModel.deriveRoster && record.canvas) {
         record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => playerMap.has(id));
       }
-      if (JSON.stringify(record) !== before) dirtyRecords.push(record);
+      const after = needsMigration ? JSON.stringify(record) : JSON.stringify(record.roster || null);
+      if (before !== after) dirtyRecords.push(record);
     }
     players = [...playerMap.values()];
     // 云端只读访客不允许写库：迁移/推导只放在内存里，避免初始化直接失败
@@ -1568,10 +1576,24 @@
         console.error('[refreshApp] 保存全局选手失败:', error);
       }
     }
-    // 只回写发生变化的比赛，避免每次刷新都全量写库
-    if (canWrite) {
-      for (const record of dirtyRecords) {
-        await storagePut(record);
+    // 只回写发生变化的比赛;云端模式合并为一次 GET+PUT,
+    // 避免逐条 storagePut 各自先拉云端再覆盖(写放大)
+    if (canWrite && dirtyRecords.length) {
+      if (mode === 'cloud') {
+        for (const record of dirtyRecords) {
+          const index = cloudWorkspace.tournaments.findIndex((t) => t.id === record.id);
+          if (index >= 0) cloudWorkspace.tournaments[index] = record;
+          else cloudWorkspace.tournaments.push(record);
+        }
+        try {
+          await cloudPutWorkspace(cloudWorkspace);
+        } catch (error) {
+          console.error('[refreshApp] 批量保存失败:', error);
+        }
+      } else {
+        for (const record of dirtyRecords) {
+          await storagePut(record);
+        }
       }
     }
 
