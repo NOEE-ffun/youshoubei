@@ -187,23 +187,47 @@
 
   /* ---------- 云端存储适配 ---------- */
 
-  async function detectMode() {
+  /* 一次请求同时完成模式探测与云端取数:拿到合法 workspace 即云端模式;
+   * 404(未部署 API)/超时/网络错误 → 本机模式,省掉原先 /api/health 的串行往返 */
+  async function probeCloud() {
     let timer = null;
     try {
       const hasAbort = typeof AbortController !== 'undefined';
       const controller = hasAbort ? new AbortController() : null;
-      timer = setTimeout(() => controller && controller.abort(), 1200);
-      const response = await fetch('/api/health', controller ? { signal: controller.signal } : {});
+      timer = setTimeout(() => controller && controller.abort(), 2000);
+      const response = await fetch('/api/data', controller ? { signal: controller.signal } : {});
       clearTimeout(timer);
       timer = null;
-      if (!response.ok) return 'local';
-      const data = await response.json().catch(() => ({}));
-      return data && data.ok ? 'cloud' : 'local';
+      if (!response.ok) {
+        if (response.status >= 500) {
+          const message = await apiErrorMessage(response).catch(() => '');
+          cloudFallbackReason = message ? ('云端数据读取失败:' + message) : '云端数据读取失败';
+        }
+        return null;
+      }
+      const workspace = await response.json();
+      if (!workspace || !Array.isArray(workspace.tournaments)) return null;
+      return workspace;
     } catch (error) {
-      return 'local';
+      return null;
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  /* 补齐 workspace 缺省字段:players/tournaments 为空时造默认数据,activeId 兜底到第一场 */
+  function normalizeWorkspace(workspace) {
+    if (!workspace.players) workspace.players = [];
+    if (!workspace.tournaments || !workspace.tournaments.length) {
+      const list = workspace.players.length ? workspace.players : makeDefaultPlayers();
+      workspace.players = list;
+      const fresh = makeDefaultTournament('我的赛事', list.map((p) => p.id));
+      workspace = { players: workspace.players, tournaments: [fresh], activeId: fresh.id };
+    }
+    if (!workspace.activeId || !workspace.tournaments.some((t) => t.id === workspace.activeId)) {
+      workspace.activeId = workspace.tournaments[0].id;
+    }
+    return workspace;
   }
 
   async function apiErrorMessage(response) {
@@ -1566,31 +1590,13 @@
     };
     window.TournamentApp = appInstance;
     try {
-      mode = await detectMode();
-      if (mode === 'cloud') {
-        try {
-          cloudWorkspace = await cloudGetWorkspace();
-          if (!cloudWorkspace.players) {
-            cloudWorkspace.players = [];
-          }
-          if (!cloudWorkspace.tournaments || !cloudWorkspace.tournaments.length) {
-            const list = cloudWorkspace.players.length ? cloudWorkspace.players : makeDefaultPlayers();
-            cloudWorkspace.players = list;
-            const fresh = makeDefaultTournament('我的赛事', list.map((p) => p.id));
-            cloudWorkspace = { players: cloudWorkspace.players, tournaments: [fresh], activeId: fresh.id };
-          }
-          if (!cloudWorkspace.activeId || !cloudWorkspace.tournaments.some((t) => t.id === cloudWorkspace.activeId)) {
-            cloudWorkspace.activeId = cloudWorkspace.tournaments[0].id;
-          }
-        } catch (error) {
-          mode = 'local';
-          cloudWorkspace = null;
-          cloudFallbackReason = errMsg(error);
-        }
-      }
-      /* 仅本地模式需要本地兜底初始化；云端模式不得触碰 localStorage/IndexedDB，
-       * 否则会覆盖用户刚切换的 activeId（主页/赛程显示错乱） */
-      if (mode === 'local') {
+      const workspace = await probeCloud();
+      if (workspace) {
+        cloudWorkspace = normalizeWorkspace(workspace);
+      } else {
+        /* 仅本地模式需要本地兜底初始化;云端模式不得触碰 localStorage/IndexedDB,
+         * 否则会覆盖用户刚切换的 activeId(主页/赛程显示错乱) */
+        mode = 'local';
         await ensureFirstTournament();
       }
       appInstance.mode = mode;
