@@ -222,6 +222,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  background: var(--surface);
 }
 
 .main-nav {
