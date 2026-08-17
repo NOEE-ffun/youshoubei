@@ -5,6 +5,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PORT || process.argv[2] || 8000);
@@ -25,6 +26,21 @@ const MIME = {
   '.woff': 'font/woff',
   '.woff2': 'font/woff2'
 };
+
+/* 静态资源允许短缓存 + SWR;页面与数据文件保持每次校验 */
+function cacheControlFor(filePath) {
+  return /\.(js|css|svg)$/i.test(filePath)
+    ? 'public, max-age=300, stale-while-revalidate=604800'
+    : 'no-cache';
+}
+
+/* 本站文件都是小文本,同步压缩足够;按 Accept-Encoding 优先 br */
+function encodeBody(req, data) {
+  const accept = String(req.headers['accept-encoding'] || '');
+  if (/\bbr\b/.test(accept)) return { body: zlib.brotliCompressSync(data), encoding: 'br' };
+  if (/\bgzip\b/.test(accept)) return { body: zlib.gzipSync(data), encoding: 'gzip' };
+  return { body: data, encoding: '' };
+}
 
 const server = http.createServer((req, res) => {
   let pathname;
@@ -63,12 +79,17 @@ const server = http.createServer((req, res) => {
       return;
     }
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, {
+    const headers = {
       'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': 'no-cache',
-      'X-Content-Type-Options': 'nosniff'
-    });
-    res.end(data);
+      'Cache-Control': cacheControlFor(filePath),
+      'X-Content-Type-Options': 'nosniff',
+      'Vary': 'Accept-Encoding'
+    };
+    const { body, encoding } = encodeBody(req, data);
+    if (encoding) headers['Content-Encoding'] = encoding;
+    headers['Content-Length'] = body.length;
+    res.writeHead(200, headers);
+    res.end(body);
   });
 });
 
