@@ -1460,7 +1460,6 @@
     const items = [
       { page: 'home', href: 'index.html', icon: 'home', label: '主页' },
       { page: 'match', href: 'schedule.html', icon: 'emoji_events', label: '比赛' },
-      { page: 'library', href: 'library.html', icon: 'photo_library', label: '卡组库' },
       { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' }
     ];
     const isActive = (page) => {
