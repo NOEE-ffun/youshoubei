@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <meta name="view-transition" content="same-origin">
-  <meta name="description" content="右手杯比赛库：只读查看一场比赛画布。">
+  <meta name="description" content="右手杯卡组库：只读查看一场比赛画布与卡组。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-  <title>比赛库 - 右手杯</title>
+  <title>卡组库 - 右手杯</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
   <link rel="prefetch" href="index.html">
   <link rel="prefetch" href="schedule.html">
@@ -22,20 +22,29 @@
     <nav class="side-nav" aria-label="主导航">
       <a class="side-link" href="index.html" data-page="home" title="主页" aria-label="主页"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/home.svg" alt="主页" aria-hidden="true"></span></a>
       <a class="side-link" href="schedule.html" data-page="match" title="比赛" aria-label="比赛"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/emoji_events.svg" alt="比赛" aria-hidden="true"></span></a>
+      <a class="side-link is-active" href="library.html" data-page="library" title="卡组库" aria-label="卡组库"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/photo_library.svg" alt="卡组库" aria-hidden="true"></span></a>
       <a class="side-link" href="players.html" data-page="players" title="选手库" aria-label="选手库"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/groups.svg" alt="选手库" aria-hidden="true"></span></a>
     </nav>
   </aside>
 
   <div class="layout-body">
     <main id="main-content" tabindex="-1">
-      <h1>比赛库</h1>
+      <h1>卡组库</h1>
       <div class="library-toolbar">
         <label class="visually-hidden" for="library-tournament-select">选择比赛</label>
         <select id="library-tournament-select" class="header-select"></select>
       </div>
       <div class="library-canvas-wrap">
         <div class="canvas-scroll canvas-scroll-full" id="library-scroll">
-          <div class="canvas-board" id="library-board"></div>
+          <div class="canvas-stage" id="library-stage">
+            <div class="canvas-board" id="library-board"></div>
+          </div>
+        </div>
+        <div class="zoom-dock" id="zoom-dock" role="group" aria-label="画布缩放">
+          <button type="button" class="zoom-btn" data-zoom="out" title="缩小" aria-label="缩小画布"><img class="icon" src="icons/zoom_out.svg" alt="" aria-hidden="true"></button>
+          <button type="button" class="zoom-btn zoom-level" data-zoom="reset" title="重置为 100%" aria-label="重置缩放为 100%"><span id="zoom-level">100%</span></button>
+          <button type="button" class="zoom-btn" data-zoom="in" title="放大" aria-label="放大画布"><img class="icon" src="icons/zoom_in.svg" alt="" aria-hidden="true"></button>
+          <button type="button" class="zoom-btn" data-zoom="fit" title="适应画布" aria-label="缩放到适应画布"><img class="icon" src="icons/fit_screen.svg" alt="" aria-hidden="true"></button>
         </div>
       </div>
     </main>

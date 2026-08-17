@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { escapeHtml, avatarMarkup, safeUrl, cssUrl } = window.TournamentUtils;
+  const { escapeHtml, avatarMarkup, safeUrl, cssUrl, debounce } = window.TournamentUtils;
 
   const CARD_WIDTH = 280;
   const CARD_HEIGHT = 176;
@@ -19,6 +19,110 @@
 
   function cardLeft(card) { return (Number(card.x) || 0) * COL_GAP; }
   function cardTop(card) { return (Number(card.y) || 0) * ROW_GAP; }
+
+  /* ---------- 只读画布缩放（与赛程页 zoom-dock 同款交互） ---------- */
+
+  const LIB_MIN_SCALE = 0.05;
+  const LIB_MAX_SCALE = 3;
+  let libScale = 1;
+  let libUserZoomed = false;
+
+  function libBoard() { return document.getElementById('library-board'); }
+  function libStage() { return document.getElementById('library-stage'); }
+  function libScroll() { return document.getElementById('library-scroll'); }
+
+  function libSyncZoom() {
+    const board = libBoard();
+    const stage = libStage();
+    if (!board || !stage) return;
+    const w = parseFloat(board.style.width) || 600;
+    const h = parseFloat(board.style.height) || 400;
+    stage.style.width = (w * libScale) + 'px';
+    stage.style.height = (h * libScale) + 'px';
+    board.style.transform = 'scale(' + libScale + ')';
+    board.style.transformOrigin = '0 0';
+    const label = document.getElementById('zoom-level');
+    if (label) label.textContent = Math.round(libScale * 100) + '%';
+  }
+
+  function libSetZoom(next) {
+    libScale = Math.max(LIB_MIN_SCALE, Math.min(LIB_MAX_SCALE, next));
+    libSyncZoom();
+  }
+
+  function libZoomAtCenter(factor) {
+    const sc = libScroll();
+    if (!sc) return;
+    const rect = sc.getBoundingClientRect();
+    const cx = sc.scrollLeft + rect.width / 2;
+    const cy = sc.scrollTop + rect.height / 2;
+    const next = Math.max(LIB_MIN_SCALE, Math.min(LIB_MAX_SCALE, libScale * factor));
+    const ratio = next / libScale;
+    libScale = next;
+    libSyncZoom();
+    sc.scrollLeft = cx * ratio - rect.width / 2;
+    sc.scrollTop = cy * ratio - rect.height / 2;
+  }
+
+  /* 按卡片内容范围适配，而非画布边界（与赛程页 fitCanvas 同口径） */
+  function libFit() {
+    const sc = libScroll();
+    const board = libBoard();
+    if (!sc || !board) return;
+    let w = parseFloat(board.style.width) || 600;
+    let h = parseFloat(board.style.height) || 400;
+    let maxX = 0;
+    let maxY = 0;
+    board.querySelectorAll('.canvas-card').forEach((el) => {
+      maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
+      maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
+    });
+    if (maxX && maxY) {
+      w = maxX;
+      h = maxY;
+    }
+    const rect = sc.getBoundingClientRect();
+    libSetZoom(Math.max(LIB_MIN_SCALE, Math.min(1, Math.min(
+      (rect.width - 24) / w,
+      (rect.height - 24) / h
+    ))));
+  }
+
+  function bindLibZoom() {
+    const dock = document.getElementById('zoom-dock');
+    if (dock) {
+      dock.addEventListener('click', (event) => {
+        const btn = event.target.closest('.zoom-btn');
+        if (!btn) return;
+        const kind = btn.dataset.zoom;
+        if (kind === 'in') {
+          libUserZoomed = true;
+          libZoomAtCenter(1.15);
+        } else if (kind === 'out') {
+          libUserZoomed = true;
+          libZoomAtCenter(1 / 1.15);
+        } else if (kind === 'reset') {
+          libUserZoomed = true;
+          libSetZoom(1);
+        } else if (kind === 'fit') {
+          libUserZoomed = false;
+          libFit();
+        }
+      });
+    }
+    const sc = libScroll();
+    if (sc) {
+      sc.addEventListener('wheel', (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        libUserZoomed = true;
+        libZoomAtCenter(Math.exp(-event.deltaY * 0.0018));
+      }, { passive: false });
+    }
+    window.addEventListener('resize', debounce(() => {
+      if (!libUserZoomed) libFit();
+    }, 200));
+  }
 
   function renderSelect() {
     const select = document.getElementById('library-tournament-select');
@@ -132,6 +236,8 @@
     wrap.className = 'canvas-cards';
     wrap.innerHTML = resolved.cards.map(cardHtml).join('');
     board.appendChild(wrap);
+    libSyncZoom();
+    if (!libUserZoomed) libFit();
   }
 
   function bind() {
@@ -148,6 +254,7 @@
     renderSelect();
     render();
     bind();
+    bindLibZoom();
     document.addEventListener('ts:changed', render);
   });
 

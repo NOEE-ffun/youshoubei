@@ -1359,6 +1359,19 @@
     return map;
   }
 
+  /* 赛事状态徽章（upcoming/ongoing/finished），主页 hero 与顶栏共用；
+   * 文案带 LIVE 字样，进行中配合 .status-dot 呼吸点 */
+  function statusBadgeMarkup(status) {
+    const map = {
+      upcoming: { cls: 'status-upcoming', text: '未开始' },
+      ongoing: { cls: 'status-ongoing', text: 'LIVE · 进行中' },
+      finished: { cls: 'status-finished', text: '已结束' }
+    };
+    const item = map[status] || map.upcoming;
+    return '<span class="status-badge ' + item.cls + '"><span class="status-dot" aria-hidden="true"></span>' +
+      item.text + '</span>';
+  }
+
   window.TournamentUtils = {
     escapeHtml,
     iconMarkup,
@@ -1369,6 +1382,7 @@
     canEdit,
     save,
     medalMap,
+    statusBadgeMarkup,
     avatarMarkup,
     notify,
     uiConfirm
@@ -1394,6 +1408,7 @@
     const items = [
       { page: 'home', href: 'index.html', icon: 'home', label: '主页' },
       { page: 'match', href: 'schedule.html', icon: 'emoji_events', label: '比赛' },
+      { page: 'library', href: 'library.html', icon: 'photo_library', label: '卡组库' },
       { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' }
     ];
     const isActive = (page) => {

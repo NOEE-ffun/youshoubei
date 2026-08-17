@@ -22,17 +22,20 @@
     <nav class="side-nav" aria-label="主导航">
       <a class="side-link is-active" href="index.html" data-page="home" title="主页" aria-label="主页"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/home.svg" alt="主页" aria-hidden="true"></span></a>
       <a class="side-link" href="schedule.html" data-page="match" title="比赛" aria-label="比赛"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/emoji_events.svg" alt="比赛" aria-hidden="true"></span></a>
+      <a class="side-link" href="library.html" data-page="library" title="卡组库" aria-label="卡组库"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/photo_library.svg" alt="卡组库" aria-hidden="true"></span></a>
       <a class="side-link" href="players.html" data-page="players" title="选手库" aria-label="选手库"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/groups.svg" alt="选手库" aria-hidden="true"></span></a>
     </nav>
   </aside>
 
   <div class="layout-body">
     <main class="home-main" id="main-content" tabindex="-1">
-      <h1 class="visually-hidden">右手杯主页</h1>
-
       <div class="home-hero">
         <div class="home-slideshow" id="home-slideshow" aria-hidden="true"></div>
         <div class="home-content">
+          <div class="home-identity">
+            <h1 class="home-title" id="home-title">右手杯</h1>
+            <div class="home-meta" id="home-meta" aria-live="polite"></div>
+          </div>
           <div class="home-marquee" role="group" aria-label="参赛选手">
             <div class="marquee-row">
               <div class="marquee-track" id="marquee-track"></div>
@@ -40,9 +43,12 @@
             <div class="marquee-row">
               <div class="marquee-track marquee-track-reverse" id="marquee-track-reverse"></div>
             </div>
+            <p class="home-marquee-empty" id="home-marquee-empty" hidden>选手名单待公布</p>
           </div>
           <div class="home-actions">
             <a class="btn btn-primary btn-lg" href="schedule.html">查看比赛</a>
+            <a class="btn btn-secondary btn-lg" id="home-live-btn" href="schedule.html" hidden rel="noopener">观看直播</a>
+            <a class="btn btn-secondary btn-lg" href="library.html">浏览卡组</a>
           </div>
         </div>
       </div>

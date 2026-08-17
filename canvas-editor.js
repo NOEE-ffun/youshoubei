@@ -91,7 +91,7 @@
       b.classList.remove('tool-link', 'tool-delete', 'zoom-mode');
     }
     const hint = document.getElementById('canvas-hint');
-    if (hint) hint.textContent = '查看模式';
+    if (hint) hint.textContent = '查看模式 · Ctrl/⌘+滚轮缩放';
     if (cardDialog && cardDialog.open) cardDialog.close();
     refreshToolbarUI();
   }
@@ -142,6 +142,9 @@
     stage.style.height = (baseHeight * scale) + 'px';
     b.style.transform = 'scale(' + scale + ')';
     b.style.transformOrigin = '0 0';
+    /* 右下角常驻缩放控件的百分比读数（仅赛程页存在该元素） */
+    const label = document.getElementById('zoom-level');
+    if (label) label.textContent = Math.round(scale * 100) + '%';
   }
 
   function setZoom(next) {
@@ -168,13 +171,28 @@
   function zoomIn() { zoomAtCenter(1.15); }
   function zoomOut() { zoomAtCenter(1 / 1.15); }
 
+  /* 内容实际范围：适配应以卡片为准，而不是 40×24 的编辑边界（否则缩到 ~10% 卡片不可读） */
+  function contentExtent() {
+    const b = board();
+    if (!b) return null;
+    let maxX = 0;
+    let maxY = 0;
+    b.querySelectorAll('.canvas-card').forEach((el) => {
+      maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
+      maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
+    });
+    if (!maxX || !maxY) return null;
+    return { width: maxX, height: maxY };
+  }
+
   function fitCanvas() {
     const sc = scrollEl();
     if (!sc) return;
+    const extent = contentExtent() || { width: baseWidth, height: baseHeight };
     const rect = sc.getBoundingClientRect();
     const next = Math.max(MIN_SCALE, Math.min(1, Math.min(
-      (rect.width - 24) / baseWidth,
-      (rect.height - 24) / baseHeight
+      (rect.width - 24) / extent.width,
+      (rect.height - 24) / extent.height
     )));
     scale = next;
     syncZoom();
@@ -644,6 +662,7 @@
     toggleZoomMode,
     zoomIn,
     zoomOut,
+    setZoom,
     fitCanvas,
     syncZoom,
     getSelectedCount
