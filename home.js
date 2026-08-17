@@ -3,18 +3,54 @@
 
   /* 主页：跑马灯 + 比赛背景幻灯片渐变 */
 
-  const { escapeHtml, medalMap, avatarMarkup, safeUrl } = window.TournamentUtils;
+  const { escapeHtml, medalMap, avatarMarkup, safeUrl, statusBadgeMarkup } = window.TournamentUtils;
 
   let slideTimer = null;
   let slideIndex = 0;
   let slideBackgrounds = [];
+
+  /* 赛事身份：标题用比赛名（静态兜底「右手杯」），状态徽章 + 开赛时间 + 直播入口 */
+  function formatStartTime(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
+  function renderIdentity() {
+    const app = window.TournamentApp;
+    const record = app && app.current;
+    if (!record) return;
+    const titleEl = document.getElementById('home-title');
+    if (titleEl) titleEl.textContent = record.name || '右手杯';
+    const meta = document.getElementById('home-meta');
+    if (meta) {
+      const parts = [statusBadgeMarkup(record.status)];
+      const time = formatStartTime(record.startTime);
+      if (time) parts.push('<span class="home-start-time">开赛 ' + time + '</span>');
+      meta.innerHTML = parts.join('');
+    }
+    const liveBtn = document.getElementById('home-live-btn');
+    if (liveBtn) {
+      /* liveUrl 经白名单校验（仅 https 直播地址放行），无链接时隐藏按钮 */
+      const url = safeUrl(record.liveUrl || '');
+      liveBtn.hidden = !url;
+      if (url) liveBtn.href = url;
+    }
+  }
 
   function renderMarquee() {
     const app = window.TournamentApp;
     const record = app && app.current;
     if (!app) return;
     const players = (app.players || []).slice();
-    if (!players.length) {
+    /* 全是「选手 N」占位名或库为空时显示待公布空状态，不滚动占位卡 */
+    const allPlaceholder = !players.length || players.every((p) =>
+      /^选手\s*\d+$/.test(String((p && p.name) || '').trim()));
+    const emptyNote = document.getElementById('home-marquee-empty');
+    if (emptyNote) emptyNote.hidden = !allPlaceholder;
+    if (allPlaceholder) {
       for (const id of ['marquee-track', 'marquee-track-reverse']) {
         const track = document.getElementById(id);
         if (track) track.innerHTML = '';
@@ -53,7 +89,7 @@
     if (!slideBackgrounds.length) {
       if (slideTimer) clearInterval(slideTimer);
       el.innerHTML = '';
-      el.style.backgroundImage = 'linear-gradient(135deg, #1e293b, #0f172a)';
+      el.style.backgroundImage = 'linear-gradient(135deg, var(--hero-fallback-a), var(--hero-fallback-b))';
       return;
     }
     showSlide();
@@ -78,9 +114,11 @@
   }
 
   document.addEventListener('ts:ready', () => {
+    renderIdentity();
     renderMarquee();
     loadSlideshowBackgrounds();
     document.addEventListener('ts:changed', () => {
+      renderIdentity();
       renderMarquee();
       loadSlideshowBackgrounds();
     });

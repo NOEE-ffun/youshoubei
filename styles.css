@@ -39,6 +39,9 @@
   --success: oklch(62% 0.13 160);
   --success-soft: #e4f6ee;
   --success-soft: oklch(96% 0.02 167);
+  /* 主页 hero 无背景图时的深色回退(照片区底色,不参与浅色页面主题) */
+  --hero-fallback-a: #1e293b;
+  --hero-fallback-b: #0f172a;
   --radius-sm: 0.5rem;
   --radius: 0.875rem;
   --radius-lg: 1.25rem;
@@ -320,6 +323,57 @@ body {
   min-block-size: 2rem;
   padding: 0.25rem 0.625rem;
   font-size: 0.82rem;
+}
+
+.btn-lg {
+  font-size: 1.05rem;
+  padding: 0.75rem 1.5rem;
+  min-block-size: 3rem;
+}
+
+/* 赛事状态徽章:默认浅色上下文(顶栏等);主页 hero 深色语境由 .home-meta 覆写 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.status-dot {
+  inline-size: 0.45rem;
+  block-size: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.status-badge.status-upcoming {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.status-badge.status-ongoing {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.status-badge.status-finished {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.status-badge.status-ongoing .status-dot {
+  animation: live-pulse 1.2s var(--ease-in-out) infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
 }
 
 /* 页面布局 */
@@ -1732,6 +1786,56 @@ dialog::backdrop {
   box-shadow: var(--shadow-sm);
 }
 
+/* 画布右下角常驻缩放控件:查看/编辑态都可用 */
+.zoom-dock {
+  position: absolute;
+  inset-block-end: 0.75rem;
+  inset-inline-end: 1rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem;
+  background: oklch(100% 0 0 / 0.9);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+}
+
+.zoom-dock[hidden] {
+  display: none;
+}
+
+.zoom-btn {
+  inline-size: 2rem;
+  block-size: 2rem;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.zoom-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.zoom-level {
+  min-inline-size: 3rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
 .page-wrap-canvas .champion-banner,
 .layout-body-canvas .champion-banner {
   position: absolute;
@@ -2007,9 +2111,24 @@ body[data-page="players"] #bg-layer {
   opacity: 1;
 }
 
+/* hero 可读性压暗层:照片再亮也保证白字标题与徽章可读 */
+.home-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: radial-gradient(
+    ellipse at center,
+    rgb(15 23 42 / 0.5),
+    rgb(15 23 42 / 0.28) 62%,
+    rgb(15 23 42 / 0.55)
+  );
+  pointer-events: none;
+}
+
 .home-content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: grid;
   gap: 2rem;
   justify-items: center;
@@ -2024,6 +2143,85 @@ body[data-page="players"] #bg-layer {
   width: 100%;
 }
 
+/* 赛事身份:标题 + 状态徽章 + 开赛时间 */
+.home-identity {
+  display: grid;
+  justify-items: center;
+  gap: 0.875rem;
+  text-align: center;
+  padding-inline: 1rem;
+}
+
+.home-title {
+  margin: 0;
+  font-size: clamp(2.25rem, 5vw, 3.5rem);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  color: #fff;
+  text-wrap: balance;
+  text-shadow: 0 2px 18px rgb(15 23 42 / 0.45);
+}
+
+.home-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  color: oklch(96% 0.01 262);
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* hero 深色语境的徽章覆写:玻璃底白字;进行中/已结束用实色强化 */
+.home-meta .status-badge {
+  background: oklch(100% 0 0 / 0.16);
+  border-color: oklch(100% 0 0 / 0.4);
+  color: #fff;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.home-meta .status-badge.status-ongoing {
+  background: var(--danger);
+  border-color: transparent;
+  color: #fff;
+}
+
+.home-meta .status-badge.status-finished {
+  background: var(--success);
+  border-color: transparent;
+  color: #fff;
+}
+
+.home-start-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-marquee-empty {
+  margin: 0;
+  padding: 1.75rem 1rem;
+  color: oklch(96% 0.01 262 / 0.9);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.home-marquee-empty[hidden] {
+  display: none;
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
 .home-actions .btn-lg {
   font-size: 1.05rem;
   padding: 0.75rem 1.5rem;
@@ -2032,6 +2230,7 @@ body[data-page="players"] #bg-layer {
 /* ========== 比赛库 ========== */
 
 .library-canvas-wrap {
+  position: relative;
   height: calc(100vh - 9rem);
   min-height: 480px;
   border: 1px solid var(--border);

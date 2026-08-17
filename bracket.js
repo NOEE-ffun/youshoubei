@@ -97,7 +97,7 @@
     if (layout) layout.classList.toggle('has-toolbar', editMode);
     if (toolbar) toolbar.hidden = !editMode;
     const hint = document.getElementById('canvas-hint');
-    if (hint) hint.textContent = editMode ? '编辑模式' : '查看模式';
+    if (hint) hint.textContent = editMode ? '编辑模式' : '查看模式 · Ctrl/⌘+滚轮缩放';
     renderEditToolbar();
   }
 
@@ -767,6 +767,43 @@
     });
   }
 
+  /* ---------- 查看态自适应与常驻缩放控件 ---------- */
+
+  let userZoomed = false;
+
+  /* 查看态且用户未手动缩放时贴合视口，让双败图首屏可见（总决赛不再在视口外） */
+  function autoFitCanvas() {
+    if (editMode || userZoomed) return;
+    if (window.CanvasEditor && window.CanvasEditor.fitCanvas) window.CanvasEditor.fitCanvas();
+  }
+
+  function bindZoomDock() {
+    const dock = document.getElementById('zoom-dock');
+    if (!dock) return;
+    dock.addEventListener('click', (event) => {
+      const btn = event.target.closest('.zoom-btn');
+      if (!btn) return;
+      const editor = window.CanvasEditor;
+      if (!editor) return;
+      const kind = btn.dataset.zoom;
+      if (kind === 'in') {
+        userZoomed = true;
+        editor.zoomIn();
+      } else if (kind === 'out') {
+        userZoomed = true;
+        editor.zoomOut();
+      } else if (kind === 'reset') {
+        if (!editor.setZoom) return;
+        userZoomed = true;
+        editor.setZoom(1);
+      } else if (kind === 'fit') {
+        userZoomed = false;
+        editor.fitCanvas();
+      }
+    });
+    window.addEventListener('resize', debounce(autoFitCanvas, 200));
+  }
+
   /* 头像上传（与 roster 联动，写全局选手库） */
   let avatarFileInput = null;
   let pendingAvatarId = null;
@@ -839,13 +876,16 @@
 
   document.addEventListener('ts:ready', () => {
     renderAll();
+    autoFitCanvas();
     syncEditUI();
     hideEditLock();
     bindCanvasLock();
     bindEditToolbar();
+    bindZoomDock();
   });
   document.addEventListener('ts:changed', () => {
     renderAll();
+    autoFitCanvas();
     syncEditUI();
   });
   bindCanvas();
