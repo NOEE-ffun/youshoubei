@@ -23,6 +23,7 @@
   /* ---------- 只读画布缩放（与赛程页 zoom-dock 同款交互） ---------- */
 
   const LIB_MIN_SCALE = 0.05;
+  const LIB_FIT_MIN_SCALE = 0.28;
   const LIB_MAX_SCALE = 3;
   let libScale = 1;
   let libUserZoomed = false;
@@ -82,7 +83,7 @@
       h = maxY;
     }
     const rect = sc.getBoundingClientRect();
-    libSetZoom(Math.max(LIB_MIN_SCALE, Math.min(1, Math.min(
+    libSetZoom(Math.max(LIB_FIT_MIN_SCALE, Math.min(1, Math.min(
       (rect.width - 24) / w,
       (rect.height - 24) / h
     ))));
