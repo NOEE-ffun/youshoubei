@@ -44,7 +44,11 @@ async function writeJson(key, value) {
 async function uploadImageBuffer(key, buffer, contentType) {
   const client = getClient();
   await client.put(key, buffer, {
-    headers: { 'Content-Type': contentType }
+    headers: {
+      'Content-Type': contentType,
+      /* key 是 UUID,内容不会变,可放心长缓存 */
+      'Cache-Control': 'public, max-age=31536000, immutable'
+    }
   });
   // data.json 保持私有；图片对象单独设为公共读
   await client.putACL(key, 'public-read');
