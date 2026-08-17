@@ -1380,6 +1380,8 @@
   function renderSidebar() {
     const placeholder = document.getElementById('app-sidebar');
     if (!placeholder) return;
+    /* 页面自带静态导航骨架时不再重建,避免闪烁也省一次 innerHTML */
+    if (placeholder.querySelector('.side-nav')) return;
     const app = window.TournamentApp;
     const active = app && app.activePage;
     const items = [
