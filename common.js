@@ -239,6 +239,58 @@
     }
   }
 
+  /* ---------- 云端 workspace 本地缓存(SWR) ----------
+   * 云端数据是纯 JSON(图片为 URL 字符串),localStorage 可整体序列化;
+   * 命中缓存先渲染秒开,超过 TTL 再后台校新,避免页面间跳转每次全量重拉 */
+  const WORKSPACE_CACHE_KEY = 'ts:workspaceCache';
+  const WORKSPACE_CACHE_TTL = 60000;
+
+  function readWorkspaceCache() {
+    try {
+      const raw = localStorage.getItem(WORKSPACE_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.workspace && parsed.workspace.tournaments)
+        || !Number.isFinite(parsed.savedAt)) return null;
+      return parsed;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function writeWorkspaceCache(workspace) {
+    try {
+      localStorage.setItem(WORKSPACE_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), workspace }));
+    } catch (error) {
+      /* 隐私模式/存储满:缓存写不进不影响主流程 */
+    }
+  }
+
+  function setCloudWorkspace(workspace) {
+    cloudWorkspace = workspace;
+    writeWorkspaceCache(workspace);
+  }
+
+  async function revalidateWorkspaceQuietly() {
+    try {
+      const response = await fetch('/api/data');
+      /* 非 200(含 404=API 未部署)一律保留缓存:
+       * cloudGetWorkspace 会把 404 当"空云端"返回,直连会把缓存覆盖成默认空赛事 */
+      if (!response.ok) return;
+      const fresh = normalizeWorkspace(await response.json());
+      if (!Array.isArray(fresh.tournaments)) return;
+      if (JSON.stringify(fresh) === JSON.stringify(cloudWorkspace)) {
+        writeWorkspaceCache(fresh); /* 只刷新时间戳 */
+        return;
+      }
+      setCloudWorkspace(fresh);
+      await refreshApp();
+      document.dispatchEvent(new CustomEvent('ts:changed'));
+    } catch (error) {
+      /* 后台校新失败:沿用现有数据,不打扰用户 */
+    }
+  }
+
   async function cloudGetWorkspace() {
     const response = await fetch('/api/data');
     if (response.status === 404) return { tournaments: [], activeId: null };
@@ -305,7 +357,7 @@
         throw new Error(message);
       }
       /* 上传成功后本地快照与上传内容对齐 */
-      cloudWorkspace = payload;
+      setCloudWorkspace(payload);
     };
     const result = cloudWriteQueue.then(run, run);
     cloudWriteQueue = result.catch(() => {});
@@ -360,7 +412,7 @@
         latest.activeId = (latest.tournaments[0] || {}).id || null;
       }
       await cloudPutWorkspace(latest, { noMerge: true });
-      cloudWorkspace = latest;
+      setCloudWorkspace(latest);
       return;
     }
     return idbDelete(id);
@@ -388,7 +440,7 @@
       const latest = await cloudGetWorkspace();
       latest.players = (latest.players || []).filter((p) => p.id !== id);
       await cloudPutWorkspace(latest, { noMerge: true });
-      cloudWorkspace = latest;
+      setCloudWorkspace(latest);
       return;
     }
     const players = (await idbGetMeta(META_PLAYERS)) || [];
@@ -471,7 +523,7 @@
     if (!workspace.activeId) workspace.activeId = workspace.tournaments[0].id;
 
     await cloudPutWorkspace(workspace);
-    cloudWorkspace = workspace;
+    setCloudWorkspace(workspace);
     await refreshApp();
     notify('已将 ' + workspace.tournaments.length + ' 场比赛上传到云端');
   }
@@ -1590,9 +1642,21 @@
     };
     window.TournamentApp = appInstance;
     try {
+      const cached = readWorkspaceCache();
+      if (cached) {
+        /* 缓存命中:立即以云端模式渲染,过期则后台校新 */
+        mode = 'cloud';
+        setCloudWorkspace(normalizeWorkspace(cached.workspace));
+        appInstance.mode = mode;
+        await refreshApp();
+        document.dispatchEvent(new CustomEvent('ts:ready'));
+        if (Date.now() - cached.savedAt > WORKSPACE_CACHE_TTL) revalidateWorkspaceQuietly();
+        return;
+      }
       const workspace = await probeCloud();
       if (workspace) {
-        cloudWorkspace = normalizeWorkspace(workspace);
+        mode = 'cloud';
+        setCloudWorkspace(normalizeWorkspace(workspace));
       } else {
         /* 仅本地模式需要本地兜底初始化;云端模式不得触碰 localStorage/IndexedDB,
          * 否则会覆盖用户刚切换的 activeId(主页/赛程显示错乱) */
