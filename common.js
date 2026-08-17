@@ -558,9 +558,13 @@
         const ctx = canvas.getContext('2d');
         ctx.drawImage(image, 0, 0, width, height);
         canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('图片压缩失败'));
-        }, 'image/jpeg', quality || 0.85);
+          if (blob && blob.type === 'image/webp') { resolve(blob); return; }
+          /* 不支持 WebP 编码的浏览器回退 JPEG */
+          canvas.toBlob((fallback) => {
+            if (fallback) resolve(fallback);
+            else reject(new Error('图片压缩失败'));
+          }, 'image/jpeg', quality || 0.85);
+        }, 'image/webp', quality || 0.85);
       };
       image.onerror = () => {
         URL.revokeObjectURL(url);
@@ -592,9 +596,12 @@
           size, size,
           0, 0, 200, 200);
         canvas.toBlob((blob) => {
-          if (blob) resolve(blob);
-          else reject(new Error('图片压缩失败'));
-        }, 'image/jpeg', 0.85);
+          if (blob && blob.type === 'image/webp') { resolve(blob); return; }
+          canvas.toBlob((fallback) => {
+            if (fallback) resolve(fallback);
+            else reject(new Error('图片压缩失败'));
+          }, 'image/jpeg', 0.85);
+        }, 'image/webp', 0.85);
       };
       image.onerror = () => {
         URL.revokeObjectURL(url);
@@ -847,7 +854,7 @@
       '        <button type="button" id="bg-upload" class="btn btn-secondary btn-sm" aria-describedby="bg-hint">上传背景</button>' +
       '        <button type="button" id="bg-remove" class="btn btn-danger btn-sm">移除背景</button>' +
       '      </div>' +
-      '      <p class="hint" id="bg-hint">支持常见图片格式，上传后自动压缩至最长边 1920px。</p>' +
+      '      <p class="hint" id="bg-hint">支持常见图片格式，上传后自动压缩至最长边 1600px。</p>' +
       '    </div>' +
       '    <div class="form-field" id="admin-field" hidden>' +
       '      <label for="settings-admin-token">管理口令</label>' +
@@ -947,7 +954,7 @@
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       try {
-        let image = await compressImage(file, 1920);
+        let image = await compressImage(file, 1600, 0.8);
         if (mode === 'cloud') image = await uploadCloudImage(image);
         pendingBackground = image;
         const preview = settingsDialog.querySelector('#bg-preview');
