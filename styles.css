@@ -13,11 +13,11 @@
   --bg: #f4f6fb;
   --surface: #ffffff;
   /* 半透明卡片表面：透出背景图；配合 backdrop-filter 模糊保证文字可读 */
-  --surface-glass: rgba(255, 255, 255, 0.7);
-  --surface-glass: oklch(100% 0 0 / 0.7);
+  --surface-glass: rgba(255, 255, 255, 0.88);
+  --surface-glass: oklch(100% 0 0 / 0.88);
   /* 玻璃卡片悬停表面与深色遮罩家族 */
-  --surface-glass-hover: rgba(255, 255, 255, 0.85);
-  --surface-glass-hover: oklch(100% 0 0 / 0.85);
+  --surface-glass-hover: rgba(255, 255, 255, 0.95);
+  --surface-glass-hover: oklch(100% 0 0 / 0.95);
   --scrim: rgba(23, 30, 51, 0.82);
   --scrim: oklch(22% 0.02 262 / 0.82);
   --scrim-strong: rgba(23, 30, 51, 0.95);
@@ -44,6 +44,8 @@
   --accent-stripe: oklch(93% 0.04 262);
   --danger: #d64545;
   --danger: oklch(58% 0.2 25);
+  --danger-strong: #b91c1c;
+  --danger-strong: oklch(45% 0.17 25);
   --danger-soft: #fdecec;
   --danger-soft: oklch(96% 0.02 17);
   --success: #1f9d6a;
@@ -79,6 +81,7 @@
   --dur-pulse: 1.2s;
   --dur-breathe: 1.6s;
   --dur-slideshow: 900ms;
+  --header-height: 3rem;
 }
 
 * {
@@ -176,8 +179,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: oklch(100% 0 0 / 0.88);
-  backdrop-filter: blur(12px);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
   padding-left: 4.5rem;
 }
@@ -208,6 +210,7 @@ body {
   gap: 0.5rem;
   min-inline-size: 0;
   flex: 1 1 auto;
+  background: var(--surface);
 }
 
 .header-title {
@@ -305,7 +308,10 @@ body {
 }
 
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 1;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-color: var(--border);
   cursor: not-allowed;
   transform: none;
 }
@@ -342,7 +348,7 @@ body {
 
 .btn-danger {
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .btn-danger:hover {
@@ -390,7 +396,7 @@ body {
 
 .status-badge.status-ongoing {
   background: var(--danger-soft);
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .status-badge.status-finished {
@@ -661,21 +667,21 @@ main > h1 {
 
 /* ongoing 赛事里未完赛的对局：危险色呼吸描边 + LIVE 小章 */
 .match-card.match-live {
-  border-color: var(--danger);
-  outline: 2px solid var(--danger);
+  border-color: var(--danger-strong);
+  outline: 2px solid var(--danger-strong);
   outline-offset: 1px;
   animation: match-live-breathe var(--dur-breathe) var(--ease-in-out) infinite;
 }
 
 .match-card.cycle {
-  border-color: var(--danger);
-  outline: 2px dashed var(--danger);
+  border-color: var(--danger-strong);
+  outline: 2px dashed var(--danger-strong);
   outline-offset: 2px;
 }
 
 @keyframes match-live-breathe {
-  0%, 100% { outline-color: var(--danger); }
-  50% { outline-color: oklch(from var(--danger) l c h / 0.25); }
+  0%, 100% { outline-color: var(--danger-strong); }
+  50% { outline-color: oklch(from var(--danger-strong) l c h / 0.25); }
 }
 
 .match-head {
@@ -721,11 +727,11 @@ main > h1 {
 
 .match-state.live {
   color: #fff;
-  background: var(--danger);
+  background: var(--danger-strong);
 }
 
 .match-state.cycle {
-  color: var(--danger);
+  color: var(--danger-strong);
   background: var(--danger-soft);
 }
 
@@ -842,7 +848,7 @@ main > h1 {
 
 .form-error {
   margin: 0.35rem 0 0;
-  color: var(--danger);
+  color: var(--danger-strong);
   background: var(--danger-soft);
   border: 1px solid oklch(from var(--danger) l c h / 0.35);
   border-radius: var(--radius-sm);
@@ -1012,8 +1018,7 @@ button.image-slot {
 }
 
 .slot-action.danger {
-  background: #d64545;
-  background: oklch(from var(--danger) l c h / 0.85);
+  background: var(--danger-strong);
 }
 
 .slot-action.danger:hover {
@@ -1226,7 +1231,7 @@ dialog::backdrop {
 }
 
 .toast-danger {
-  background: var(--danger);
+  background: var(--danger-strong);
   color: #fff;
 }
 
@@ -1460,7 +1465,7 @@ dialog::backdrop {
 }
 
 .avatar-action.danger {
-  color: var(--danger);
+  color: var(--danger-strong);
 }
 
 .deck-player-head {
@@ -1638,7 +1643,7 @@ dialog::backdrop {
   inset-block-end: -0.5rem;
   inset-inline-end: 1rem;
   justify-self: end;
-  background: oklch(100% 0 0 / 0.72);
+  background: var(--surface);
   border-color: var(--border);
   color: var(--text);
 }
@@ -1741,8 +1746,13 @@ dialog::backdrop {
   width: 280px;
   min-height: 176px;
   box-sizing: border-box;
+  background: var(--surface);
   z-index: 2;
   cursor: default;
+}
+
+.canvas-board .match-card {
+  background: var(--surface);
 }
 
 .canvas-board.editing .canvas-card {
@@ -2308,11 +2318,13 @@ body[data-page="players"] #bg-layer {
   justify-content: center;
   border-radius: var(--radius);
   overflow: hidden;
+  background-image: linear-gradient(135deg, var(--hero-fallback-a), var(--hero-fallback-b));
 }
 
 .home-slideshow {
   position: absolute;
   inset: 0;
+  background-image: linear-gradient(135deg, var(--hero-fallback-a), var(--hero-fallback-b));
   background-size: cover;
   background-position: center;
   overflow: hidden;
@@ -2412,7 +2424,7 @@ body[data-page="players"] #bg-layer {
 }
 
 .home-meta .status-badge.status-ongoing {
-  background: var(--danger);
+  background: var(--danger-strong);
   border-color: transparent;
   color: #fff;
 }
@@ -2627,12 +2639,12 @@ body[data-page="players"] #bg-layer {
 
 .layout-body {
   margin-left: 3.25rem;
-  min-height: calc(100vh - 3rem);
+  min-height: calc(100vh - var(--header-height, 3rem));
   padding: 0;
 }
 
 .layout-body > main {
-  height: calc(100vh - 3rem);
+  height: calc(100vh - var(--header-height, 3rem));
   min-height: 0;
   overflow: auto;
   padding: 1rem;
@@ -2642,11 +2654,11 @@ body[data-page="players"] #bg-layer {
 .layout-body-canvas {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  height: calc(100vh - 3rem);
+  height: calc(100vh - var(--header-height, 3rem));
   min-height: 0;
   padding: 0;
   gap: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .layout-body-canvas.has-toolbar {
@@ -2657,7 +2669,7 @@ body[data-page="players"] #bg-layer {
   position: relative;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   padding: 0;
 }
 
@@ -2828,7 +2840,7 @@ body[data-page="players"] #bg-layer {
 /* ========== 主页全屏 ========== */
 
 .layout-body > main.home-main {
-  height: calc(100vh - 3rem);
+  height: calc(100vh - var(--header-height, 3rem));
   min-height: 0;
   overflow: hidden;
   padding: 0;

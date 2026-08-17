@@ -233,7 +233,7 @@
       '<article class="match-card canvas-card' + (played ? ' played' : '') + (cycle ? ' cycle' : '') + (live ? ' match-live' : '') + '"' +
       ' data-match="' + match.id + '" style="left:' + cardLeft(card) + 'px;top:' + cardTop(card) + 'px">' +
       '<header class="match-head">' +
-      '<h3 class="match-title">' + escapeHtml(match.label || match.id) + '</h3>' +
+      '<h2 class="match-title">' + escapeHtml(match.label || match.id) + '</h2>' +
       '<span class="match-format">' + escapeHtml(match.format || 'BO3') + '</span>' +
       '<span class="match-state' + stateClass + '">' + stateText + '</span>' +
       '</header>' +

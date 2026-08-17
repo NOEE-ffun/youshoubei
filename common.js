@@ -1478,6 +1478,15 @@
       '</nav>';
   }
 
+  let headerHeightBound = false;
+
+  /* 顶栏高度随视口换行变化，写入 CSS 变量供整页画布 calc 使用 */
+  function syncHeaderHeight() {
+    const placeholder = document.getElementById('app-header');
+    if (!placeholder) return;
+    document.documentElement.style.setProperty('--header-height', placeholder.offsetHeight + 'px');
+  }
+
   function renderHeader() {
     const app = window.TournamentApp;
     const placeholder = document.getElementById('app-header');
@@ -1550,6 +1559,11 @@
         if (window.BracketActions && window.BracketActions.requestEdit) window.BracketActions.requestEdit();
         else if (window.BracketActions && window.BracketActions.toggleEdit) window.BracketActions.toggleEdit();
       });
+    }
+    syncHeaderHeight();
+    if (!headerHeightBound) {
+      headerHeightBound = true;
+      window.addEventListener('resize', debounce(syncHeaderHeight, 120));
     }
   }
 
