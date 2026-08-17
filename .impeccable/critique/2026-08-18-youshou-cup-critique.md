@@ -27,8 +27,9 @@
 
 ## Detector Evidence（captain fallback）
 
-- 桌面 1440×900 四页: 27 warnings — low-contrast ×26（其中大部分是 fit 缩放后的小字号像素级误报；sticky 页头测量误报 1）+ overused-font ×1（系统 sans-serif 被识别为 Arial，误报）
+- 桌面 1440×900 四页: 27 warnings — low-contrast ×26 + overused-font ×1（系统 sans-serif 被识别为 Arial，误报）
 - 移动 390×844 四页: 23 warnings — 同类像素对比度误报 + overused-font ×1
+- A/B 交叉结论: B 报的缩放后小字号 low-contrast 为像素级误报——A 路实测 100% 缩放下 text-muted 为 5.2–5.9:1 达标，根因是 auto-fit 过度缩小的可读性问题（P1-1，已修复）；真实对比度缺陷是 success 3.07:1（P1-2，已修复）。
 - 修复过程中已消除: skipped-heading ×2、clipped-overflow-container ×2、players 页 8 条真实危险色对比度、home hero 白字白底 2 条
 
 ## 优先级问题（Assessment A，附 captain 处置）
