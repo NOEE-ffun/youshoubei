@@ -6,6 +6,7 @@
   const COL_GAP = 320;
   const ROW_GAP = 210;
   const MIN_SCALE = 0.05;
+  const FIT_MIN_SCALE = 0.28;
   const MAX_SCALE = 3;
 
   let active = false;
@@ -190,7 +191,7 @@
     if (!sc) return;
     const extent = contentExtent() || { width: baseWidth, height: baseHeight };
     const rect = sc.getBoundingClientRect();
-    const next = Math.max(MIN_SCALE, Math.min(1, Math.min(
+    const next = Math.max(FIT_MIN_SCALE, Math.min(1, Math.min(
       (rect.width - 24) / extent.width,
       (rect.height - 24) / extent.height
     )));

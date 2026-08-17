@@ -50,6 +50,8 @@
   --danger-soft: oklch(96% 0.02 17);
   --success: #1f9d6a;
   --success: oklch(62% 0.13 160);
+  --success-strong: #0b6e4f;
+  --success-strong: oklch(45% 0.09 160);
   --success-soft: #e4f6ee;
   --success-soft: oklch(96% 0.02 167);
   /* 主页 hero 无背景图时的深色回退(照片区底色,不参与浅色页面主题) */
@@ -402,7 +404,7 @@ body {
 
 .status-badge.status-finished {
   background: var(--success-soft);
-  color: var(--success);
+  color: var(--success-strong);
 }
 
 .status-badge.status-ongoing .status-dot {
@@ -715,14 +717,14 @@ main > h1 {
   font-size: 0.78rem;
   font-weight: 400;
   letter-spacing: 0.08em;
-  color: var(--accent);
+  color: var(--accent-strong);
   background: var(--accent-soft);
   border-radius: var(--radius-pill);
   padding: 0.15rem 0.45rem;
 }
 
 .match-state.done {
-  color: var(--success);
+  color: var(--success-strong);
   background: var(--success-soft);
 }
 
@@ -2431,7 +2433,7 @@ body[data-page="players"] #bg-layer {
 }
 
 .home-meta .status-badge.status-finished {
-  background: var(--success);
+  background: var(--success-strong);
   border-color: transparent;
   color: #fff;
 }
