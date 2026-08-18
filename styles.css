@@ -18,6 +18,9 @@
   /* 玻璃卡片悬停表面与深色遮罩家族 */
   --surface-glass-hover: rgba(255, 255, 255, 0.95);
   --surface-glass-hover: oklch(100% 0 0 / 0.95);
+  /* 悬浮面板(顶栏/侧栏/工具栏/缩放控件/提示药丸):半透明 + 毛玻璃 */
+  --surface-float: rgba(255, 255, 255, 0.9);
+  --surface-float: oklch(100% 0 0 / 0.9);
   --scrim: rgba(23, 30, 51, 0.82);
   --scrim: oklch(22% 0.02 262 / 0.82);
   --scrim-strong: rgba(23, 30, 51, 0.95);
@@ -88,6 +91,121 @@
 
 html {
   color-scheme: light;
+}
+
+/* ---------- 暗色主题 ----------
+ * <head> 里的 theme-init.js 在首帧前把 data-theme 写到 <html>(显式选择存
+ * localStorage 'ts:theme',未选择跟随系统),因此这里只维护一份令牌块。
+ * 暗色下强调色整体提亮以胜任文字/图标;实心 accent 面改配深色文字(见下)。 */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0f1626;
+  --bg: oklch(19% 0.028 262);
+  --surface: #1a2337;
+  --surface: oklch(24% 0.032 262);
+  --surface-float: rgba(20, 28, 48, 0.92);
+  --surface-float: oklch(22% 0.03 262 / 0.92);
+  --surface-glass: rgba(20, 28, 48, 0.86);
+  --surface-glass: oklch(22% 0.03 262 / 0.86);
+  --surface-glass-hover: rgba(28, 37, 60, 0.94);
+  --surface-glass-hover: oklch(27% 0.032 262 / 0.94);
+  --overlay: rgba(5, 9, 18, 0.6);
+  --overlay: oklch(10% 0.02 262 / 0.6);
+  --surface-2: #232e46;
+  --surface-3: #2d3a56;
+  --text: #e8ecf6;
+  --text-muted: #a5b0c6;
+  --border: #39496b;
+  --border-soft: rgba(148, 163, 184, 0.14);
+  --warning-soft: #3a3220;
+  --warning-soft: oklch(30% 0.04 90);
+  --accent: #8fabff;
+  --accent: oklch(74% 0.115 262);
+  --accent-strong: #b3c6ff;
+  --accent-strong: oklch(84% 0.09 262);
+  --accent-soft: #243352;
+  --accent-soft: oklch(28% 0.05 262);
+  --accent-stripe: #2c3c60;
+  --accent-stripe: oklch(31% 0.055 262);
+  --danger: #f29393;
+  --danger: oklch(74% 0.1 25);
+  --danger-soft: #3d2327;
+  --danger-soft: oklch(28% 0.05 25);
+  --success: #5ecfa2;
+  --success: oklch(76% 0.1 160);
+  --success-soft: #1c3830;
+  --success-soft: oklch(28% 0.045 165);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 24px 80px rgb(0 0 0 / 0.6);
+  --focus-ring: 0 0 0 3px rgba(143, 171, 255, 0.7);
+  --focus-ring: 0 0 0 3px oklch(74% 0.115 262 / 0.7);
+}
+
+/* 实心 accent 面上的文字/图标翻深色:亮蓝底 + 白字对比不足 */
+[data-theme='dark'] .btn-primary,
+[data-theme='dark'] .tool-btn.is-active,
+[data-theme='dark'] .side-link.is-active,
+[data-theme='dark'] .score-btn.active,
+[data-theme='dark'] .skip-link {
+  color: #0d1730;
+}
+
+[data-theme='dark'] .side-link.is-active .icon,
+[data-theme='dark'] .tool-btn.is-active .icon {
+  filter: none;
+}
+
+/* 背景光环:浅色光晕换暗色微光 */
+[data-theme='dark'] #bg-layer {
+  background:
+    radial-gradient(circle at 15% 15%, oklch(28% 0.05 262 / 0.55), transparent 42%),
+    radial-gradient(circle at 85% 85%, oklch(26% 0.04 210 / 0.5), transparent 46%),
+    var(--bg);
+}
+
+/* 冠军横幅:浅蓝玻璃换暗玻璃(描边已是 accent 相对色,自动适配) */
+[data-theme='dark'] .champion-banner {
+  background: linear-gradient(120deg, oklch(30% 0.05 262 / 0.75), oklch(24% 0.035 262 / 0.6));
+}
+
+/* 编辑锁遮罩 */
+[data-theme='dark'] .canvas-lock {
+  background: rgba(12, 18, 34, 0.55);
+  background: oklch(12% 0.02 262 / 0.55);
+}
+
+/* 编辑态画布底色微调,深底下网格背景靠 --border-soft 令牌自动变暗 */
+[data-theme='dark'] .canvas-board.editing {
+  background-color: rgba(148, 163, 184, 0.05);
+}
+
+/* 奖牌:浅色玻璃换暗色玻璃 + 金属描边 */
+[data-theme='dark'] .medal-gold {
+  background: oklch(35% 0.07 85 / 0.55);
+  border-color: oklch(75% 0.13 85 / 0.7);
+}
+[data-theme='dark'] .medal-silver {
+  background: oklch(32% 0.02 250 / 0.55);
+  border-color: oklch(70% 0.02 250 / 0.7);
+}
+[data-theme='dark'] .medal-bronze {
+  background: oklch(33% 0.06 45 / 0.55);
+  border-color: oklch(65% 0.09 45 / 0.7);
+}
+
+/* 连线在深底上提亮一档 */
+[data-theme='dark'] .canvas-edge.winner { stroke: #4dd69b; }
+[data-theme='dark'] .canvas-edge.loser { stroke: #ff8585; }
+
+/* 文本选择色:浏览器自带的表面也要属于设计 */
+::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+[data-theme='dark'] ::selection {
+  color: #0d1730;
 }
 
 body {
@@ -1026,6 +1144,9 @@ dialog {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   padding: 0;
+  /* 显式表面色:不依赖 UA 在 color-scheme 下的默认(双主题确定一致) */
+  background: var(--surface);
+  color: var(--text);
   inline-size: min(92vw, 34rem);
   max-block-size: min(85vh, 46rem);
   overflow: auto;
@@ -1766,7 +1887,7 @@ dialog::backdrop {
   height: 12px;
   border-radius: 50%;
   border: 2px solid var(--accent);
-  background: #fff;
+  background: var(--surface);
   pointer-events: all;
   cursor: crosshair;
   z-index: 5;
@@ -1942,7 +2063,7 @@ dialog::backdrop {
   font-size: 0.85rem;
   letter-spacing: 0.04em;
   color: var(--text);
-  background: oklch(100% 0 0 / 0.9);
+  background: var(--surface-float);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border);
@@ -1966,7 +2087,7 @@ dialog::backdrop {
   align-items: center;
   gap: 0.125rem;
   padding: 0.25rem;
-  background: oklch(100% 0 0 / 0.9);
+  background: var(--surface-float);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border: 1px solid var(--border);
@@ -2027,7 +2148,7 @@ dialog::backdrop {
   inset-block: 0;
   left: 0;
   width: 4.5rem;
-  background: oklch(100% 0 0 / 0.9);
+  background: var(--surface-float);
   backdrop-filter: blur(14px);
   border-right: 1px solid var(--border);
   z-index: 60;
@@ -2597,7 +2718,7 @@ body[data-page="players"] #bg-layer {
   align-items: center;
   gap: 0.4rem;
   padding: 0.5rem 0.2rem;
-  background: oklch(100% 0 0 / 0.9);
+  background: var(--surface-float);
   border-left: 1px solid var(--border);
   overflow-y: auto;
 }
