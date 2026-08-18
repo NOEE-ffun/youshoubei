@@ -1368,9 +1368,9 @@
       ? CanvasModel.deriveStandings(record)
       : { champion: null, runnerUp: null, thirdPlace: null };
     if (!standings.champion) return map;
-    if (standings.champion) map.set(standings.champion, { type: 'gold', icon: 'medal-gold' });
-    if (standings.runnerUp) map.set(standings.runnerUp, { type: 'silver', icon: 'medal-silver' });
-    if (standings.thirdPlace) map.set(standings.thirdPlace, { type: 'bronze', icon: 'medal-bronze' });
+    if (standings.champion) map.set(standings.champion, { type: 'gold', emoji: '🥇' });
+    if (standings.runnerUp) map.set(standings.runnerUp, { type: 'silver', emoji: '🥈' });
+    if (standings.thirdPlace) map.set(standings.thirdPlace, { type: 'bronze', emoji: '🥉' });
     return map;
   }
 
@@ -1509,10 +1509,12 @@
       ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
         '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛">' + options + '</select>'
       : '';
+    /* 赛程页 main 无 h1,顶栏标题承担 h1;其余页面 main 自带 h1,顶栏用 span 避免双 h1 */
+    const titleTag = isSchedule ? 'h1' : 'span';
     placeholder.innerHTML =
       '<div class="header-inner">' +
       '  <div class="header-title-group">' +
-      '    <h1 class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</h1>' +
+      '    <' + titleTag + ' class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</' + titleTag + '>' +
       statusBadgeMarkup(active.status) +
       '  </div>' +
       '  <div class="header-actions">' +

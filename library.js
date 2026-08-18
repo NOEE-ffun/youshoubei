@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { escapeHtml, avatarMarkup, safeUrl, cssUrl, bindZoomDock, bindZoomWheel, bindZoomFitOnResize } = window.TournamentUtils;
+  const { escapeHtml, avatarMarkup, safeUrl, cssUrl } = window.TournamentUtils;
 
   const CARD_WIDTH = 280;
   const CARD_HEIGHT = 176;
@@ -19,89 +19,6 @@
 
   function cardLeft(card) { return (Number(card.x) || 0) * COL_GAP; }
   function cardTop(card) { return (Number(card.y) || 0) * ROW_GAP; }
-
-  /* ---------- 只读画布缩放（与赛程页 zoom-dock 同款交互） ---------- */
-
-  const LIB_MIN_SCALE = 0.05;
-  const LIB_FIT_MIN_SCALE = 0.28;
-  const LIB_MAX_SCALE = 3;
-  let libScale = 1;
-  let libUserZoomed = false;
-
-  function libBoard() { return document.getElementById('library-board'); }
-  function libStage() { return document.getElementById('library-stage'); }
-  function libScroll() { return document.getElementById('library-scroll'); }
-
-  function libSyncZoom() {
-    const board = libBoard();
-    const stage = libStage();
-    if (!board || !stage) return;
-    const w = parseFloat(board.style.width) || 600;
-    const h = parseFloat(board.style.height) || 400;
-    stage.style.width = (w * libScale) + 'px';
-    stage.style.height = (h * libScale) + 'px';
-    board.style.transform = 'scale(' + libScale + ')';
-    board.style.transformOrigin = '0 0';
-    const label = document.getElementById('zoom-level');
-    if (label) label.textContent = Math.round(libScale * 100) + '%';
-  }
-
-  function libSetZoom(next) {
-    libScale = Math.max(LIB_MIN_SCALE, Math.min(LIB_MAX_SCALE, next));
-    libSyncZoom();
-  }
-
-  function libZoomAtCenter(factor) {
-    const sc = libScroll();
-    if (!sc) return;
-    const rect = sc.getBoundingClientRect();
-    const cx = sc.scrollLeft + rect.width / 2;
-    const cy = sc.scrollTop + rect.height / 2;
-    const next = Math.max(LIB_MIN_SCALE, Math.min(LIB_MAX_SCALE, libScale * factor));
-    const ratio = next / libScale;
-    libScale = next;
-    libSyncZoom();
-    sc.scrollLeft = cx * ratio - rect.width / 2;
-    sc.scrollTop = cy * ratio - rect.height / 2;
-  }
-
-  /* 按卡片内容范围适配，而非画布边界（与赛程页 fitCanvas 同口径） */
-  function libFit() {
-    const sc = libScroll();
-    const board = libBoard();
-    if (!sc || !board) return;
-    let w = parseFloat(board.style.width) || 600;
-    let h = parseFloat(board.style.height) || 400;
-    let maxX = 0;
-    let maxY = 0;
-    board.querySelectorAll('.canvas-card').forEach((el) => {
-      maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
-      maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
-    });
-    if (maxX && maxY) {
-      w = maxX;
-      h = maxY;
-    }
-    const rect = sc.getBoundingClientRect();
-    libSetZoom(Math.max(LIB_FIT_MIN_SCALE, Math.min(1, Math.min(
-      (rect.width - 24) / w,
-      (rect.height - 24) / h
-    ))));
-  }
-
-  function bindLibZoom() {
-    window.TournamentUtils.bindZoomDock({
-      onZoomIn: () => { libUserZoomed = true; libZoomAtCenter(1.15); },
-      onZoomOut: () => { libUserZoomed = true; libZoomAtCenter(1 / 1.15); },
-      onReset: () => { libUserZoomed = true; libSetZoom(1); },
-      onFit: () => { libUserZoomed = false; libFit(); }
-    });
-    window.TournamentUtils.bindZoomWheel('library-scroll', (factor) => {
-      libUserZoomed = true;
-      libZoomAtCenter(factor);
-    });
-    window.TournamentUtils.bindZoomFitOnResize(() => !libUserZoomed, libFit);
-  }
 
   function renderSelect() {
     const select = document.getElementById('library-tournament-select');
@@ -140,18 +57,14 @@
   }
 
   function cardHtml(match) {
-    const ready = Boolean(match.a && match.b);
-    const cycle = Boolean(match.cycle);
-    const live = !match.played && ready && !match.invalid && !cycle && window.TournamentApp.current.status === 'ongoing';
-    const stateText = match.invalid ? '无效' : match.draw ? '平局' : cycle ? '连线成环' : live ? '进行中' : match.played ? '已结束' : ready ? '未开始' : '待定';
-    const stateClass = match.invalid ? ' invalid' : match.draw ? ' draw' : cycle ? ' cycle' : live ? ' live' : match.played ? ' done' : '';
+    const stateText = match.invalid ? '无效' : match.draw ? '平局' : match.played ? '已结束' : (match.a && match.b ? '未开始' : '待定');
     return (
-      '<article class="match-card canvas-card' + (match.played ? ' played' : '') + (cycle ? ' cycle' : '') + (live ? ' match-live' : '') + '" data-match="' + match.id + '"' +
+      '<article class="match-card canvas-card' + (match.played ? ' played' : '') + '" data-match="' + match.id + '"' +
       ' style="left:' + cardLeft(match) + 'px;top:' + cardTop(match) + 'px">' +
       '<header class="match-head">' +
-      '<h2 class="match-title">' + escapeHtml(match.label || match.id) + '</h2>' +
+      '<h3 class="match-title">' + escapeHtml(match.label || match.id) + '</h3>' +
       '<span class="match-format">' + escapeHtml(match.format || 'BO3') + '</span>' +
-      '<span class="match-state' + stateClass + '">' + stateText + '</span>' +
+      '<span class="match-state' + (match.played ? ' done' : '') + '">' + stateText + '</span>' +
       '</header>' +
       (match.phase ? '<div class="match-phase">' + escapeHtml(match.phase) + '</div>' : '') +
       playerRow(match, 0) +
@@ -219,8 +132,6 @@
     wrap.className = 'canvas-cards';
     wrap.innerHTML = resolved.cards.map(cardHtml).join('');
     board.appendChild(wrap);
-    libSyncZoom();
-    if (!libUserZoomed) libFit();
   }
 
   function bind() {
@@ -237,7 +148,6 @@
     renderSelect();
     render();
     bind();
-    bindLibZoom();
     document.addEventListener('ts:changed', render);
   });
 
