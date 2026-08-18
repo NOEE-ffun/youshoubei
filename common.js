@@ -134,10 +134,30 @@
     return Array.from({ length: 8 }, (_, i) => ({
       id: uid('p'),
       name: '选手 ' + (i + 1),
+      title: { type: 'text', text: '', image: null },
+      color: null,
       avatar: null,
       createdAt: Date.now(),
       updatedAt: Date.now()
     }));
+  }
+
+  /* 选手对象归一化：title 统一为 {type:'text'|'image',text,image}、color 校验为 #rrggbb 或 null。
+   * 非法选手对象返回 null；字段可修复时返回浅拷贝的新对象（原对象不动）。 */
+  function normalizePlayer(p) {
+    if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
+    const src = (p.title && typeof p.title === 'object' && !Array.isArray(p.title)) ? p.title : {};
+    const type = src.type === 'image' ? 'image' : 'text';
+    const text = typeof src.text === 'string' ? src.text : '';
+    const rawImage = src.image;
+    const image = (rawImage == null || typeof rawImage === 'string' || typeof rawImage === 'object')
+      ? (rawImage == null ? null : rawImage)
+      : null;
+    const color = /^#[0-9a-fA-F]{6}$/.test(p.color || '') ? p.color : null;
+    const out = Object.assign({}, p);
+    out.title = { type, text, image };
+    out.color = color;
+    return out;
   }
 
   function makeDefaultTournament(name, roster) {
@@ -485,6 +505,9 @@
       for (const player of playerMap.values()) {
         if (player.avatar && typeof player.avatar !== 'string') {
           player.avatar = await uploadCloudImage(player.avatar);
+        }
+        if (player.title && player.title.image && typeof player.title.image !== 'string') {
+          player.title.image = await uploadCloudImage(player.title.image);
         }
       }
       for (const matchId of Object.keys(copy.matchDecks || {})) {
@@ -1311,7 +1334,8 @@
 
   /* ---------- 背景与页头 ---------- */
 
-  /* 头像 HTML：有图显示图片（URL 经白名单校验），无图显示首字符占位（颜色按选手 id 确定性取） */
+  /* 头像 HTML：有图显示图片（URL 经白名单校验），无图显示首字符占位。
+   * 颜色优先取选手自定义色(player.color,对战海报共享),未设置时按选手 id 确定性取。 */
   function avatarMarkup(player, sizeClass) {
     const cls = 'avatar ' + sizeClass;
     if (player && player.avatar) {
@@ -1320,9 +1344,11 @@
         ' alt="' + escapeHtml(player.name || '') + ' 的头像">';
     }
     const initial = String((player && player.name) || '?').trim().charAt(0) || '?';
-    const color = (typeof CanvasModel !== 'undefined' && CanvasModel.avatarColor)
-      ? CanvasModel.avatarColor(player ? player.id : '')
-      : '#3563e9';
+    const color = (player && /^#[0-9a-fA-F]{6}$/.test(player.color || ''))
+      ? player.color
+      : ((typeof CanvasModel !== 'undefined' && CanvasModel.avatarColor)
+        ? CanvasModel.avatarColor(player ? player.id : '')
+        : '#3563e9');
     return '<span class="' + cls + ' avatar-fallback" style="background:' + color + '">' +
       escapeHtml(initial) + '</span>';
   }
@@ -1434,6 +1460,7 @@
     medalMap,
     statusBadgeMarkup,
     avatarMarkup,
+    normalizePlayer,
     notify,
     uiConfirm,
     bindZoomDock,
@@ -1508,7 +1535,8 @@
     const items = [
       { page: 'home', href: 'index.html', icon: 'home', label: '主页' },
       { page: 'match', href: 'schedule.html', icon: 'emoji_events', label: '比赛' },
-      { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' }
+      { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' },
+      { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' }
     ];
     const isActive = (page) => {
       if (page === 'match') return active === 'schedule' || active === 'match';
@@ -1539,7 +1567,7 @@
     const placeholder = document.getElementById('app-header');
     if (!placeholder) return;
     const active = app.current;
-    const pageTitles = { home: '右手杯', players: '选手库' };
+    const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器' };
     const headerTitle = pageTitles[app.activePage] || active.name;
     const options = app.list.map((item) =>
       '<option value="' + item.id + '"' + (item.id === active.id ? ' selected' : '') + '>' +
@@ -1547,6 +1575,7 @@
       '</option>'
     ).join('');
     const isSchedule = app.activePage === 'schedule';
+    const isPoster = app.activePage === 'poster';
     const showTournamentSwitch = app.activePage === 'schedule';
     const scheduleActions = isSchedule
       ? '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
@@ -1556,6 +1585,22 @@
     const tournamentSwitch = showTournamentSwitch
       ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
         '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛">' + options + '</select>'
+      : '';
+    /* 海报页页头专属控制（主题选择/分辨率/导出/OBS），仅海报页渲染 */
+    const posterControls = isPoster
+      ? '<div class="header-poster-controls" id="header-poster-controls">' +
+        '  <div class="picker poster-picker">' +
+        '    <button type="button" id="poster-theme-picker" class="btn btn-ghost btn-sm poster-theme-btn" aria-haspopup="listbox" aria-expanded="false">' +
+        '      <span class="poster-theme-dot" id="poster-theme-dot" aria-hidden="true"></span>' +
+        '      <span id="poster-theme-name">红蓝宿敌</span>' +
+        '    </button>' +
+        '    <ul id="poster-theme-menu" class="poster-theme-menu" role="listbox" aria-label="选择海报主题" hidden></ul>' +
+        '  </div>' +
+        '  <label class="field field--inline poster-resolution" for="poster-resolution"><span class="field__label">分辨率</span>' +
+        '    <select id="poster-resolution" class="field__control"><option value="1080p">1080p</option><option value="2k">2K</option><option value="4k">4K</option></select></label>' +
+        '  <button type="button" id="poster-export" class="btn btn-primary btn-sm"><span id="poster-export-label">导出 PNG</span></button>' +
+        '  <button type="button" id="poster-obs" class="btn btn-ghost btn-sm" title="复制 OBS 浏览器源链接">OBS 源</button>' +
+        '</div>'
       : '';
     /* 主题切换按钮:显示"将切换到"的目标模式图标(浅色时显示月亮) */
     const theme = currentTheme();
@@ -1580,6 +1625,7 @@
       '  <div class="header-actions">' +
       tournamentSwitch +
       scheduleActions +
+      posterControls +
       themeBtn +
       '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm icon-btn" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
       '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="设置" aria-label="设置">' + iconMarkup('settings', '设置') + '</button>' +
@@ -1587,6 +1633,10 @@
       '</div>';
 
     placeholder.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
+
+    /* 海报 OBS 推送按钮仅管理员可见（访客只读渲染） */
+    const posterObs = placeholder.querySelector('#poster-obs');
+    if (posterObs) posterObs.hidden = !canEdit();
 
     const switchSelect = placeholder.querySelector('#tournament-switch');
     if (switchSelect) {
@@ -1664,7 +1714,10 @@
     };
     if (!record) return urls;
     const app = window.TournamentApp;
-    for (const player of (app && app.players) || []) push(player.avatar);
+    for (const player of (app && app.players) || []) {
+      push(player.avatar);
+      if (player.title && player.title.image) push(player.title.image);
+    }
     for (const decks of Object.values(record.matchDecks || {})) {
       for (const deckList of Object.values(decks || {})) {
         for (const deck of deckList || []) {
@@ -1692,7 +1745,20 @@
   async function refreshApp() {
     let all = await storageGetAll();
     let players = await storageGetPlayers();
-    const playerMap = new Map((players || []).map((p) => [p.id, p]));
+    /* 归一化选手字段（title 对象结构 / color 校验），损坏条目丢弃并标记待回写 */
+    let playersDirty = false;
+    const normalizedPlayers = [];
+    for (const p of (players || [])) {
+      const n = normalizePlayer(p);
+      if (!n) {
+        playersDirty = true;
+        continue;
+      }
+      normalizedPlayers.push(n);
+      if (JSON.stringify(n) !== JSON.stringify(p)) playersDirty = true;
+    }
+    players = normalizedPlayers;
+    const playerMap = new Map(players.map((p) => [p.id, p]));
     const dirtyRecords = [];
 
     for (const record of all) {
@@ -1717,7 +1783,7 @@
     players = [...playerMap.values()];
     // 云端只读访客不允许写库：迁移/推导只放在内存里，避免初始化直接失败
     const canWrite = mode !== 'cloud' || (appInstance && appInstance.isAdmin());
-    if (canWrite && (dirtyRecords.length || !players.length)) {
+    if (canWrite && (dirtyRecords.length || playersDirty || !players.length)) {
       try {
         await storagePutPlayers(players);
       } catch (error) {

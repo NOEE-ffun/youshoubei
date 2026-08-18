@@ -38,10 +38,12 @@ const PORT = Number(process.env.PORT || process.argv[2] || 8000);
 const apiData = require('./api/data');
 const apiUpload = require('./api/upload');
 const apiHealth = require('./api/health');
+const apiPosterStage = require('./api/poster-stage');
 const API_ROUTES = {
   '/api/data': apiData,
   '/api/upload': apiUpload,
-  '/api/health': apiHealth
+  '/api/health': apiHealth,
+  '/api/poster-stage': apiPosterStage
 };
 
 const MIME = {
@@ -76,19 +78,26 @@ function encodeBody(req, data) {
   return { body: data, encoding: '' };
 }
 
-/* Vercel res 的最小适配:api/*.js 只用了 status().json() */
+/* Vercel res 的最小适配:api/*.js 只用 status().json()。
+ * 默认 Cache-Control no-store;个别公开只读接口(如 /api/poster-stage GET)
+ * 可用 .cacheControl('public, max-age=300') 覆盖。 */
 function apiResponse(rawRes) {
   let statusCode = 200;
+  let cacheControl = 'no-store';
   return {
     status(code) {
       statusCode = code;
+      return this;
+    },
+    cacheControl(value) {
+      cacheControl = value;
       return this;
     },
     json(payload) {
       const body = Buffer.from(JSON.stringify(payload), 'utf8');
       rawRes.statusCode = statusCode;
       rawRes.setHeader('Content-Type', 'application/json; charset=utf-8');
-      rawRes.setHeader('Cache-Control', 'no-store');
+      rawRes.setHeader('Cache-Control', cacheControl);
       rawRes.setHeader('X-Content-Type-Options', 'nosniff');
       rawRes.setHeader('Content-Length', body.length);
       rawRes.end(body);
@@ -130,7 +139,7 @@ function requestHandler(req, res) {
   }
 
   /* API 先路由;未注册的 /api/* 一律 404,避免把 api/oss.js 等源码当静态文件下发 */
-  if (pathname === '/api/data' || pathname === '/api/upload' || pathname === '/api/health') {
+  if (API_ROUTES[pathname]) {
     handleApi(API_ROUTES[pathname], req, res);
     return;
   }
@@ -189,7 +198,7 @@ if (require.main === module) {
   const server = createServer();
   server.listen(PORT, () => {
     console.log('赛事网站已启动：http://localhost:' + PORT);
-    console.log('API 路由: /api/data /api/upload /api/health');
+    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage');
     console.log('按 Ctrl+C 停止服务器');
   });
 }

@@ -1,0 +1,734 @@
+/**
+ * 页面布局 + 控制面板(深色电竞工具台)
+ * 风格:结构优先 —— 1px 边框、方角、mono 技术标签、克制的强调色
+ */
+/* ---------- 基础 ---------- */
+#poster-app *,
+#poster-app *::before,
+#poster-app *::after {
+  box-sizing: border-box;
+}
+#poster-app button {
+  font-family: inherit;
+}
+#poster-app .visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+#poster-app :focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+/* hidden 属性必须压过任何 display 声明(GUI 测试发现:.avatar__remove 的 display:flex 曾覆盖 hidden) */
+#poster-app [hidden] {
+  display: none !important;
+}
+/* ---------- 浏览器表面细节(主题化默认行为) ---------- */
+#poster-app ::selection {
+  background: var(--color-accent);
+  color: #fff;
+}
+#poster-app input,
+#poster-app select,
+#poster-app textarea {
+  caret-color: var(--color-accent);
+}
+#poster-app ::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+#poster-app .panel {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+#poster-app .panel::-webkit-scrollbar {
+  inline-size: 8px;
+}
+#poster-app .panel::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+  border-radius: 4px;
+}
+#poster-app .panel::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-faint);
+}
+/* ---------- 顶栏 ---------- */
+#poster-app .topbar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--layer-sticky);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--size-16);
+  flex-wrap: wrap;
+  /* min 而非固定高:窄视口换行时自动长高,内容不再溢出 60px 条(单行时视觉不变) */
+  min-block-size: var(--topbar-height);
+  padding-inline: var(--size-20);
+  background: rgba(14, 16, 23, 0.92);
+  backdrop-filter: blur(8px);
+  border-block-end: 1px solid var(--color-border);
+}
+#poster-app .topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  min-inline-size: 0;
+}
+#poster-app .topbar__logo {
+  color: var(--color-accent);
+  filter: drop-shadow(0 0 6px var(--color-accent));
+}
+#poster-app .topbar__title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+#poster-app .topbar__tag {
+  font-family: var(--font-family-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.18em;
+  color: var(--color-text-faint);
+  white-space: nowrap;
+}
+#poster-app .topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  flex-wrap: wrap;
+}
+/* 中宽度带(60–70rem):品牌区+动作区放不进一行,收起装饰性副标题保顶栏单行
+   (此区间面板为 sticky,顶栏必须保持 --topbar-height,否则 sticky 偏移失准) */
+@media (60rem <= width < 70rem){#poster-app .topbar__tag {
+    display: none;
+  }}
+/* 触屏设备没有 Cmd/Ctrl+Enter,提示芯片只占位不传达信息 */
+@media (pointer: coarse){#poster-app .kbd {
+    display: none;
+  }}
+/* ---------- 主题选择器(单按钮 + 下拉菜单) ---------- */
+#poster-app .picker {
+  position: relative;
+}
+#poster-app .theme-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--size-8);
+  block-size: 34px;
+  padding-inline: var(--size-12);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+#poster-app .theme-picker:hover,
+#poster-app .theme-picker[aria-expanded="true"] {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+#poster-app .theme-picker__dot {
+  inline-size: 14px;
+  block-size: 14px;
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 6px currentColor;
+  flex-shrink: 0;
+}
+#poster-app .theme-picker__name {
+  white-space: nowrap;
+}
+#poster-app .theme-picker__caret {
+  color: var(--color-text-faint);
+  transition: transform var(--transition-fast);
+}
+#poster-app .theme-picker[aria-expanded="true"] .theme-picker__caret {
+  transform: rotate(180deg);
+}
+#poster-app .theme-menu {
+  position: absolute;
+  inset-block-start: calc(100% + 6px);
+  inset-inline-start: 0;
+  z-index: var(--layer-dropdown);
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  min-inline-size: 210px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+}
+#poster-app .theme-menu li {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  padding: var(--size-8) var(--size-12);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  outline-offset: -2px;
+}
+#poster-app .theme-menu li:hover {
+  background: var(--color-surface-sunken);
+  color: var(--color-text);
+}
+#poster-app .theme-menu li[aria-selected="true"] {
+  color: var(--color-text);
+  background: var(--color-accent-soft);
+}
+#poster-app .theme-menu li.theme-menu__item--focused {
+  outline: 2px solid var(--color-accent);
+}
+#poster-app .theme-menu__dot {
+  inline-size: 12px;
+  block-size: 12px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  box-shadow: 0 0 5px;
+}
+#poster-app .theme-menu__name {
+  flex: 1;
+}
+#poster-app .theme-menu li[aria-selected="true"]::after {
+  content: "✓";
+  color: var(--color-accent);
+  font-weight: var(--font-weight-bold);
+}
+/* ---------- OBS 舞台模式(隐藏界面,仅渲染海报) ---------- */
+/* ---------- 按钮 ---------- */
+#poster-app .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-8);
+  block-size: 34px;
+  padding-inline: var(--size-16);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast),
+    background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+#poster-app .btn:active {
+  transform: translateY(1px);
+}
+#poster-app .btn--primary {
+  border: 0;
+  /* 2026-08-12 审计:原亮渐变白字最低 1.53:1;与 #101018 各 50% 混合后三主题白字 ≥5.0:1 */
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--color-accent) 50%, #101018),
+    color-mix(in srgb, var(--color-accent-2) 50%, #101018));
+  color: #fff;
+  box-shadow: 0 0 14px var(--color-accent-soft), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+#poster-app .btn--primary:hover {
+  box-shadow: 0 0 22px var(--color-accent-soft), inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+#poster-app .btn--primary:disabled {
+  opacity: 0.65;
+  cursor: progress;
+}
+#poster-app .btn--ghost {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+#poster-app .btn--ghost:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+#poster-app .btn--danger:hover {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+/* 二次确认状态:重置按钮(2026-08-12 审计护栏) */
+#poster-app .btn--confirm {
+  border-color: var(--color-error);
+  background: var(--color-error);
+  color: #fff;
+}
+#poster-app .btn--confirm:hover {
+  border-color: var(--color-error);
+  background: var(--color-error);
+  color: #fff;
+}
+#poster-app .kbd {
+  padding: 2px 7px;
+  border: 1px solid var(--color-border-strong);
+  border-block-end-width: 2px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-family-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+}
+/* ---------- 布局 ---------- */
+#poster-app .layout {
+  display: grid;
+  grid-template-columns: var(--panel-width) minmax(0, 1fr);
+  gap: var(--size-20);
+  align-items: start;
+  padding: var(--size-20);
+  max-inline-size: 1600px;
+  margin-inline: auto;
+}
+/* ---------- 控制面板 ---------- */
+#poster-app .panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-16);
+  padding: var(--size-16);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  position: sticky;
+  inset-block-start: calc(var(--topbar-height) + var(--size-16));
+  max-block-size: calc(100dvh - var(--topbar-height) - var(--size-32));
+  overflow-y: auto;
+}
+#poster-app .group {
+  margin: 0;
+  padding: var(--size-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-sunken);
+}
+#poster-app .group__legend {
+  padding-inline: var(--size-8);
+  font-family: var(--font-family-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.16em;
+  color: var(--color-text-faint);
+}
+#poster-app .group__legend--left::before {
+  content: "◤ ";
+  color: var(--color-accent);
+}
+#poster-app .group__legend--right::before {
+  content: "◥ ";
+  color: var(--color-accent-2);
+}
+#poster-app .field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-block-end: var(--size-12);
+}
+#poster-app .field:last-child {
+  margin-block-end: 0;
+}
+#poster-app .field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--size-12);
+}
+#poster-app .field__label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+#poster-app .field__control {
+  inline-size: 100%;
+  block-size: 34px;
+  padding-inline: var(--size-12);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: var(--text-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+#poster-app .field__control:hover {
+  border-color: var(--color-text-faint);
+}
+#poster-app .field__control:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-focus-ring);
+}
+#poster-app .field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--size-8);
+  margin: 0;
+}
+#poster-app .field--url {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--size-8);
+  margin-block-start: var(--size-12);
+  margin-block-end: 0;
+}
+/* ---------- 头像上传 ---------- */
+#poster-app .avatar {
+  position: relative;
+}
+#poster-app .avatar__drop {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 100%;
+  block-size: 170px;
+  padding: var(--size-12);
+  border: 1.5px dashed var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-raised);
+  color: var(--color-text-faint);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+#poster-app .avatar__drop:hover,
+#poster-app .avatar__drop--over {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+#poster-app .avatar__hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--size-8);
+  font-size: var(--text-sm);
+  text-align: center;
+  pointer-events: none;
+}
+#poster-app .avatar__img {
+  inline-size: 146px;
+  block-size: 146px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  border: 2px solid var(--color-accent);
+  box-shadow: 0 0 14px var(--color-accent-soft);
+  pointer-events: none;
+}
+#poster-app .avatar__remove {
+  position: absolute;
+  inset-block-start: var(--size-8);
+  inset-inline-end: var(--size-8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.7);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+#poster-app .avatar__remove:hover {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+#poster-app .panel__tools {
+  display: flex;
+  gap: var(--size-12);
+}
+#poster-app .panel__tools .btn {
+  flex: 1;
+}
+/* ---------- 选手库 ---------- */
+#poster-app .roster__hint {
+  margin: 0 0 var(--size-8);
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+#poster-app .roster__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--size-8);
+}
+#poster-app .roster__card {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+  padding: var(--size-8) var(--size-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+#poster-app .roster__card:hover {
+  border-color: var(--color-border-strong);
+}
+#poster-app .roster__avatar {
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+#poster-app .roster__avatar--ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-sm);
+}
+#poster-app .roster__dot {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+#poster-app .roster__dot--none {
+  border: 1.5px dashed var(--color-text-faint);
+  box-shadow: none;
+}
+#poster-app .roster__meta {
+  min-inline-size: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+#poster-app .roster__name {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#poster-app .roster__tag {
+  font-family: var(--font-family-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#poster-app .roster__ops {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+#poster-app .roster__del--armed {
+  border-color: var(--color-error) !important;
+  background: var(--color-error) !important;
+  color: #fff !important;
+}
+#poster-app .roster__empty {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+}
+/* ---------- ID / 队标行 ---------- */
+#poster-app .tag-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-8);
+}
+#poster-app .tag-row .field__control {
+  flex: 1;
+  min-inline-size: 0;
+}
+/* 队标图已设置:上传按钮高亮提示当前为图片模式 */
+#poster-app .btn--tag-on {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+/* 队标大小滑杆(仅在设置了队标图后显示) */
+#poster-app .tag-size-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+}
+#poster-app .field__control--range {
+  flex: 1;
+  min-inline-size: 0;
+  block-size: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+#poster-app .tag-size-val {
+  font-family: var(--font-family-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  min-inline-size: 3.5ch;
+  text-align: right;
+}
+/* ---------- 颜色选择行 ---------- */
+#poster-app .color-row {
+  display: flex;
+  align-items: center;
+  gap: var(--size-12);
+}
+#poster-app .color-dot {
+  inline-size: 26px;
+  block-size: 26px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-border-strong);
+  flex-shrink: 0;
+  transition: box-shadow var(--transition-fast);
+}
+#poster-app .color-dot--custom {
+  border-style: dashed;
+  box-shadow: 0 0 8px var(--color-accent-soft);
+}
+#poster-app .field__control--color {
+  inline-size: 56px;
+  padding: 3px;
+  block-size: 34px;
+  cursor: pointer;
+}
+#poster-app .btn--sm {
+  block-size: 28px;
+  padding-inline: var(--size-12);
+  font-size: var(--text-xs);
+}
+#poster-app .btn--block {
+  inline-size: 100%;
+  margin-block-start: var(--size-12);
+}
+/* ---------- 预览区 ---------- */
+#poster-app .stage {
+  min-inline-size: 0;
+}
+#poster-app .stage__frame {
+  position: relative;
+  margin: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-sunken);
+  aspect-ratio: var(--poster-aspect);
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--color-bg), 0 18px 50px rgba(0, 0, 0, 0.55),
+    0 0 60px var(--color-accent-soft);
+  transition: box-shadow var(--transition-base);
+}
+#poster-app .stage__frame--over {
+  box-shadow: 0 0 0 2px var(--color-accent), 0 0 46px var(--color-accent-soft);
+}
+/* 导出成功反馈(2026-08-12 审计:peak-end) */
+#poster-app .stage__frame--exported {
+  animation: export-flash 1.4s ease-out;
+}
+@keyframes export-flash{
+  0% {
+    box-shadow: 0 0 0 1px var(--color-bg), 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 60px var(--color-accent-soft);
+  }
+  30% {
+    box-shadow: 0 0 0 3px var(--color-success), 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 90px rgba(61, 220, 151, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 1px var(--color-bg), 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 60px var(--color-accent-soft);
+  }
+}
+@media (prefers-reduced-motion: reduce){#poster-app .stage__frame--exported {
+    animation: none;
+    box-shadow: 0 0 0 2px var(--color-success), 0 18px 50px rgba(0, 0, 0, 0.55);
+  }}
+#poster-app .stage__slot svg {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+}
+#poster-app .stage__hint {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--size-12);
+  background: rgba(7, 8, 13, 0.72);
+  color: var(--color-text-muted);
+  font-size: var(--text-lg);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.08em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-fast);
+}
+#poster-app .stage__frame--over .stage__hint {
+  opacity: 1;
+}
+#poster-app .stage__note {
+  margin: var(--size-12) 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-faint);
+  text-align: center;
+}
+/* ---------- Toast ---------- */
+#poster-app .toast {
+  position: fixed;
+  inset-block-end: var(--size-24);
+  left: 50%;
+  transform: translateX(-50%) translateY(14px);
+  z-index: var(--layer-toast);
+  max-inline-size: min(90vw, 480px);
+  padding: var(--size-12) var(--size-20);
+  border: 1px solid var(--color-border-strong);
+  border-inline-start: 3px solid var(--color-success);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-base), transform var(--transition-base);
+}
+#poster-app .toast--show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+#poster-app .toast--error {
+  border-inline-start-color: var(--color-error);
+}
+/* ---------- 响应式 ---------- */
+@media (width < 60rem){#poster-app .layout {
+    grid-template-columns: 1fr;
+  }
+/* 2026-08-12 审计:移动端海报置前(开屏即见成品,实时反馈成立) */
+#poster-app .stage {
+    order: -1;
+  }
+#poster-app .panel {
+    position: static;
+    max-block-size: none;
+  }
+#poster-app .topbar {
+    min-block-size: 0;
+    padding-block: var(--size-12);
+  }}
+/* ---------- title (player title) controls ---------- */
+
+#poster-app .title-badge {
+  display: inline-block;
+  margin-block-start: 4px;
+  font-family: var(--font-family-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.05em;
+  color: var(--color-accent);
+}
+
+#poster-app .field__control:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

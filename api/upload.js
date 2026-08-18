@@ -1,22 +1,13 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const { adminGate } = require('./auth');
 const { uploadImageBuffer, publicUrl } = require('./oss');
 
 const MAX_SIZE = 5 * 1024 * 1024;
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
-}
-
-function isAuthorized(req) {
-  const expected = process.env.ADMIN_TOKEN;
-  if (!expected) return null;
-  const header = req.headers.authorization || '';
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 const EXT_BY_TYPE = {
@@ -47,15 +38,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  const authed = isAuthorized(req);
-  if (authed === null) {
-    sendJson(res, 403, { error: '管理功能未配置（ADMIN_TOKEN）' });
-    return;
-  }
-  if (!authed) {
-    sendJson(res, 401, { error: '管理口令错误' });
-    return;
-  }
+  if (!adminGate(req, res)) return;
 
   const chunks = [];
   let size = 0;

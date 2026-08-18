@@ -1,0 +1,96 @@
+/**
+ * 海报预览层动效 —— 仅作用于预览 DOM 中的 SVG 元素(class="p-*")
+ * 导出用原始 SVG 字符串静态渲染,不受本文件影响,所见即所得
+ * 全部动效只走 transform / opacity,尊重 prefers-reduced-motion
+ */
+/* 粒子漂浮 */
+#poster-app .p-particle {
+  animation: vs-float 7s ease-in-out infinite alternate;
+}
+#poster-app .p-particle:nth-child(3n) { animation-duration: 9s; animation-delay: -3s; }
+#poster-app .p-particle:nth-child(5n) { animation-duration: 5.5s; animation-delay: -1.4s; }
+/* 菱形闪点 */
+#poster-app .p-sparkle {
+  animation: vs-blink 3.4s ease-in-out infinite;
+}
+/* 光环 / 菱形环旋转 */
+#poster-app .p-ring,
+#poster-app .p-diamond {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: vs-spin 30s linear infinite;
+}
+#poster-app .p-diamond { animation-duration: 46s; animation-direction: reverse; }
+/* VS 徽章呼吸 */
+#poster-app .p-vs {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: vs-breathe 3.6s ease-in-out infinite;
+}
+/* 中心能量射线 */
+#poster-app .p-ray {
+  animation: vs-ray 4.2s ease-in-out infinite;
+}
+/* 两侧闪电 */
+#poster-app .p-bolt {
+  animation: vs-blink 2.4s ease-in-out infinite;
+}
+#poster-app .p-bolt:nth-child(2) { animation-delay: -1.2s; }
+/* LIVE 红点 */
+#poster-app .p-live {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: vs-live 1.15s ease-in-out infinite;
+}
+/* 底部扫描线 */
+#poster-app .p-scan {
+  animation: vs-scan 6s linear infinite;
+}
+/* 顶部标题微光 */
+#poster-app .p-title {
+  animation: vs-title 4.6s ease-in-out infinite;
+}
+@keyframes vs-float{
+  from { transform: translateY(-7px); }
+  to   { transform: translateY(9px); }
+}
+@keyframes vs-blink{
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.95; }
+}
+@keyframes vs-spin{
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes vs-breathe{
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.045); }
+}
+@keyframes vs-ray{
+  0%, 100% { opacity: 0.22; }
+  50%      { opacity: 0.55; }
+}
+@keyframes vs-live{
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%      { transform: scale(1.5); opacity: 0.55; }
+}
+@keyframes vs-scan{
+  from { transform: translateY(0); }
+  to   { transform: translateY(78px); }
+}
+@keyframes vs-title{
+  0%, 100% { opacity: 0.86; }
+  50%      { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce){#poster-app .p-particle,
+#poster-app .p-sparkle,
+#poster-app .p-ring,
+#poster-app .p-diamond,
+#poster-app .p-vs,
+#poster-app .p-ray,
+#poster-app .p-bolt,
+#poster-app .p-live,
+#poster-app .p-scan,
+#poster-app .p-title {
+    animation: none;
+  }}

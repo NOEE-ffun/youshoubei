@@ -1,0 +1,119 @@
+/**
+ * VS 对阵海报生成器 · 设计令牌
+ * 页面 chrome 中性层改为浅色优先，跟随主站 tokens：默认 :root 浅色，
+ * html[data-theme='dark'] 覆盖为暗色；海报主题色见 themes.css(data-poster-theme)。
+ * 海报画布(SVG)自身为深色电竞风，与页面 chrome 解耦，不受本文件影响。
+ */
+:root {
+  /* ========================================
+   * Typography - Font Families
+   * ======================================== */
+  --font-family-display:
+    Impact, "Arial Black", "PingFang SC", "Microsoft YaHei",
+    "Noto Sans SC", "Helvetica Neue", sans-serif;
+  --font-family-base:
+    -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans SC",
+    "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-family-mono:
+    ui-monospace, "SF Mono", "Cascadia Code", "Menlo", Consolas, monospace;
+
+  /* ========================================
+   * Typography - Weights & Sizes
+   * ======================================== */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 800;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.0625rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+
+  /* ========================================
+   * Spacing / Size Scale
+   * ======================================== */
+  --size-4: 0.25rem;
+  --size-8: 0.5rem;
+  --size-12: 0.75rem;
+  --size-16: 1rem;
+  --size-20: 1.25rem;
+  --size-24: 1.5rem;
+  --size-32: 2rem;
+  --size-40: 2.5rem;
+  --size-48: 3rem;
+  --size-64: 4rem;
+  --size-80: 5rem;
+
+  /* ========================================
+   * Radius
+   * ======================================== */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 50%;
+
+  /* ========================================
+   * Z-Index Layers
+   * ======================================== */
+  --layer-base: 1;
+  --layer-sticky: 100;
+  --layer-dropdown: 200;
+  --layer-toast: 400;
+
+  /* ========================================
+   * Transitions
+   * ======================================== */
+  --transition-fast: 120ms ease;
+  --transition-base: 240ms ease;
+  --transition-slow: 480ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ========================================
+   * Colors - 中性层(浅色优先,映射主站 palette)
+   * ======================================== */
+  --color-bg: #f4f6fb;
+  --color-surface: #ffffff;
+  --color-surface-raised: #f7f9fc;
+  --color-surface-sunken: #eef1f8;
+  --color-border: #d9e0ec;
+  --color-border-strong: #b9c3d6;
+
+  --color-text: #1c2434;
+  --color-text-muted: #5b6577;
+  --color-text-faint: #8a93a8;
+
+  --color-success: #1f9d6a;
+  --color-error: #d64545;
+  --color-warning: #b7791f;
+  --color-info: #3563e9;
+
+  --color-focus-ring: color-mix(in srgb, var(--color-accent) 45%, transparent);
+
+  /* ========================================
+   * 布局
+   * ======================================== */
+  --topbar-height: 60px;
+  --panel-width: 360px;
+  --poster-aspect: 16 / 9;
+}
+
+/* 暗色:跟随主站 [data-theme='dark'] 中性色 */
+html[data-theme='dark'] {
+  --color-bg: #0f1626;
+  --color-surface: #1a2337;
+  --color-surface-raised: #232e46;
+  --color-surface-sunken: #2d3a56;
+  --color-border: #39496b;
+  --color-border-strong: #4a5b80;
+
+  --color-text: #e8ecf6;
+  --color-text-muted: #a5b0c6;
+  --color-text-faint: #7d8499;
+
+  --color-success: #5ecfa2;
+  --color-error: #f29393;
+  --color-warning: #ffc24d;
+  --color-info: #4da3ff;
+}

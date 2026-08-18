@@ -1,0 +1,56 @@
+/**
+ * OBS 舞台页:仅渲染海报,无站点 chrome。
+ * 全屏纯黑底 + 居中 16:9 海报,不加载站点 tokens/style。
+ */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #000;
+  color: #fff;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+#poster-slot {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#poster-slot svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#stage-error {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  font-size: 1rem;
+  color: #e8ecf6;
+  background: #000;
+  z-index: 10;
+}
+
+#stage-error[hidden] {
+  display: none;
+}
