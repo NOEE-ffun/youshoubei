@@ -54,7 +54,7 @@
   var exporting = false;
   var dragDepth = 0;
   /* 槽位图片是否被本页改动过(用于「存为选手」时决定是否回写头像/称号图) */
-  var slotChanged = { left: { img: false, titleImg: false }, right: { img: false, titleImg: false } };
+  var slotChanged = { left: { img: false }, right: { img: false } };
 
   function currentData() {
     return {
@@ -72,7 +72,7 @@
         tagImg: state.data.left.tagImg || null,
         tagImgRatio: state.data.left.tagImgRatio || null,
         tagImgSize: state.data.left.tagImgSize || null,
-        title: state.data.left.title || { type: "text", text: "", image: null }
+        title: sideEl("left", "title") ? sideEl("left", "title").value.trim() : (state.data.left.title || "")
       },
       right: {
         name: els.rightName.value.trim(),
@@ -83,26 +83,15 @@
         tagImg: state.data.right.tagImg || null,
         tagImgRatio: state.data.right.tagImgRatio || null,
         tagImgSize: state.data.right.tagImgSize || null,
-        title: state.data.right.title || { type: "text", text: "", image: null }
+        title: sideEl("right", "title") ? sideEl("right", "title").value.trim() : (state.data.right.title || "")
       }
     };
   }
 
   function syncTitleControls(side) {
     var d = state.data[side] || {};
-    var t = (d.title && typeof d.title === "object" && !Array.isArray(d.title)) ? d.title : { type: "text", text: "", image: null };
-    var isImage = t.type === "image" && t.image != null;
-    var can = canEdit();
     var input = sideEl(side, "title");
-    var imgBtn = sideEl(side, "title-img");
-    var removeBtn = sideEl(side, "title-img-remove");
-    var badge = sideEl(side, "title-badge");
-    input.value = isImage ? "" : (t.text || "");
-    input.disabled = !can || isImage;
-    imgBtn.hidden = !can;
-    removeBtn.hidden = !can || !isImage;
-    badge.hidden = !isImage;
-    imgBtn.classList.toggle("btn--tag-on", isImage);
+    if (input) input.value = typeof d.title === "string" ? d.title : "";
   }
 
   function render() {
@@ -352,27 +341,11 @@
         render();
       });
 
-      // 称号文本
+      // 赛前垃圾话(纯文本)
       sideEl(side, "title").addEventListener("input", function () {
-        var d = state.data[side];
-        d.title = { type: "text", text: sideEl(side, "title").value.trim(), image: null };
-        slotChanged[side].titleImg = true;
+        state.data[side].title = sideEl(side, "title").value.trim();
         clearTimeout(titleDebounce[side]);
         titleDebounce[side] = setTimeout(function () { saveState(); render(); }, 160);
-      });
-
-      // 称号图片上传/移除(管理员)
-      sideEl(side, "title-img").addEventListener("click", function () {
-        if (!canEdit()) { toast("需要管理员权限", true); return; }
-        pendingTitleSide = side;
-        ensureTitleFileInput().click();
-      });
-      sideEl(side, "title-img-remove").addEventListener("click", function () {
-        state.data[side].title = { type: "text", text: "", image: null };
-        slotChanged[side].titleImg = true;
-        saveState();
-        render();
-        toast("已移除称号图片,恢复文字显示");
       });
 
       // 自由选色
