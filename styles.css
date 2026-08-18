@@ -44,14 +44,10 @@
   --accent-stripe: oklch(93% 0.04 262);
   --danger: #d64545;
   --danger: oklch(58% 0.2 25);
-  --danger-strong: #b91c1c;
-  --danger-strong: oklch(45% 0.17 25);
   --danger-soft: #fdecec;
   --danger-soft: oklch(96% 0.02 17);
   --success: #1f9d6a;
   --success: oklch(62% 0.13 160);
-  --success-strong: #0b6e4f;
-  --success-strong: oklch(45% 0.09 160);
   --success-soft: #e4f6ee;
   --success-soft: oklch(96% 0.02 167);
   /* 主页 hero 无背景图时的深色回退(照片区底色,不参与浅色页面主题) */
@@ -365,13 +361,7 @@ body {
   font-size: 0.82rem;
 }
 
-.btn-lg {
-  font-size: 1.05rem;
-  padding: 0.75rem 1.5rem;
-  min-block-size: 3rem;
-}
-
-/* 赛事状态徽章:默认浅色上下文(顶栏等);主页 hero 深色语境由 .home-meta 覆写 */
+/* 赛事状态徽章:顶栏标题旁的赛事状态(未开始/进行中/已结束) */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -1607,74 +1597,6 @@ dialog::backdrop {
   }
 }
 
-/* 主页背景轮播与跑马灯共用的播放/暂停控件（UX #108） */
-.slideshow-pause,
-.marquee-pause {
-  display: inline-grid;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border: 1px solid oklch(100% 0 0 / 0.45);
-  border-radius: var(--radius-pill);
-  background: oklch(100% 0 0 / 0.16);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  color: #fff;
-  cursor: pointer;
-  pointer-events: auto;
-  z-index: 11;
-  transition:
-    background var(--dur-ui) var(--ease-out),
-    border-color var(--dur-ui) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
-}
-
-.slideshow-pause {
-  position: absolute;
-  inset-block-start: 0.75rem;
-  inset-inline-end: 1rem;
-}
-
-.slideshow-pause .icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  filter: invert(1);
-}
-
-.marquee-pause {
-  position: absolute;
-  inset-block-end: -0.5rem;
-  inset-inline-end: 1rem;
-  justify-self: end;
-  background: var(--surface);
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.marquee-pause .icon {
-  width: 1.15rem;
-  height: 1.15rem;
-}
-
-.slideshow-pause:hover,
-.marquee-pause:hover {
-  background: oklch(100% 0 0 / 0.3);
-}
-
-.marquee-pause:hover {
-  background: var(--surface-2);
-}
-
-.slideshow-pause:active,
-.marquee-pause:active {
-  transform: scale(0.95);
-}
-
-.slideshow-pause:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
 /* ========== 页面切换过渡（跨文档 View Transitions） ========== */
 
 /* 旧页轻微上移淡出，新页自下淡入——切换不再生硬白屏 */
@@ -2347,21 +2269,6 @@ body[data-page="players"] #bg-layer {
   opacity: 1;
 }
 
-/* hero 可读性压暗层:照片再亮也保证白字标题与徽章可读 */
-.home-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background: radial-gradient(
-    ellipse at center,
-    rgb(15 23 42 / 0.5),
-    rgb(15 23 42 / 0.28) 62%,
-    rgb(15 23 42 / 0.55)
-  );
-  pointer-events: none;
-}
-
 .home-content {
   position: relative;
   z-index: 2;
@@ -2377,95 +2284,6 @@ body[data-page="players"] #bg-layer {
   top: auto;
   transform: none;
   width: 100%;
-}
-
-/* 赛事身份:标题 + 状态徽章 + 开赛时间 */
-.home-identity {
-  display: grid;
-  justify-items: center;
-  gap: 0.875rem;
-  text-align: center;
-  padding-inline: 1rem;
-}
-
-.home-title {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: clamp(2rem, 5vw, 3.25rem);
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  line-height: 1.15;
-  color: #fff;
-  text-wrap: balance;
-  text-shadow: 0 2px 18px rgb(15 23 42 / 0.45);
-}
-
-.home-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
-  color: oklch(96% 0.01 262);
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
-/* hero 深色语境的徽章覆写:upcoming 灰/ongoing 红/finished 绿 */
-.home-meta .status-badge {
-  background: oklch(100% 0 0 / 0.16);
-  border-color: oklch(100% 0 0 / 0.4);
-  color: #fff;
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-}
-
-.home-meta .status-badge.status-upcoming {
-  background: oklch(72% 0.005 262 / 0.92);
-  border-color: transparent;
-  color: #1c2434;
-}
-
-.home-meta .status-badge.status-ongoing {
-  background: var(--danger-strong);
-  border-color: transparent;
-  color: #fff;
-}
-
-.home-meta .status-badge.status-finished {
-  background: var(--success-strong);
-  border-color: transparent;
-  color: #fff;
-}
-
-.home-start-time {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: var(--font-display);
-  font-size: 1.02rem;
-  letter-spacing: 0.05em;
-  font-variant-numeric: tabular-nums;
-}
-
-.home-marquee-empty {
-  margin: 0;
-  padding: 1.75rem 1rem;
-  color: oklch(96% 0.01 262 / 0.9);
-  font-size: 1.05rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-.home-marquee-empty[hidden] {
-  display: none;
-}
-
-.home-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.75rem;
 }
 
 .home-actions .btn-lg {
