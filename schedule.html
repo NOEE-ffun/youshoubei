@@ -8,7 +8,7 @@
   <meta name="description" content="右手杯比赛：可查看与编辑赛程、比分及卡组。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>比赛 - 右手杯</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
+  <link rel="icon" href="icons/emoji_events.svg" type="image/svg+xml">
   <link rel="prefetch" href="index.html">
   <link rel="prefetch" href="library.html">
   <link rel="prefetch" href="players.html">
@@ -29,12 +29,13 @@
   <div class="layout-body layout-body-canvas" id="canvas-layout">
     <main id="main-content" tabindex="-1">
       <div class="champion-banner" id="champion-banner" hidden>
-        <span class="medal" aria-hidden="true">🏆</span>
+        <span class="medal" aria-hidden="true"><img class="icon" src="icons/emoji_events.svg" alt="" aria-hidden="true"></span>
         <span id="champion-text"></span>
       </div>
 
       <div class="canvas-wrap-full">
         <div class="canvas-hint" id="canvas-hint">查看模式</div>
+        <div class="canvas-meta" id="canvas-meta" hidden></div>
         <div class="canvas-scroll canvas-scroll-full" id="canvas-scroll">
           <div class="canvas-stage" id="canvas-stage">
             <div class="canvas-board" id="canvas-board"></div>
@@ -52,21 +53,28 @@
             </div>
           </div>
         </div>
+
+        <div class="zoom-dock" id="zoom-dock" role="group" aria-label="画布缩放">
+          <button type="button" class="zoom-btn" data-zoom="out" title="缩小" aria-label="缩小画布"><img class="icon" src="icons/zoom_out.svg" alt="" aria-hidden="true"></button>
+          <button type="button" class="zoom-btn zoom-level" data-zoom="reset" title="重置为 100%" aria-label="重置缩放为 100%"><span id="zoom-level">100%</span></button>
+          <button type="button" class="zoom-btn" data-zoom="in" title="放大" aria-label="放大画布"><img class="icon" src="icons/zoom_in.svg" alt="" aria-hidden="true"></button>
+          <button type="button" class="zoom-btn" data-zoom="fit" title="适应画布" aria-label="缩放到适应画布"><img class="icon" src="icons/fit_screen.svg" alt="" aria-hidden="true"></button>
+        </div>
       </div>
     </main>
 
     <aside class="edit-toolbar" id="edit-toolbar" aria-label="编辑工具" hidden>
-      <button type="button" class="tool-btn is-active" data-tool="select" title="选择 / 拖拽"><img class="icon" src="icons/open_with.svg" alt="选择 / 拖拽"></button>
-      <button type="button" class="tool-btn" data-tool="link" title="连线"><img class="icon" src="icons/link.svg" alt="连线"></button>
-      <button type="button" class="tool-btn" data-tool="add" title="添加卡片"><img class="icon" src="icons/add.svg" alt="添加卡片"></button>
-      <button type="button" class="tool-btn" data-tool="format-size" title="画布大小"><img class="icon" src="icons/format_size.svg" alt="画布大小"></button>
-      <button type="button" class="tool-btn" data-tool="zoom" title="缩放模式"><img class="icon" src="icons/search.svg" alt="缩放模式"></button>
-      <button type="button" class="tool-btn" data-tool="zoom-in" title="放大"><img class="icon" src="icons/zoom_in.svg" alt="放大"></button>
-      <button type="button" class="tool-btn" data-tool="zoom-out" title="缩小"><img class="icon" src="icons/zoom_out.svg" alt="缩小"></button>
-      <button type="button" class="tool-btn" data-tool="fit" title="适应画布"><img class="icon" src="icons/fit_screen.svg" alt="适应画布"></button>
-      <button type="button" class="tool-btn" data-tool="delete" title="批量删除模式"><img class="icon" src="icons/delete_sweep.svg" alt="批量删除模式"></button>
-      <button type="button" class="tool-btn danger" id="edit-delete-selected-btn" title="删除选中卡片" hidden><img class="icon" src="icons/delete.svg" alt="删除选中卡片"></button>
-      <button type="button" class="tool-btn" data-tool="save" title="保存"><img class="icon" src="icons/save.svg" alt="保存"></button>
+      <button type="button" class="tool-btn is-active" data-tool="select" title="选择 / 拖拽" aria-label="选择 / 拖拽"><img class="icon" src="icons/open_with.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="link" title="连线" aria-label="连线"><img class="icon" src="icons/link.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="add" title="添加卡片" aria-label="添加卡片"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="format-size" title="画布大小" aria-label="画布大小"><img class="icon" src="icons/format_size.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="zoom" title="缩放模式" aria-label="缩放模式"><img class="icon" src="icons/search.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="zoom-in" title="放大" aria-label="放大"><img class="icon" src="icons/zoom_in.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="zoom-out" title="缩小" aria-label="缩小"><img class="icon" src="icons/zoom_out.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="fit" title="适应画布" aria-label="适应画布"><img class="icon" src="icons/fit_screen.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="delete" title="批量删除模式" aria-label="批量删除模式"><img class="icon" src="icons/delete_sweep.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn danger" id="edit-delete-selected-btn" title="删除选中卡片" aria-label="删除选中卡片" hidden><img class="icon" src="icons/delete.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="save" title="保存" aria-label="保存"><img class="icon" src="icons/save.svg" alt="" aria-hidden="true"></button>
     </aside>
   </div>
 

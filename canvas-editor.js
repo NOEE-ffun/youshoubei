@@ -6,6 +6,7 @@
   const COL_GAP = 320;
   const ROW_GAP = 210;
   const MIN_SCALE = 0.05;
+  const FIT_MIN_SCALE = 0.28;
   const MAX_SCALE = 3;
 
   let active = false;
@@ -91,7 +92,7 @@
       b.classList.remove('tool-link', 'tool-delete', 'zoom-mode');
     }
     const hint = document.getElementById('canvas-hint');
-    if (hint) hint.textContent = '查看模式';
+    if (hint) hint.textContent = '查看模式 · Ctrl/⌘+滚轮缩放';
     if (cardDialog && cardDialog.open) cardDialog.close();
     refreshToolbarUI();
   }
@@ -142,6 +143,9 @@
     stage.style.height = (baseHeight * scale) + 'px';
     b.style.transform = 'scale(' + scale + ')';
     b.style.transformOrigin = '0 0';
+    /* 右下角常驻缩放控件的百分比读数（仅赛程页存在该元素） */
+    const label = document.getElementById('zoom-level');
+    if (label) label.textContent = Math.round(scale * 100) + '%';
   }
 
   function setZoom(next) {
@@ -168,13 +172,28 @@
   function zoomIn() { zoomAtCenter(1.15); }
   function zoomOut() { zoomAtCenter(1 / 1.15); }
 
+  /* 内容实际范围：适配应以卡片为准，而不是 40×24 的编辑边界（否则缩到 ~10% 卡片不可读） */
+  function contentExtent() {
+    const b = board();
+    if (!b) return null;
+    let maxX = 0;
+    let maxY = 0;
+    b.querySelectorAll('.canvas-card').forEach((el) => {
+      maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
+      maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
+    });
+    if (!maxX || !maxY) return null;
+    return { width: maxX, height: maxY };
+  }
+
   function fitCanvas() {
     const sc = scrollEl();
     if (!sc) return;
+    const extent = contentExtent() || { width: baseWidth, height: baseHeight };
     const rect = sc.getBoundingClientRect();
-    const next = Math.max(MIN_SCALE, Math.min(1, Math.min(
-      (rect.width - 24) / baseWidth,
-      (rect.height - 24) / baseHeight
+    const next = Math.max(FIT_MIN_SCALE, Math.min(1, Math.min(
+      (rect.width - 24) / extent.width,
+      (rect.height - 24) / extent.height
     )));
     scale = next;
     syncZoom();
@@ -513,6 +532,12 @@
     return html;
   }
 
+  /* 连线来源卡片的可读名称：优先 label（如 胜者组 1/4 决赛 1） */
+  function flowSourceLabel(cardId) {
+    const source = findCard(cardId);
+    return source ? (source.label || source.id) : cardId;
+  }
+
   function openCardDialog(cardId) {
     const card = findCard(cardId);
     if (!card) return;
@@ -528,11 +553,11 @@
     cardDialog.querySelector('#card-slot-b').innerHTML = playerOptions(slotB && slotB.type === 'player' ? slotB.playerId : '');
     if (slotA && slotA.type === 'flow') {
       cardDialog.querySelector('#card-slot-a').insertAdjacentHTML('beforeend',
-        '<option value="__flow" selected>来自 ' + escapeHtml(slotA.cardId) + ' ' + (slotA.outcome === 'loser' ? '败者' : '胜者') + '</option>');
+        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotA.cardId)) + ' 的' + (slotA.outcome === 'loser' ? '败者' : '胜者') + '</option>');
     }
     if (slotB && slotB.type === 'flow') {
       cardDialog.querySelector('#card-slot-b').insertAdjacentHTML('beforeend',
-        '<option value="__flow" selected>来自 ' + escapeHtml(slotB.cardId) + ' ' + (slotB.outcome === 'loser' ? '败者' : '胜者') + '</option>');
+        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotB.cardId)) + ' 的' + (slotB.outcome === 'loser' ? '败者' : '胜者') + '</option>');
     }
     cardDialog.querySelector('#card-rank-winner').value = card.exitRanks && card.exitRanks.winner != null ? card.exitRanks.winner : '';
     cardDialog.querySelector('#card-rank-loser').value = card.exitRanks && card.exitRanks.loser != null ? card.exitRanks.loser : '';
@@ -644,6 +669,7 @@
     toggleZoomMode,
     zoomIn,
     zoomOut,
+    setZoom,
     fitCanvas,
     syncZoom,
     getSelectedCount

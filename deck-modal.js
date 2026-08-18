@@ -6,7 +6,7 @@
   let pendingTarget = null;
   let readOnly = false;
 
-  const { escapeHtml, debounce, canEdit, save, avatarMarkup, cssUrl, notify, errMsg } =
+  const { escapeHtml, debounce, canEdit, save, avatarMarkup, cssUrl, notify, errMsg, iconMarkup, uiConfirm } =
     window.TournamentUtils;
 
   function buildDialog() {
@@ -127,7 +127,7 @@
       return (
         '<button type="button" class="image-slot empty" data-add="' + key + '"' +
         (editable ? '' : ' disabled') + '>' +
-        '<span class="slot-plus" aria-hidden="true">＋</span>添加图片' +
+        '<span class="slot-plus" aria-hidden="true">' + iconMarkup('add', '') + '</span>添加图片' +
         '</button>'
       );
     }
@@ -214,6 +214,7 @@
 
     body.querySelectorAll('[data-delete]').forEach((btn) => {
       btn.addEventListener('click', async () => {
+        if (!(await uiConfirm('确定删除这张卡组图片吗？'))) return;
         const [matchId, playerId, deckIndex, slotIndex] = btn.dataset.delete.split('|');
         window.TournamentApp.current.matchDecks[matchId][playerId][Number(deckIndex)].images
           .splice(Number(slotIndex), 1);
