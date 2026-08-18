@@ -80,33 +80,35 @@ Nginx 证书可用 `certbot --nginx -d youshoubei.cn -d www.youshoubei.cn`;Caddy
 - 现在 Vercel 用的就是杭州桶,ECS 部署后继续读同一个桶:**零迁移、零改 URL**。
 - 只有走香港过渡路线时才需要新建香港桶并搬数据(不推荐当前走这条路)。
 
-## 4.1 代码更新:GitHub → 阿里云 ECS 自动部署
+## 4.1 代码更新:GitHub → 云效 Flow → 杭州 ECS(已选定)
 
-ECS 本身不提供 Vercel 那种"仓库 push 即发布"能力,但阿里云有对应产品。两个推荐方案:
+> 云效 Flow 只负责 CI/CD,不存网站数据;它的免费额度限制的是构建时长,和网站运行/OSS 存储无关。额度见云效控制台,个人项目通常够用;就算构建额度用完,仍可手动到 ECS 执行 `deploy/flow-deploy.sh` 更新。
 
-**方案甲:阿里云云效 Flow(最接近 Vercel 的体验)**
-1. 开通阿里云「云效」,进入 Flow 流水线。
-2. 代码源选 GitHub,用 OAuth 授权你的 `NOEE-ffun/youshoubei` 仓库,自动配置 webhook。
-3. 流水线两步:
-   - 构建:选 Node 20,执行 `npm ci --omit=dev && npm test`。
-   - 部署:选「主机部署」,把杭州 ECS 加为云效主机组(装云效 agent),执行:
-     ```bash
-     cd /srv/youshoubei
-     git pull --ff-only origin main
-     npm ci --omit=dev
-     sudo systemctl restart youshoubei
-     ```
-4. 之后每次 push 到 GitHub `main`,云效自动构建并部署,和 Vercel 用法一致。
+### 一次性配置(阿里云控制台)
 
-**方案乙:GitHub Actions(仓库已托管在 GitHub,配置更少)**
-1. 在 ECS 生成部署专用 SSH key,公钥放 `~/.ssh/authorized_keys`。
-2. GitHub 仓库 Secrets 存 `SSH_HOST / SSH_USER / SSH_KEY`。
-3. 加 `.github/workflows/deploy.yml`,内容为 SSH 到 ECS 后:
+1. 开通云效:进入 [云效 DevOps](https://devops.aliyun.com/),创建企业/工作空间,进入 **Flow**。
+2. 新建流水线:
+   - 选「空模板」或「代码源触发」模板。
+   - 代码源 → 添加代码源 → **GitHub**,OAuth 授权你的账号,选择 `NOEE-ffun/youshoubei` 仓库,默认分支 `main`,开启 **push 触发(Webhook)**。
+3. 阶段一「构建」(Node 20 构建环境):
    ```bash
-   cd /srv/youshoubei && git pull --ff-only origin main && npm ci --omit=dev && sudo systemctl restart youshoubei
+   npm ci --omit=dev
+   npm test
    ```
+   这一步是质量闸门:测试不过,不会进入部署。
+4. 阶段二「主机部署」:
+   - 先在 Flow 左侧「主机组」新建主机组,把杭州 ECS 加进去(控制台会给一段 agent 安装命令,在 ECS 上执行)。
+   - 主机组执行用户推荐 `root`,或用普通用户并给 `systemctl` 免密 sudo。
+   - 添加「主机部署」任务,选择该主机组,部署脚本填:
+     ```bash
+     cd /srv/youshoubei && bash deploy/flow-deploy.sh
+     ```
+   - 脚本内容见仓库 `deploy/flow-deploy.sh`:更新到 `main`、`npm ci`、重启 `youshoubei`、健康检查。
+5. 保存并手动运行一次流水线,日志里看到 `[flow-deploy] deploy ok` 即通。
 
-两者都支持 push 自动部署;想要"全阿里云体系"用云效 Flow,想少配置用 GitHub Actions。
+之后每次 push 到 GitHub `main`,云效都会自动构建并部署到杭州 ECS,使用体验与 Vercel 一致。
+
+> 备选:如果以后不想用云效,仓库已托管在 GitHub,也可以改走 GitHub Actions(配置见前几版说明)。当前按已选方案使用云效 Flow。
 
 ## 5. DNS 切换(阿里云云解析)
 
