@@ -212,12 +212,45 @@ test("大小/比例缺省回退与越界钳制,无队标时输出与旧版一致
   assert.ok(legacy.includes(">DK.FIRE<") && legacy.includes(">ICE.BLIZZ<"), "无队标数据时保持文字胶囊");
 });
 
+console.log("\n[poster.js] 称号 title");
+test("title 文字渲染在名字下方并转义", () => {
+  const t = JSON.parse(JSON.stringify(BASE_DATA));
+  t.left.title = { type: "text", text: "卫冕冠军", image: null };
+  const svg = S.VSPoster.build(t, THEME);
+  assert.ok(svg.includes(">卫冕冠军<"), "称号文字应渲染");
+  assert.ok(svg.includes("卫冕冠军"), "称号文字应出现在 SVG");
+});
+test("title 文字转义防注入", () => {
+  const t = JSON.parse(JSON.stringify(BASE_DATA));
+  t.left.title = { type: "text", text: "<b>&", image: null };
+  const svg = S.VSPoster.build(t, THEME);
+  assert.ok(!svg.includes("<b>"), "称号文字不应出现未转义标签");
+  assert.ok(svg.includes("&lt;b&gt;"), "称号文字应转义");
+});
+test("title 图片优先渲染 <image> 且等比缩放", () => {
+  const t = JSON.parse(JSON.stringify(BASE_DATA));
+  t.right.title = { type: "image", text: "", image: "data:image/png;base64,AAA" };
+  const svg = S.VSPoster.build(t, THEME);
+  assert.ok(svg.includes('href="data:image/png;base64,AAA"'), "称号图片应内嵌");
+  assert.ok(svg.includes('preserveAspectRatio="xMidYMid meet"'), "称号图片等比缩放");
+});
+test("title 缺失/空不渲染,非法图片 scheme 忽略", () => {
+  const plain = S.VSPoster.build(BASE_DATA, THEME);
+  assert.ok(!plain.includes("卫冕冠军"), "无 title 不应渲染");
+
+  const bad = JSON.parse(JSON.stringify(BASE_DATA));
+  bad.left.title = { type: "image", text: "称号", image: "javascript:alert(1)" };
+  const svg = S.VSPoster.build(bad, THEME);
+  assert.ok(!svg.includes("javascript:"), "非法图片 scheme 不应进入 SVG");
+});
+
 console.log("\n[upload.js] URL 白名单");
 test("允许 http/https/data", () => {
   assert.equal(S.VSUpload.isAllowedURL("https://a.com/x.png"), true);
   assert.equal(S.VSUpload.isAllowedURL("http://a.com/x.png"), true);
   assert.equal(S.VSUpload.isAllowedURL("data:image/png;base64,AAA"), true);
   assert.equal(S.VSUpload.isAllowedURL("  https://b.com/y.jpg  "), true, "应先去空白");
+  assert.equal(S.VSUpload.isAllowedURL("blob:http://localhost/abc"), true, "本地 Blob 头像/称号应放行");
 });
 test("拒绝危险 scheme", () => {
   assert.equal(S.VSUpload.isAllowedURL("javascript:alert(1)"), false);

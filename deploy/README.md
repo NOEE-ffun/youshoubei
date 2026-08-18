@@ -97,6 +97,19 @@ Nginx 证书可用 `certbot --nginx -d youshoubei.cn -d www.youshoubei.cn`;Caddy
 - 现在 Vercel 用的就是杭州桶,ECS 部署后继续读同一个桶:**零迁移、零改 URL**。
 - 只有走香港过渡路线时才需要新建香港桶并搬数据(不推荐当前走这条路)。
 
+### 4.0 海报板块需要的一次性 OSS CORS 配置
+
+海报页会把云端选手头像/称号图片读入 Canvas 生成 PNG。为避免跨域污染,需在 OSS 桶开启 CORS:
+- 允许来源:`https://www.youshoubei.cn`(本地调试再加 `http://localhost:*`)
+- 允许方法:`GET`
+- 允许 Headers:`*`
+- 暴露 Headers:`ETag`
+- 缓存时间:600 秒
+
+### 4.0.1 OBS 舞台环境变量
+
+`POSTER_STAGE_TTL_DAYS=7`:管理员生成 OBS 短链的有效天数,过期后舞台页返回 404。可改 30 或更长;不填默认 7 天。
+
 ## 4.1 代码更新:GitHub → 云效 Flow → 杭州 ECS(已选定)
 
 > 云效 Flow 只负责 CI/CD,不存网站数据;它的免费额度限制的是构建时长,和网站运行/OSS 存储无关。额度见云效控制台,个人项目通常够用;就算构建额度用完,仍可手动到 ECS 执行 `deploy/flow-deploy.sh` 更新。

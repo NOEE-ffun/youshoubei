@@ -61,9 +61,6 @@
 }
 /* ---------- 顶栏 ---------- */
 #poster-app .topbar {
-  position: sticky;
-  inset-block-start: 0;
-  z-index: var(--layer-sticky);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -72,8 +69,7 @@
   /* min 而非固定高:窄视口换行时自动长高,内容不再溢出 60px 条(单行时视觉不变) */
   min-block-size: var(--topbar-height);
   padding-inline: var(--size-20);
-  background: rgba(14, 16, 23, 0.92);
-  backdrop-filter: blur(8px);
+  background: var(--color-surface);
   border-block-end: 1px solid var(--color-border);
 }
 #poster-app .topbar__brand {
@@ -296,8 +292,8 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   position: sticky;
-  inset-block-start: calc(var(--topbar-height) + var(--size-16));
-  max-block-size: calc(100dvh - var(--topbar-height) - var(--size-32));
+  inset-block-start: calc(var(--header-height, var(--topbar-height)) + var(--size-16));
+  max-block-size: calc(100dvh - var(--header-height, var(--topbar-height)) - var(--size-32));
   overflow-y: auto;
 }
 #poster-app .group {
