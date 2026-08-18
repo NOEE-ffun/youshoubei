@@ -212,36 +212,27 @@ test("大小/比例缺省回退与越界钳制,无队标时输出与旧版一致
   assert.ok(legacy.includes(">DK.FIRE<") && legacy.includes(">ICE.BLIZZ<"), "无队标数据时保持文字胶囊");
 });
 
-console.log("\n[poster.js] 称号 title");
+console.log("\n[poster.js] 赛前垃圾话 title(纯文本)");
 test("title 文字渲染在名字下方并转义", () => {
   const t = JSON.parse(JSON.stringify(BASE_DATA));
-  t.left.title = { type: "text", text: "卫冕冠军", image: null };
+  t.left.title = "今天你必输";
   const svg = S.VSPoster.build(t, THEME);
-  assert.ok(svg.includes(">卫冕冠军<"), "称号文字应渲染");
-  assert.ok(svg.includes("卫冕冠军"), "称号文字应出现在 SVG");
+  assert.ok(svg.includes(">今天你必输<"), "赛前垃圾话应渲染");
 });
 test("title 文字转义防注入", () => {
   const t = JSON.parse(JSON.stringify(BASE_DATA));
-  t.left.title = { type: "text", text: "<b>&", image: null };
+  t.left.title = "<b>&";
   const svg = S.VSPoster.build(t, THEME);
-  assert.ok(!svg.includes("<b>"), "称号文字不应出现未转义标签");
-  assert.ok(svg.includes("&lt;b&gt;"), "称号文字应转义");
+  assert.ok(!svg.includes("<b>"), "赛前垃圾话不应出现未转义标签");
+  assert.ok(svg.includes("&lt;b&gt;"), "赛前垃圾话应转义");
 });
-test("title 图片优先渲染 <image> 且等比缩放", () => {
-  const t = JSON.parse(JSON.stringify(BASE_DATA));
-  t.right.title = { type: "image", text: "", image: "data:image/png;base64,AAA" };
-  const svg = S.VSPoster.build(t, THEME);
-  assert.ok(svg.includes('href="data:image/png;base64,AAA"'), "称号图片应内嵌");
-  assert.ok(svg.includes('preserveAspectRatio="xMidYMid meet"'), "称号图片等比缩放");
-});
-test("title 缺失/空不渲染,非法图片 scheme 忽略", () => {
+test("title 空/缺失不渲染", () => {
   const plain = S.VSPoster.build(BASE_DATA, THEME);
-  assert.ok(!plain.includes("卫冕冠军"), "无 title 不应渲染");
-
-  const bad = JSON.parse(JSON.stringify(BASE_DATA));
-  bad.left.title = { type: "image", text: "称号", image: "javascript:alert(1)" };
-  const svg = S.VSPoster.build(bad, THEME);
-  assert.ok(!svg.includes("javascript:"), "非法图片 scheme 不应进入 SVG");
+  assert.ok(!plain.includes("今天你必输"), "无 title 不应渲染");
+  const t = JSON.parse(JSON.stringify(BASE_DATA));
+  t.left.title = "";
+  const svg = S.VSPoster.build(t, THEME);
+  assert.ok(!svg.includes('y="876"'), "空 title 不额外输出文字节点");
 });
 
 console.log("\n[upload.js] URL 白名单");

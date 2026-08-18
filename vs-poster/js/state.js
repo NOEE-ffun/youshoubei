@@ -22,8 +22,8 @@
         bo: "BO3",
         date: today(),
         venue: "上海体育馆",
-        left: { name: "烈焰", tag: "DK.FIRE", img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: { type: "text", text: "", image: null } },
-        right: { name: "冰霜", tag: "ICE.BLIZZ", img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: { type: "text", text: "", image: null } }
+        left: { name: "烈焰", tag: "DK.FIRE", img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: "" },
+        right: { name: "冰霜", tag: "ICE.BLIZZ", img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: "" }
       },
       themeId: "red-blue",
       resolution: "1080p"
@@ -49,7 +49,12 @@
     try {
       var raw = localStorage.getItem(KEY);
       if (!raw) return defaults();
-      return deepMerge(defaults(), JSON.parse(raw));
+      var merged = deepMerge(defaults(), JSON.parse(raw));
+      ["left", "right"].forEach(function (side) {
+        var t = merged.data[side] && merged.data[side].title;
+        merged.data[side].title = typeof t === "string" ? t : ((t && typeof t.text === "string") ? t.text : "");
+      });
+      return merged;
     } catch (e) {
       return defaults();
     }
@@ -82,23 +87,17 @@
   }
 
   function save(state) {
-    var leftTitle = (state.data.left.title && state.data.left.title.image) || null;
-    var rightTitle = (state.data.right.title && state.data.right.title.image) || null;
     return Promise.all([
       compressForStorage(state.data.left.img || null),
       compressForStorage(state.data.right.img || null),
       compressForStorage(state.data.left.tagImg || null),
-      compressForStorage(state.data.right.tagImg || null),
-      compressForStorage(leftTitle),
-      compressForStorage(rightTitle)
+      compressForStorage(state.data.right.tagImg || null)
     ]).then(function (imgs) {
       var copy = JSON.parse(JSON.stringify(state));
       copy.data.left.img = imgs[0];
       copy.data.right.img = imgs[1];
       copy.data.left.tagImg = imgs[2];
       copy.data.right.tagImg = imgs[3];
-      if (copy.data.left.title) copy.data.left.title.image = imgs[4];
-      if (copy.data.right.title) copy.data.right.title.image = imgs[5];
       try { localStorage.setItem(KEY, JSON.stringify(copy)); } catch (e) { /* 存储满时静默 */ }
     });
   }
