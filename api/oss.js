@@ -4,6 +4,11 @@ const OSS = require('ali-oss');
 
 const DATA_PATH = 'data.json';
 
+/* 函数部署在境外区域、OSS 在杭州:跨境连接偶发被重置/挂起。
+ * 显式短超时让失败快速暴露,网络类错误用新建客户端重试(绕开卡死的 keepalive socket)。 */
+const REQUEST_TIMEOUT_MS = 4000;
+const RETRY_DELAYS = [250, 600];
+
 function getClient() {
   const region = process.env.OSS_REGION;
   const bucket = process.env.OSS_BUCKET;
@@ -17,14 +22,39 @@ function getClient() {
     bucket,
     accessKeyId,
     accessKeySecret,
-    secure: true
+    secure: true,
+    timeout: REQUEST_TIMEOUT_MS
   });
 }
 
+function isRetriable(error) {
+  if (!error) return false;
+  const code = error.code || '';
+  if (['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EPIPE', 'EAI_AGAIN'].includes(code)) return true;
+  if (error.status >= 500) return true;
+  return /timeout|timed\s*out|socket hang up/i.test(String(error.message || ''));
+}
+
+async function withRetry(task) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= RETRY_DELAYS.length; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[attempt - 1]));
+    }
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (!isRetriable(error)) throw error;
+    }
+  }
+  const message = lastError && lastError.message ? lastError.message : String(lastError);
+  throw new Error(message + '（已重试 ' + RETRY_DELAYS.length + ' 次仍失败）');
+}
+
 async function readJson(key) {
-  const client = getClient();
   try {
-    const result = await client.get(key);
+    const result = await withRetry(() => getClient().get(key));
     const content = result.content;
     if (!content) return null;
     return JSON.parse(content.toString('utf8'));
@@ -35,23 +65,24 @@ async function readJson(key) {
 }
 
 async function writeJson(key, value) {
-  const client = getClient();
-  await client.put(key, Buffer.from(JSON.stringify(value), 'utf8'), {
+  await withRetry(() => getClient().put(key, Buffer.from(JSON.stringify(value), 'utf8'), {
     headers: { 'Content-Type': 'application/json; charset=utf-8' }
-  });
+  }));
 }
 
 async function uploadImageBuffer(key, buffer, contentType) {
-  const client = getClient();
-  await client.put(key, buffer, {
-    headers: {
-      'Content-Type': contentType,
-      /* key 是 UUID,内容不会变,可放心长缓存 */
-      'Cache-Control': 'public, max-age=31536000, immutable'
-    }
+  await withRetry(async () => {
+    const client = getClient();
+    await client.put(key, buffer, {
+      headers: {
+        'Content-Type': contentType,
+        /* key 是 UUID,内容不会变,可放心长缓存 */
+        'Cache-Control': 'public, max-age=31536000, immutable'
+      }
+    });
+    // data.json 保持私有；图片对象单独设为公共读
+    await client.putACL(key, 'public-read');
   });
-  // data.json 保持私有；图片对象单独设为公共读
-  await client.putACL(key, 'public-read');
 }
 
 function publicUrl(key) {
@@ -65,5 +96,7 @@ module.exports = {
   readJson,
   writeJson,
   uploadImageBuffer,
-  publicUrl
+  publicUrl,
+  withRetry,
+  isRetriable
 };
