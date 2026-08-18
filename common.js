@@ -625,16 +625,22 @@
     return toastRegion;
   }
 
-  /* 自动消失的操作反馈；type 为 'danger' 时用于错误提示 */
+  /* 自动消失的操作反馈；type 为 'danger' 时用于错误提示（assertive 播报） */
   function notify(message, type) {
     const region = ensureToastRegion();
+    const isDanger = type === 'danger';
     const toast = document.createElement('div');
-    toast.className = 'toast' + (type === 'danger' ? ' toast-danger' : '');
+    toast.className = 'toast' + (isDanger ? ' toast-danger' : '');
+    toast.setAttribute('role', isDanger ? 'alert' : 'status');
     toast.textContent = message;
     region.appendChild(toast);
+    if (isDanger) region.setAttribute('aria-live', 'assertive');
     setTimeout(() => {
       toast.classList.add('toast-out');
-      setTimeout(() => toast.remove(), 300);
+      setTimeout(() => {
+        toast.remove();
+        if (!region.querySelector('.toast-danger')) region.setAttribute('aria-live', 'polite');
+      }, 300);
     }, 3600);
     return toast;
   }
@@ -698,9 +704,9 @@
     lightbox.hidden = true;
     lightbox.innerHTML =
       '<img class="lightbox-img" alt="">' +
-      '<button type="button" class="lightbox-btn lightbox-close" aria-label="关闭放大图">✕</button>' +
-      '<button type="button" class="lightbox-btn lightbox-prev" aria-label="上一张">‹</button>' +
-      '<button type="button" class="lightbox-btn lightbox-next" aria-label="下一张">›</button>';
+      '<button type="button" class="lightbox-btn lightbox-close" aria-label="关闭放大图">' + iconMarkup('close', '') + '</button>' +
+      '<button type="button" class="lightbox-btn lightbox-prev" aria-label="上一张">' + iconMarkup('chevron_left', '') + '</button>' +
+      '<button type="button" class="lightbox-btn lightbox-next" aria-label="下一张">' + iconMarkup('chevron_right', '') + '</button>';
     document.body.appendChild(lightbox);
 
     const img = lightbox.querySelector('.lightbox-img');
@@ -1345,6 +1351,15 @@
     });
   }
 
+  /* 开赛时间格式化（主页 hero 与赛程页共用）：M月d日 HH:mm */
+  function formatStartTime(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+
   /* 比赛已分出冠亚季军时，返回 playerId → 奖牌信息 的映射；未结束返回空 Map */
   function medalMap(record) {
     const map = new Map();
@@ -1359,6 +1374,52 @@
     return map;
   }
 
+  /* 赛事状态徽章（upcoming/ongoing/finished），主页 hero 与顶栏共用；
+   * ongoing 红色 LIVE，配合 .status-dot 呼吸点（reduced-motion 下静态） */
+  function statusBadgeMarkup(status) {
+    const map = {
+      upcoming: { cls: 'status-upcoming', text: '未开始' },
+      ongoing: { cls: 'status-ongoing', text: 'LIVE' },
+      finished: { cls: 'status-finished', text: '已结束' }
+    };
+    const item = map[status] || map.upcoming;
+    return '<span class="status-badge ' + item.cls + '"><span class="status-dot" aria-hidden="true"></span>' +
+      item.text + '</span>';
+  }
+
+  /* 两页（赛程/library）共用的浮动缩放控件绑定 */
+  function bindZoomDock(handlers) {
+    const dock = document.getElementById('zoom-dock');
+    if (!dock || !handlers) return;
+    dock.addEventListener('click', (event) => {
+      const btn = event.target.closest('.zoom-btn');
+      if (!btn) return;
+      const kind = btn.dataset.zoom;
+      if (kind === 'in' && handlers.onZoomIn) handlers.onZoomIn();
+      else if (kind === 'out' && handlers.onZoomOut) handlers.onZoomOut();
+      else if (kind === 'reset' && handlers.onReset) handlers.onReset();
+      else if (kind === 'fit' && handlers.onFit) handlers.onFit();
+    });
+  }
+
+  /* library 页 Ctrl/Cmd+滚轮缩放（赛程页由 canvas-editor 处理，避免双重缩放） */
+  function bindZoomWheel(scrollId, zoomAtCenter) {
+    const sc = document.getElementById(scrollId);
+    if (!sc || typeof zoomAtCenter !== 'function') return;
+    sc.addEventListener('wheel', (event) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      zoomAtCenter(Math.exp(-event.deltaY * 0.0018));
+    }, { passive: false });
+  }
+
+  function bindZoomFitOnResize(shouldFit, fit) {
+    if (typeof shouldFit !== 'function' || typeof fit !== 'function') return;
+    window.addEventListener('resize', debounce(() => {
+      if (shouldFit()) fit();
+    }, 200));
+  }
+
   window.TournamentUtils = {
     escapeHtml,
     iconMarkup,
@@ -1368,10 +1429,15 @@
     debounce,
     canEdit,
     save,
+    formatStartTime,
     medalMap,
+    statusBadgeMarkup,
     avatarMarkup,
     notify,
-    uiConfirm
+    uiConfirm,
+    bindZoomDock,
+    bindZoomWheel,
+    bindZoomFitOnResize
   };
 
   function applyBackground(record) {
@@ -1411,6 +1477,15 @@
       '</nav>';
   }
 
+  let headerHeightBound = false;
+
+  /* 顶栏高度随视口换行变化，写入 CSS 变量供整页画布 calc 使用 */
+  function syncHeaderHeight() {
+    const placeholder = document.getElementById('app-header');
+    if (!placeholder) return;
+    document.documentElement.style.setProperty('--header-height', placeholder.offsetHeight + 'px');
+  }
+
   function renderHeader() {
     const app = window.TournamentApp;
     const placeholder = document.getElementById('app-header');
@@ -1426,22 +1501,31 @@
     const isSchedule = app.activePage === 'schedule';
     const showTournamentSwitch = app.activePage === 'schedule';
     const scheduleActions = isSchedule
-      ? '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
-        '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
-        '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑">' + iconMarkup('edit', '编辑') + '</button>'
+      ? '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
+        '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单" aria-label="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
+        '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>'
       : '';
     const tournamentSwitch = showTournamentSwitch
       ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
-        '<select id="tournament-switch" class="header-select" title="切换比赛">' + options + '</select>'
+        '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛">' + options + '</select>'
       : '';
+    /* 赛程页 main 无 h1,顶栏标题承担 h1;其余页面 main 自带 h1,顶栏用 span 避免双 h1。
+     * 主页顶栏不显示标题;状态徽章只在赛程页出现 */
+    const titleTag = isSchedule ? 'h1' : 'span';
+    const titleGroup = app.activePage === 'home'
+      ? ''
+      : '  <div class="header-title-group">' +
+        '    <' + titleTag + ' class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</' + titleTag + '>' +
+        (isSchedule ? statusBadgeMarkup(active.status) : '') +
+        '  </div>';
     placeholder.innerHTML =
       '<div class="header-inner">' +
-      '  <span class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</span>' +
+      titleGroup +
       '  <div class="header-actions">' +
       tournamentSwitch +
       scheduleActions +
-      '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm icon-btn" title="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
-      '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="设置">' + iconMarkup('settings', '设置') + '</button>' +
+      '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm icon-btn" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
+      '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="设置" aria-label="设置">' + iconMarkup('settings', '设置') + '</button>' +
       '  </div>' +
       '</div>';
 
@@ -1480,6 +1564,11 @@
         if (window.BracketActions && window.BracketActions.requestEdit) window.BracketActions.requestEdit();
         else if (window.BracketActions && window.BracketActions.toggleEdit) window.BracketActions.toggleEdit();
       });
+    }
+    syncHeaderHeight();
+    if (!headerHeightBound) {
+      headerHeightBound = true;
+      window.addEventListener('resize', debounce(syncHeaderHeight, 120));
     }
   }
 

@@ -2,8 +2,10 @@
   'use strict';
 
   /* 共享工具统一来自 common.js */
-  const { escapeHtml, debounce, canEdit, save, medalMap, avatarMarkup, notify, uiConfirm } =
-    window.TournamentUtils;
+  const {
+    escapeHtml, debounce, canEdit, save, avatarMarkup, notify, uiConfirm,
+    formatStartTime, bindZoomDock: bindZoomDockControls, bindZoomFitOnResize
+  } = window.TournamentUtils;
 
   const CARD_WIDTH = 280;
   const CARD_HEIGHT = 176;
@@ -27,14 +29,6 @@
   function playerName(id) {
     const p = playerById(id);
     return p ? p.name : '待定';
-  }
-
-  async function savePlayers() {
-    try {
-      await window.TournamentApp.storagePutPlayers(window.TournamentApp.players);
-    } catch (error) {
-      notify(window.TournamentUtils.errMsg(error), 'danger');
-    }
   }
 
   /* ---------- 查看 / 编辑模式与管理员锁 ---------- */
@@ -97,7 +91,7 @@
     if (layout) layout.classList.toggle('has-toolbar', editMode);
     if (toolbar) toolbar.hidden = !editMode;
     const hint = document.getElementById('canvas-hint');
-    if (hint) hint.textContent = editMode ? '编辑模式' : '查看模式';
+    if (hint) hint.textContent = editMode ? '编辑模式' : '查看模式 · Ctrl/⌘+滚轮缩放';
     renderEditToolbar();
   }
 
@@ -150,41 +144,19 @@
       record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => known.has(id));
     }
     renderChampion();
+    renderScheduleMeta();
     renderCanvas();
     renderEditToolbar();
   }
 
-  /* ---------- 侧边栏 ---------- */
+  /* ---------- 开赛时间（赛程页浮层） ---------- */
 
-  function renderSidebar() {
-    const app = window.TournamentApp;
-    const record = app.current;
-    const sidebar = document.getElementById('rules-sidebar');
-    const wrap = document.getElementById('page-wrap');
-    const toggle = document.getElementById('rules-toggle');
-    const showBtn = document.getElementById('show-rules-btn');
-    const hidden = app.sidebarHidden();
-
-    document.getElementById('rules-text').textContent = record.rules || '';
-    sidebar.hidden = hidden;
-    wrap.classList.toggle('sidebar-hidden', hidden);
-    toggle.textContent = hidden ? '展开' : '收起';
-    toggle.setAttribute('aria-expanded', String(!hidden));
-    showBtn.hidden = !hidden;
-  }
-
-  function bindSidebar() {
-    document.getElementById('rules-toggle').addEventListener('click', () => {
-      window.TournamentApp.setSidebarHidden(!window.TournamentApp.sidebarHidden());
-      renderSidebar();
-    });
-    document.getElementById('show-rules-btn').addEventListener('click', () => {
-      window.TournamentApp.setSidebarHidden(false);
-      renderSidebar();
-    });
-    document.getElementById('rules-edit').addEventListener('click', () => {
-      window.TournamentApp.openSettings(true);
-    });
+  function renderScheduleMeta() {
+    const el = document.getElementById('canvas-meta');
+    if (!el) return;
+    const time = formatStartTime(currentRecord().startTime);
+    el.hidden = !time;
+    if (time) el.textContent = '开赛 ' + time;
   }
 
   /* ---------- 冠军横幅 ---------- */
@@ -207,63 +179,6 @@
       banner.hidden = true;
       text.textContent = '';
     }
-  }
-
-  /* ---------- 参赛名单（来自全局选手库，roster 决定出场） ---------- */
-
-  function renderRoster() {
-    const app = window.TournamentApp;
-    const record = app.current;
-    const grid = document.getElementById('roster-grid');
-    const editable = canEdit();
-    const medalOf = medalMap(record);
-    const players = (record.roster || [])
-      .map((id) => playerById(id))
-      .filter(Boolean);
-
-    grid.innerHTML = players.map((player, index) => {
-      const medal = medalOf.get(player.id);
-      return (
-        '<div class="roster-item' + (medal ? ' medal-' + medal.type : '') + '">' +
-        '<span class="roster-index">' + (index + 1) + '</span>' +
-        (medal ? '<span class="medal-badge">' + medal.emoji + '</span>' : '') +
-        '<div class="roster-avatar" data-avatar="' + player.id + '">' +
-        avatarMarkup(player, 'avatar-lg') +
-        (editable ? avatarActions(player) : '') +
-        '</div>' +
-        '<label class="visually-hidden" for="roster-name-' + player.id + '">选手 ' + (index + 1) + ' 姓名</label>' +
-        '<input id="roster-name-' + player.id + '" value="' + escapeHtml(player.name) + '" autocomplete="off"' +
-        (editable ? '' : ' disabled') + '>' +
-        '</div>'
-      );
-    }).join('');
-
-    grid.querySelectorAll('.roster-item input').forEach((input) => {
-      const player = playerById(input.id.replace('roster-name-', ''));
-      if (!player) return;
-      const commit = () => {
-        const next = input.value.trim();
-        if (next) player.name = next;
-        else input.value = player.name;
-        player.updatedAt = Date.now();
-        savePlayers();
-      };
-      input.addEventListener('input', debounce(commit, 500));
-    });
-    bindRosterAvatars();
-  }
-
-  function avatarActions(player) {
-    const has = Boolean(player.avatar);
-    return (
-      '<span class="avatar-actions">' +
-      '<button type="button" class="avatar-action" data-avatar-upload="' + player.id + '">' +
-      (has ? '更换' : '上传') + '</button>' +
-      (has
-        ? '<button type="button" class="avatar-action danger" data-avatar-delete="' + player.id + '">删除</button>'
-        : '') +
-      '</span>'
-    );
   }
 
   /* ---------- 画布渲染 ---------- */
@@ -309,14 +224,16 @@
     const ready = Boolean(match.a && match.b);
     const editable = canEdit();
     const current = (currentRecord().scores || {})[match.id];
-    const stateText = match.invalid ? '无效' : match.draw ? '平局' : match.played ? '已结束' : ready ? '未开始' : '待定';
-    const stateClass = match.invalid ? ' invalid' : match.draw ? ' draw' : match.played ? ' done' : '';
+    const cycle = Boolean(match.cycle);
+    const live = !played && ready && !match.invalid && !cycle && currentRecord().status === 'ongoing';
+    const stateText = match.invalid ? '无效' : match.draw ? '平局' : cycle ? '连线成环' : live ? '进行中' : played ? '已结束' : ready ? '未开始' : '待定';
+    const stateClass = match.invalid ? ' invalid' : match.draw ? ' draw' : cycle ? ' cycle' : live ? ' live' : played ? ' done' : '';
 
     return (
-      '<article class="match-card canvas-card' + (played ? ' played' : '') + (match.cycle ? ' cycle' : '') + '"' +
+      '<article class="match-card canvas-card' + (played ? ' played' : '') + (cycle ? ' cycle' : '') + (live ? ' match-live' : '') + '"' +
       ' data-match="' + match.id + '" style="left:' + cardLeft(card) + 'px;top:' + cardTop(card) + 'px">' +
       '<header class="match-head">' +
-      '<h3 class="match-title">' + escapeHtml(match.label || match.id) + '</h3>' +
+      '<h2 class="match-title">' + escapeHtml(match.label || match.id) + '</h2>' +
       '<span class="match-format">' + escapeHtml(match.format || 'BO3') + '</span>' +
       '<span class="match-state' + stateClass + '">' + stateText + '</span>' +
       '</header>' +
@@ -513,6 +430,92 @@
 
   /* ---------- 比分弹窗 ---------- */
 
+  function presetsForFormat(format) {
+    const fmt = String(format || '').toUpperCase();
+    if (fmt.includes('BO5') || fmt === '5') {
+      return [[3, 0], [3, 1], [3, 2], [2, 3], [1, 3], [0, 3]];
+    }
+    if (fmt.includes('BO3') || fmt === '3') {
+      return [[2, 0], [2, 1], [1, 2], [0, 2]];
+    }
+    return null;
+  }
+
+  function showScoreError(message) {
+    const error = scoreDialog && scoreDialog.querySelector('#score-error');
+    const a = scoreDialog && scoreDialog.querySelector('#score-a');
+    const b = scoreDialog && scoreDialog.querySelector('#score-b');
+    if (error) {
+      error.hidden = !message;
+      if (message) error.textContent = message;
+    }
+    if (a) a.setAttribute('aria-invalid', message ? 'true' : 'false');
+    if (b) b.setAttribute('aria-invalid', message ? 'true' : 'false');
+  }
+
+  function validateScoreInput(raw) {
+    if (String(raw).trim() === '') return { ok: false, message: '请输入双方比分' };
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return { ok: false, message: '请输入有效数字' };
+    if (!Number.isInteger(n)) return { ok: false, message: '比分必须是整数' };
+    if (n < -1 || n > 9) return { ok: false, message: '比分范围为 -1（弃权）到 9' };
+    return { ok: true, value: n };
+  }
+
+  function saveScoreFromDialog() {
+    if (!currentScoreCardId || !scoreDialog) return;
+    const a = validateScoreInput(scoreDialog.querySelector('#score-a').value);
+    const b = validateScoreInput(scoreDialog.querySelector('#score-b').value);
+    const bad = !a.ok ? a : !b.ok ? b : null;
+    if (bad) {
+      showScoreError(bad.message);
+      const input = !a.ok ? scoreDialog.querySelector('#score-a') : scoreDialog.querySelector('#score-b');
+      if (input) input.focus();
+      return;
+    }
+    showScoreError('');
+    currentRecord().scores[currentScoreCardId] = { a: a.value, b: b.value };
+    save().then(() => {
+      scoreDialog.close();
+      renderAll();
+    });
+  }
+
+  function syncScorePresetActive() {
+    const a = scoreDialog && scoreDialog.querySelector('#score-a');
+    const b = scoreDialog && scoreDialog.querySelector('#score-b');
+    const box = scoreDialog && scoreDialog.querySelector('#score-presets');
+    if (!a || !b || !box) return;
+    const key = a.value + ':' + b.value;
+    box.querySelectorAll('[data-score-preset]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.scorePreset === key);
+    });
+  }
+
+  function renderScorePresets(match) {
+    const box = scoreDialog && scoreDialog.querySelector('#score-presets');
+    if (!box) return;
+    const presets = match ? presetsForFormat(match.format) : null;
+    box.hidden = !presets;
+    if (!presets) {
+      box.innerHTML = '';
+      return;
+    }
+    box.innerHTML = presets.map((pair) =>
+      '<button type="button" class="score-btn" data-score-preset="' + pair.join(':') + '" aria-label="预设比分 ' + pair.join(' 比 ') + '">' +
+      pair.join(':') + '</button>'
+    ).join('');
+    box.querySelectorAll('[data-score-preset]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const pair = btn.dataset.scorePreset.split(':').map(Number);
+        scoreDialog.querySelector('#score-a').value = pair[0];
+        scoreDialog.querySelector('#score-b').value = pair[1];
+        showScoreError('');
+        syncScorePresetActive();
+      });
+    });
+  }
+
   function buildScoreDialog() {
     if (scoreDialog) return;
     scoreDialog = document.createElement('dialog');
@@ -525,11 +528,13 @@
       '</div>' +
       '<div class="dialog-body">' +
       '  <div class="score-form">' +
-      '    <label><span class="score-player-label" id="score-label-a">A 选手</span> <input type="number" id="score-a" step="any"></label>' +
+      '    <label><span class="score-player-label" id="score-label-a">A 选手</span> <input type="number" id="score-a" step="1" min="-1" max="9" inputmode="numeric"></label>' +
       '    <span class="score-colon">:</span>' +
-      '    <label><span class="score-player-label" id="score-label-b">B 选手</span> <input type="number" id="score-b" step="any"></label>' +
+      '    <label><span class="score-player-label" id="score-label-b">B 选手</span> <input type="number" id="score-b" step="1" min="-1" max="9" inputmode="numeric"></label>' +
       '  </div>' +
-      '  <p class="hint">支持任意数字；负数显示为“弃权”；相等为平局。</p>' +
+      '  <div class="score-presets" id="score-presets" role="group" aria-label="常用比分预设" hidden></div>' +
+      '  <p class="form-error" id="score-error" role="alert" hidden></p>' +
+      '  <p class="hint">预设按赛制自动生成；自定义输入保留 -1 弃权、相等为平局。</p>' +
       '  <div class="dialog-actions">' +
       '    <button type="button" class="btn btn-danger btn-sm" data-score-clear>清除比分</button>' +
       '    <button type="button" class="btn btn-secondary" data-score-close>取消</button>' +
@@ -538,30 +543,25 @@
       '</div>';
     document.body.appendChild(scoreDialog);
 
-    scoreDialog.querySelector('[data-score-close]').addEventListener('click', () => scoreDialog.close());
     scoreDialog.querySelectorAll('[data-score-close]').forEach((btn) => {
       btn.addEventListener('click', () => scoreDialog.close());
     });
-    scoreDialog.querySelector('[data-score-clear]').addEventListener('click', () => {
+    scoreDialog.querySelector('[data-score-clear]').addEventListener('click', async () => {
       if (!currentScoreCardId) return;
+      if (!(await uiConfirm('确定清除这场比分吗？'))) return;
       delete currentRecord().scores[currentScoreCardId];
       save().then(() => {
         scoreDialog.close();
         renderAll();
       });
     });
-    scoreDialog.querySelector('[data-score-save]').addEventListener('click', () => {
-      if (!currentScoreCardId) return;
-      const a = Number(scoreDialog.querySelector('#score-a').value);
-      const b = Number(scoreDialog.querySelector('#score-b').value);
-      if (!Number.isFinite(a) || !Number.isFinite(b)) {
-        notify('请输入有效数字', 'danger');
-        return;
-      }
-      currentRecord().scores[currentScoreCardId] = { a, b };
-      save().then(() => {
-        scoreDialog.close();
-        renderAll();
+    scoreDialog.querySelector('[data-score-save]').addEventListener('click', saveScoreFromDialog);
+    scoreDialog.querySelectorAll('#score-a, #score-b').forEach((input) => {
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          saveScoreFromDialog();
+        }
       });
     });
   }
@@ -582,11 +582,12 @@
     const current = record.scores[cardId];
     scoreDialog.querySelector('#score-a').value = current ? current.a : '';
     scoreDialog.querySelector('#score-b').value = current ? current.b : '';
+    showScoreError('');
+    renderScorePresets(match);
+    syncScorePresetActive();
     currentScoreCardId = cardId;
     scoreDialog.showModal();
   }
-
-  /* ---------- 事件绑定 ---------- */
 
   function bindCanvas() {
     const board = document.getElementById('canvas-board');
@@ -602,20 +603,6 @@
         return;
       }
     });
-  }
-
-  function toggleEdit() {
-    if (!canEdit()) {
-      notify('需要管理员密码', 'danger');
-      return;
-    }
-    editMode = !editMode;
-    renderAll();
-    if (editMode && window.CanvasEditor && window.CanvasEditor.enter) {
-      window.CanvasEditor.enter();
-    } else if (!editMode && window.CanvasEditor && window.CanvasEditor.exit) {
-      window.CanvasEditor.exit();
-    }
   }
 
   async function resetScores() {
@@ -767,60 +754,26 @@
     });
   }
 
-  /* 头像上传（与 roster 联动，写全局选手库） */
-  let avatarFileInput = null;
-  let pendingAvatarId = null;
+  /* ---------- 查看态自适应与常驻缩放控件 ---------- */
 
-  function ensureAvatarFileInput() {
-    if (avatarFileInput) return;
-    avatarFileInput = document.createElement('input');
-    avatarFileInput.type = 'file';
-    avatarFileInput.accept = 'image/*';
-    avatarFileInput.hidden = true;
-    document.body.appendChild(avatarFileInput);
-    avatarFileInput.addEventListener('change', async () => {
-      const file = avatarFileInput.files && avatarFileInput.files[0];
-      avatarFileInput.value = '';
-      const playerId = pendingAvatarId;
-      pendingAvatarId = null;
-      if (!file || !playerId) return;
-      const player = playerById(playerId);
-      if (!player) return;
-      try {
-        const blob = await window.TournamentApp.compressAvatar(file);
-        player.avatar = window.TournamentApp.mode === 'cloud'
-          ? await window.TournamentApp.uploadImage(blob)
-          : blob;
-        player.updatedAt = Date.now();
-        await savePlayers();
-        renderAll();
-      } catch (error) {
-        notify(window.TournamentUtils.errMsg(error), 'danger');
-      }
-    });
+  let userZoomed = false;
+
+  /* 查看态且用户未手动缩放时贴合视口，让双败图首屏可见（总决赛不再在视口外） */
+  function autoFitCanvas() {
+    if (editMode || userZoomed) return;
+    if (window.CanvasEditor && window.CanvasEditor.fitCanvas) window.CanvasEditor.fitCanvas();
   }
 
-  function bindRosterAvatars() {
-    ensureAvatarFileInput();
-    const grid = document.getElementById('roster-grid');
-    grid.querySelectorAll('[data-avatar-upload]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (!canEdit()) return;
-        pendingAvatarId = btn.dataset.avatarUpload;
-        avatarFileInput.click();
-      });
+  function bindZoomDock() {
+    const editor = window.CanvasEditor;
+    if (!editor) return;
+    bindZoomDockControls({
+      onZoomIn: () => { userZoomed = true; editor.zoomIn(); },
+      onZoomOut: () => { userZoomed = true; editor.zoomOut(); },
+      onReset: () => { userZoomed = true; editor.setZoom(1); },
+      onFit: () => { userZoomed = false; editor.fitCanvas(); }
     });
-    grid.querySelectorAll('[data-avatar-delete]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        if (!canEdit()) return;
-        const player = playerById(btn.dataset.avatarDelete);
-        if (!player) return;
-        player.avatar = null;
-        player.updatedAt = Date.now();
-        await savePlayers();
-        renderAll();
-      });
-    });
+    bindZoomFitOnResize(() => !editMode && !userZoomed, () => editor.fitCanvas());
   }
 
   window.BracketRender = {
@@ -839,13 +792,16 @@
 
   document.addEventListener('ts:ready', () => {
     renderAll();
+    autoFitCanvas();
     syncEditUI();
     hideEditLock();
     bindCanvasLock();
     bindEditToolbar();
+    bindZoomDock();
   });
   document.addEventListener('ts:changed', () => {
     renderAll();
+    autoFitCanvas();
     syncEditUI();
   });
   bindCanvas();
