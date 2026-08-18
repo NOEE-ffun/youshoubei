@@ -361,7 +361,11 @@
     const deleteBtn = document.getElementById('edit-delete-selected-btn');
     if (deleteBtn) {
       const count = window.CanvasEditor.getSelectedCount ? window.CanvasEditor.getSelectedCount() : 0;
-      deleteBtn.hidden = !(tool === 'delete' && count > 0);
+      /* 框选/多选后任何工具下都可删除选中,不再限定批量删除模式 */
+      deleteBtn.hidden = count <= 0;
+      const label = count > 0 ? '删除选中 ' + count + ' 张卡片' : '删除选中卡片';
+      deleteBtn.title = label;
+      deleteBtn.setAttribute('aria-label', label);
     }
   }
 

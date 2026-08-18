@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { escapeHtml, canEdit, save, notify, errMsg, uiConfirm } = window.TournamentUtils;
+  const { escapeHtml, canEdit, save, notify, errMsg, uiConfirm, debounce } = window.TournamentUtils;
 
   const COL_GAP = 320;
   const ROW_GAP = 210;
@@ -19,7 +19,8 @@
   let batchSelected = new Set();
   let dragState = null;
   let connectState = null;
-  let copiedCard = null;
+  let marqueeState = null;
+  let copiedCards = [];
   let cardDialog = null;
   let editingCardId = null;
   let wheelBound = false;
@@ -54,9 +55,17 @@
     return b ? b.querySelector('.canvas-card[data-match="' + id + '"]') : null;
   }
 
+  /* 统一选择模型:batchSelected 是唯一多选集合(全工具生效,对齐 Figma);
+   * selectedCardId 是最近操作锚(卡片弹窗等单卡场景用) */
   function selectedIds() {
-    if (tool === 'delete') return [...batchSelected];
-    return selectedCardId ? [selectedCardId] : [];
+    return [...batchSelected];
+  }
+
+  function setSelection(ids) {
+    batchSelected = new Set(ids || []);
+    selectedCardId = [...batchSelected][0] || null;
+    highlightSelected();
+    refreshToolbarUI();
   }
 
   function refreshToolbarUI() {
@@ -85,11 +94,13 @@
     batchSelected.clear();
     dragState = null;
     connectState = null;
+    marqueeState = null;
     removeTempLine();
+    removeMarqueeRect();
     const b = board();
     if (b) {
       b.classList.remove('editing');
-      b.classList.remove('tool-link', 'tool-delete', 'zoom-mode');
+      b.classList.remove('tool-link', 'tool-delete', 'tool-select', 'zoom-mode');
     }
     const hint = document.getElementById('canvas-hint');
     if (hint) hint.textContent = '查看模式 · Ctrl/⌘+滚轮缩放';
@@ -101,11 +112,12 @@
 
   function setTool(next) {
     tool = next;
-    if (next !== 'delete') batchSelected.clear();
+    /* 切换工具保留选择(Figma 语义);Esc / 空白单击才会清空 */
     const b = board();
     if (b) {
       b.classList.toggle('tool-link', next === 'link');
       b.classList.toggle('tool-delete', next === 'delete');
+      b.classList.toggle('tool-select', next === 'select');
     }
     highlightSelected();
     refreshToolbarUI();
@@ -229,7 +241,6 @@
     b.addEventListener('pointermove', onPointerMove);
     b.addEventListener('pointerup', onPointerUp);
     b.addEventListener('dblclick', onDblClick);
-    b.addEventListener('click', onClick);
     document.addEventListener('keydown', onKeyDown);
   }
 
@@ -246,28 +257,49 @@
       return;
     }
     const cardEl = event.target.closest('.canvas-card');
-    if (!cardEl) return;
+    if (!cardEl) {
+      /* 空白按下:select 工具启动框选(Shift 为加选,保留既有选择);其余工具不响应 */
+      if (tool !== 'select' || event.button !== 0) return;
+      if (event.target.closest('button, input, select, a, .port')) return;
+      event.preventDefault();
+      const base = event.shiftKey ? new Set(batchSelected) : new Set();
+      if (!event.shiftKey && batchSelected.size) setSelection([]);
+      marqueeState = {
+        startX: event.clientX,
+        startY: event.clientY,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        base
+      };
+      ensureMarqueeRect();
+      return;
+    }
     if (tool === 'delete') {
       event.preventDefault();
       toggleBatchSelected(cardEl.dataset.match);
       return;
     }
     if (tool === 'link') {
-      selectedCardId = cardEl.dataset.match;
-      highlightSelected();
+      setSelection([cardEl.dataset.match]);
       return;
     }
     if (tool === 'select' && !event.target.closest('button, input, select, a, .port')) {
-      selectedCardId = cardEl.dataset.match;
-      highlightSelected();
-      const card = findCard(selectedCardId);
-      if (!card) return;
+      const id = cardEl.dataset.match;
+      /* Shift+点卡 = 切换选中,不进入拖拽(Figma 语义) */
+      if (event.shiftKey) {
+        event.preventDefault();
+        toggleBatchSelected(id);
+        return;
+      }
+      /* 点已选中的卡 = 整组拖拽;点未选中卡 = 先单选再拖 */
+      if (!batchSelected.has(id)) setSelection([id]);
       dragState = {
-        cardId: selectedCardId,
+        cards: [...batchSelected].map((cid) => {
+          const c = findCard(cid);
+          return c ? { id: cid, originX: Number(c.x) || 0, originY: Number(c.y) || 0 } : null;
+        }).filter(Boolean),
         startX: event.clientX,
         startY: event.clientY,
-        originX: Number(card.x) || 0,
-        originY: Number(card.y) || 0,
         moved: false
       };
       event.preventDefault();
@@ -279,21 +311,32 @@
       updateTempLine(event.clientX, event.clientY);
       return;
     }
+    if (marqueeState) {
+      marqueeState.lastX = event.clientX;
+      marqueeState.lastY = event.clientY;
+      updateMarqueeRect();
+      return;
+    }
     if (!dragState) return;
-    const card = findCard(dragState.cardId);
-    if (!card) return;
     const dx = event.clientX - dragState.startX;
     const dy = event.clientY - dragState.startY;
-    const nextX = dragState.originX + Math.round(dx / (COL_GAP * scale));
-    const nextY = dragState.originY + Math.round(dy / (ROW_GAP * scale));
-    if (nextX !== card.x || nextY !== card.y) {
-      card.x = nextX;
-      card.y = nextY;
-      dragState.moved = true;
-      const el = cardElement(dragState.cardId);
-      if (el) {
-        el.style.left = (nextX * COL_GAP) + 'px';
-        el.style.top = (nextY * ROW_GAP) + 'px';
+    /* 网格步进(整格吸附):整组统一用同一偏移量,保持相对位置 */
+    const stepX = Math.round(dx / (COL_GAP * scale));
+    const stepY = Math.round(dy / (ROW_GAP * scale));
+    for (const entry of dragState.cards) {
+      const card = findCard(entry.id);
+      if (!card) continue;
+      const nextX = entry.originX + stepX;
+      const nextY = entry.originY + stepY;
+      if (nextX !== card.x || nextY !== card.y) {
+        card.x = nextX;
+        card.y = nextY;
+        dragState.moved = true;
+        const el = cardElement(entry.id);
+        if (el) {
+          el.style.left = (nextX * COL_GAP) + 'px';
+          el.style.top = (nextY * ROW_GAP) + 'px';
+        }
       }
     }
   }
@@ -318,10 +361,21 @@
       connectState = null;
       return;
     }
+    if (marqueeState) {
+      const dragged = Math.abs(marqueeState.lastX - marqueeState.startX) >= 4
+        || Math.abs(marqueeState.lastY - marqueeState.startY) >= 4;
+      /* 空白单击(位移 <4px)且非加选 = 退出选择 */
+      if (!dragged && !marqueeState.base.size) setSelection([]);
+      removeMarqueeRect();
+      marqueeState = null;
+      refreshToolbarUI();
+      return;
+    }
     if (dragState) {
       if (dragState.moved) {
         saveCanvas().then(() => {
           if (window.BracketRender) window.BracketRender.renderCanvas();
+          highlightSelected();
         });
       }
       dragState = null;
@@ -343,12 +397,10 @@
   }
 
   function onClick(event) {
+    /* 选择语义已全部在 onPointerDown 处理;click 期间不改动选择,
+     * 否则整组拖拽松手后的 click 会把多选打回单选 */
     if (!active) return;
-    const cardEl = event.target.closest('.canvas-card');
-    if (!cardEl) return;
-    if (tool === 'delete') return;
-    selectedCardId = cardEl.dataset.match;
-    highlightSelected();
+    void event;
   }
 
   function onKeyDown(event) {
@@ -356,18 +408,29 @@
     if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
     const mod = event.ctrlKey || event.metaKey;
     if (mod && (event.key === 'c' || event.key === 'C')) {
-      const id = selectedIds()[0];
-      if (id) {
-        const card = findCard(id);
-        if (card) {
-          copiedCard = JSON.parse(JSON.stringify(card));
-          notify('已复制卡片');
-        }
-      }
+      copySelection();
+      return;
+    }
+    if (mod && (event.key === 'x' || event.key === 'X')) {
+      /* 剪切免确认:副本已入剪贴板可粘贴找回(CAD/Photoshop 惯例) */
+      const ids = selectedIds();
+      if (copySelection()) removeCardsSilent(ids);
       return;
     }
     if (mod && (event.key === 'v' || event.key === 'V')) {
-      if (copiedCard) pasteCard(copiedCard);
+      if (copiedCards.length) pasteCards(copiedCards);
+      return;
+    }
+    if (mod && (event.key === 'd' || event.key === 'D')) {
+      /* Ctrl+D 原位副本;浏览器把 Ctrl+D 当书签,必须拦截 */
+      event.preventDefault();
+      const sources = selectedIds().map(findCard).filter(Boolean);
+      if (sources.length) pasteCards(sources);
+      return;
+    }
+    if (event.key === 'Escape') {
+      cancelActiveGesture();
+      setSelection([]);
       return;
     }
     if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -376,7 +439,73 @@
         event.preventDefault();
         deleteCards(ids);
       }
+      return;
     }
+    /* 方向键网格微调:±1 格,Shift ±3 格(兼作 WCAG 2.2 拖拽替代) */
+    const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (arrows[event.key] && batchSelected.size) {
+      event.preventDefault();
+      const step = event.shiftKey ? 3 : 1;
+      nudgeSelection(arrows[event.key][0] * step, arrows[event.key][1] * step);
+    }
+  }
+
+  function copySelection() {
+    const sources = selectedIds().map(findCard).filter(Boolean);
+    if (!sources.length) return false;
+    copiedCards = JSON.parse(JSON.stringify(sources));
+    notify(copiedCards.length > 1 ? '已复制 ' + copiedCards.length + ' 张卡片' : '已复制卡片');
+    return true;
+  }
+
+  let nudgeCommit = null;
+
+  function nudgeSelection(dx, dy) {
+    for (const id of batchSelected) {
+      const card = findCard(id);
+      if (!card) continue;
+      card.x = Math.max(0, (Number(card.x) || 0) + dx);
+      card.y = Math.max(0, (Number(card.y) || 0) + dy);
+      const el = cardElement(id);
+      if (el) {
+        el.style.left = (card.x * COL_GAP) + 'px';
+        el.style.top = (card.y * ROW_GAP) + 'px';
+      }
+    }
+    if (!nudgeCommit) {
+      nudgeCommit = debounce(() => {
+        saveCanvas().then(() => {
+          if (window.BracketRender) window.BracketRender.renderCanvas();
+          highlightSelected();
+        });
+      }, 500);
+    }
+    nudgeCommit();
+  }
+
+  /* Esc:取消进行中的框选/拖拽并还原原位,再清空选择 */
+  function cancelActiveGesture() {
+    if (marqueeState) {
+      batchSelected = marqueeState.base;
+      selectedCardId = [...batchSelected][0] || null;
+      marqueeState = null;
+      removeMarqueeRect();
+    }
+    if (dragState) {
+      for (const entry of dragState.cards) {
+        const card = findCard(entry.id);
+        if (!card) continue;
+        card.x = entry.originX;
+        card.y = entry.originY;
+        const el = cardElement(entry.id);
+        if (el) {
+          el.style.left = (card.x * COL_GAP) + 'px';
+          el.style.top = (card.y * ROW_GAP) + 'px';
+        }
+      }
+      dragState = null;
+    }
+    highlightSelected();
   }
 
   /* ---------- 选择 ---------- */
@@ -414,23 +543,21 @@
       exitRanks: {}
     };
     canvas.cards.push(card);
-    selectedCardId = card.id;
     if (tool === 'delete') setTool('select');
+    batchSelected = new Set([card.id]);
+    selectedCardId = card.id;
     saveCanvas().then(() => {
       if (window.BracketRender) window.BracketRender.renderCanvas();
+      highlightSelected();
       openCardDialog(card.id);
     });
   }
 
-  async function deleteCards(ids) {
-    if (!ids || !ids.length) return;
+  /* 连线槽清理 + 删除本体 + 比分/卡组清理;是否确认由调用方决定 */
+  function performRemoval(ids) {
     const record = currentRecord();
     const canvas = record.canvas || { cards: [] };
-    const cards = ids.map((id) => canvas.cards.find((c) => c.id === id)).filter(Boolean);
-    if (!cards.length) return;
-    const names = cards.map((c) => c.label || c.id).join('、');
-    if (!(await uiConfirm('确定删除卡片：' + names + ' 吗？'))) return;
-    const idSet = new Set(cards.map((c) => c.id));
+    const idSet = new Set(ids);
     for (const card of canvas.cards) {
       for (const slot of card.slots || []) {
         if (slot && slot.type === 'flow' && idSet.has(slot.cardId)) {
@@ -448,12 +575,22 @@
         canvas.cards.splice(i, 1);
       }
     }
-    selectedCardId = null;
     batchSelected.clear();
-    saveCanvas().then(() => {
+    selectedCardId = null;
+    return saveCanvas().then(() => {
       if (window.BracketRender) window.BracketRender.renderCanvas();
       refreshToolbarUI();
     });
+  }
+
+  async function deleteCards(ids) {
+    if (!ids || !ids.length) return;
+    const canvas = currentRecord().canvas || { cards: [] };
+    const cards = ids.map((id) => canvas.cards.find((c) => c.id === id)).filter(Boolean);
+    if (!cards.length) return;
+    const names = cards.map((c) => c.label || c.id).join('、');
+    if (!(await uiConfirm('确定删除卡片：' + names + ' 吗？'))) return;
+    return performRemoval(ids);
   }
 
   function deleteCard(id) {
@@ -464,30 +601,39 @@
     return deleteCards(selectedIds());
   }
 
-  function pasteCard(source) {
+  /* 剪切用静默删除:副本已在剪贴板 */
+  function removeCardsSilent(ids) {
+    if (!ids || !ids.length) return;
+    const canvas = currentRecord().canvas || { cards: [] };
+    const valid = ids.filter((id) => canvas.cards.some((c) => c.id === id));
+    if (!valid.length) return;
+    return performRemoval(valid).then(() => {
+      notify('已剪切 ' + valid.length + ' 张卡片');
+    });
+  }
+
+  /* 多卡粘贴:整体平移 (+1,+1) 保持相对位置,集内连线跟随重映射;
+   * 自动选中新集合,不弹设置窗(多卡连续弹窗不合理) */
+  function pasteCards(sources) {
     const record = currentRecord();
     const canvas = record.canvas || (record.canvas = { cards: [] });
-    const clone = JSON.parse(JSON.stringify(source));
-    const idMap = new Map();
-    const newId = (typeof CanvasModel !== 'undefined' && CanvasModel.uid) ? CanvasModel.uid('c') : ('c_' + Date.now());
-    idMap.set(clone.id, newId);
-    clone.id = newId;
-    clone.label = clone.label + ' 副本';
-    clone.x = (Number(clone.x) || 0) + 3;
-    clone.y = (Number(clone.y) || 0) + 2;
-    clone.slots = (clone.slots || []).map((slot) => {
-      if (slot && slot.type === 'flow' && idMap.has(slot.cardId)) {
-        return { ...slot, cardId: idMap.get(slot.cardId) };
-      }
-      return slot ? { ...slot } : { type: 'empty' };
-    });
-    canvas.cards.push(clone);
-    selectedCardId = clone.id;
+    let clones;
+    if (typeof CanvasModel !== 'undefined' && CanvasModel.cloneCardsForPaste) {
+      clones = CanvasModel.cloneCardsForPaste(sources, 1, 1);
+    } else {
+      clones = JSON.parse(JSON.stringify(sources));
+    }
+    if (!clones.length) return;
+    for (const clone of clones) canvas.cards.push(clone);
     if (tool === 'delete') setTool('select');
+    batchSelected = new Set(clones.map((c) => c.id));
+    selectedCardId = clones[0].id;
     saveCanvas().then(() => {
       if (window.BracketRender) window.BracketRender.renderCanvas();
-      openCardDialog(clone.id);
+      highlightSelected();
+      refreshToolbarUI();
     });
+    notify('已粘贴 ' + clones.length + ' 张卡片');
   }
 
   /* ---------- 卡片属性弹窗 ---------- */
@@ -593,6 +739,61 @@
     saveCanvas().then(() => {
       if (window.BracketRender) window.BracketRender.renderCanvas();
     });
+  }
+
+  /* ---------- 框选矩形(挂 body,renderCanvas 重建 board 不会销毁它) ---------- */
+
+  function ensureMarqueeRect() {
+    let rect = document.getElementById('canvas-marquee-rect');
+    if (!rect) {
+      rect = document.createElement('div');
+      rect.id = 'canvas-marquee-rect';
+      rect.className = 'marquee-rect';
+      rect.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(rect);
+    }
+    return rect;
+  }
+
+  function removeMarqueeRect() {
+    const rect = document.getElementById('canvas-marquee-rect');
+    if (rect) rect.remove();
+  }
+
+  /* 屏幕坐标矩形 → board 内部像素(除以 scale),与卡片 offsetLeft/Top 做交叉命中;
+   * 命中集合 = 框选起始时的基础集合(Shift 加选) ∪ 矩形碰到(交叉)的卡片 */
+  function updateMarqueeRect() {
+    const state = marqueeState;
+    const rectEl = ensureMarqueeRect();
+    const b = board();
+    if (!state || !rectEl || !b) return;
+    const left = Math.min(state.startX, state.lastX);
+    const top = Math.min(state.startY, state.lastY);
+    const width = Math.abs(state.lastX - state.startX);
+    const height = Math.abs(state.lastY - state.startY);
+    rectEl.style.left = left + 'px';
+    rectEl.style.top = top + 'px';
+    rectEl.style.width = width + 'px';
+    rectEl.style.height = height + 'px';
+
+    const boardRect = b.getBoundingClientRect();
+    const localLeft = (left - boardRect.left) / scale;
+    const localTop = (top - boardRect.top) / scale;
+    const localRight = localLeft + width / scale;
+    const localBottom = localTop + height / scale;
+    const hits = new Set(state.base);
+    b.querySelectorAll('.canvas-card').forEach((el) => {
+      const x1 = el.offsetLeft;
+      const y1 = el.offsetTop;
+      const x2 = x1 + el.offsetWidth;
+      const y2 = y1 + el.offsetHeight;
+      if (x2 >= localLeft && x1 <= localRight && y2 >= localTop && y1 <= localBottom) {
+        hits.add(el.dataset.match);
+      }
+    });
+    batchSelected = hits;
+    selectedCardId = [...hits][0] || null;
+    highlightSelected();
   }
 
   /* ---------- 临时连线 ---------- */

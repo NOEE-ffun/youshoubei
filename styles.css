@@ -1724,6 +1724,20 @@ dialog::backdrop {
   z-index: 9999;
 }
 
+/* 框选矩形:虚线描边 + 淡填充,不挡指针 */
+.marquee-rect {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9998;
+  border: 1px dashed var(--accent);
+  background: oklch(from var(--accent) l c h / 0.08);
+}
+
+/* select 工具下画布空白为十字光标(提示可框选);卡片自身保持 move 光标 */
+.canvas-board.editing.tool-select {
+  cursor: crosshair;
+}
+
 .match-phase {
   font-size: 0.72rem;
   color: var(--text-muted);
