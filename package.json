@@ -6,10 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/bracket.test.js && node test/canvas.test.js && node test/migration-smoke.test.js && node test/oss-retry.test.js && node test/clipboard-remap.test.js"
+    "test": "node test/bracket.test.js && node test/canvas.test.js && node test/migration-smoke.test.js && node test/oss-retry.test.js && node test/clipboard-remap.test.js && node test/server-smoke.test.js"
   },
   "dependencies": {
-    "@vercel/blob": "^2.6.1",
     "ali-oss": "^6.23.0"
   }
 }

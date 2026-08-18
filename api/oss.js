@@ -4,8 +4,9 @@ const OSS = require('ali-oss');
 
 const DATA_PATH = 'data.json';
 
-/* 函数部署在境外区域、OSS 在杭州:跨境连接偶发被重置/挂起。
- * 显式短超时让失败快速暴露,网络类错误用新建客户端重试(绕开卡死的 keepalive socket)。 */
+/* 历史上 Vercel 函数在境外、OSS 在杭州,跨境连接偶发被重置/挂起。
+ * 迁移到 ECS 后要求与 OSS 同地域;这里保留显式短超时 + 新建客户端重试,
+ * 作为同地域内网/公网抖动的兜底。 */
 const REQUEST_TIMEOUT_MS = 4000;
 const RETRY_DELAYS = [250, 600];
 
