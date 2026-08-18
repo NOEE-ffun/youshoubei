@@ -1,0 +1,6 @@
+# Caddy 自动申请并续期 HTTPS 证书(切换 DNS 到服务器后再启动 Caddy)
+
+youshoubei.cn, www.youshoubei.cn {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:3000
+}

@@ -22,7 +22,7 @@ npm start
 
 ## 数据怎么存
 
-数据默认存在浏览器本地（IndexedDB），刷新和重启不会丢。部署到 Vercel 后，站点通过 `api/` 下的接口把比赛数据和图片存到 Vercel Blob，任何设备打开网址看到的都是同一份内容。访问者只能看，主办方在设置里输入管理口令后才能编辑。图片上传以文件魔数校验类型（PNG/JPEG/WebP/GIF），不信任客户端声明。
+数据默认存在浏览器本地（IndexedDB），刷新和重启不会丢。部署后，`server.js` 同时提供静态站点和 `api/` 接口，比赛数据写入阿里云 OSS 的 `data.json`、图片写入 OSS `images/`，任何设备打开网址看到的都是同一份内容。访问者只能看，主办方在设置里输入管理口令后才能编辑。图片上传以文件魔数校验类型（PNG/JPEG/WebP/GIF），不信任客户端声明。阿里云 ECS 部署步骤见 [`deploy/README.md`](deploy/README.md)。
 
 ## 代码结构
 
@@ -31,7 +31,8 @@ npm start
 - `bracket.js`：赛程页渲染与交互
 - `deck-modal.js`：卡组弹窗
 - `home.js`：主页跑马灯
-- `api/`：Vercel Serverless（健康检查、读写 data.json、图片上传）
+- `server.js`：静态站点 + `/api/*` 一体化服务（原 Vercel Serverless 适配到 Node 进程）
+- `api/`：健康检查、读写 OSS data.json、图片上传（Vercel/自有 Node 双兼容）
 
 ## 测试
 

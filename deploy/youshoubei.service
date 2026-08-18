@@ -1,0 +1,27 @@
+[Unit]
+Description=YouShouBei tournament website (static + /api)
+After=network.target
+
+[Service]
+Type=simple
+# 生产环境建议使用专用低权限用户,例如:
+# useradd --system --home /srv/youshoubei --shell /usr/sbin/nologin youshoubei
+User=youshoubei
+Group=youshoubei
+WorkingDirectory=/srv/youshoubei
+# 环境变量建议放 /etc/youshoubei.env(root 可读),不要放仓库目录
+EnvironmentFile=/etc/youshoubei.env
+Environment=NODE_ENV=production
+# 阿里云 apt 安装的 node 通常在这里;nvm/二进制安装请改成绝对路径
+ExecStart=/usr/bin/node server.js 3000
+Restart=always
+RestartSec=2
+
+# 基本加固:应用只读,进程私有 /tmp
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
