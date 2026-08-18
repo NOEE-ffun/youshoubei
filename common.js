@@ -1509,14 +1509,18 @@
       ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
         '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛">' + options + '</select>'
       : '';
-    /* 赛程页 main 无 h1,顶栏标题承担 h1;其余页面 main 自带 h1,顶栏用 span 避免双 h1 */
+    /* 赛程页 main 无 h1,顶栏标题承担 h1;其余页面 main 自带 h1,顶栏用 span 避免双 h1。
+     * 主页顶栏不显示标题;状态徽章只在赛程页出现 */
     const titleTag = isSchedule ? 'h1' : 'span';
+    const titleGroup = app.activePage === 'home'
+      ? ''
+      : '  <div class="header-title-group">' +
+        '    <' + titleTag + ' class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</' + titleTag + '>' +
+        (isSchedule ? statusBadgeMarkup(active.status) : '') +
+        '  </div>';
     placeholder.innerHTML =
       '<div class="header-inner">' +
-      '  <div class="header-title-group">' +
-      '    <' + titleTag + ' class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</' + titleTag + '>' +
-      statusBadgeMarkup(active.status) +
-      '  </div>' +
+      titleGroup +
       '  <div class="header-actions">' +
       tournamentSwitch +
       scheduleActions +
