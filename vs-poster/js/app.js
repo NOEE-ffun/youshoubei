@@ -413,12 +413,10 @@
 
     $("btn-random").addEventListener("click", function () {
       var pair = RANDOM_PAIRS[Math.floor(Math.random() * RANDOM_PAIRS.length)];
-      state.data.left = { name: pair[0], tag: pair[2], img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: { type: "text", text: "", image: null } };
-      state.data.right = { name: pair[1], tag: pair[3], img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: { type: "text", text: "", image: null } };
+      state.data.left = { name: pair[0], tag: pair[2], img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: "" };
+      state.data.right = { name: pair[1], tag: pair[3], img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: "" };
       slotChanged.left.img = true;
       slotChanged.right.img = true;
-      slotChanged.left.titleImg = true;
-      slotChanged.right.titleImg = true;
       els.leftName.value = pair[0];
       els.leftTag.value = pair[2];
       els.rightName.value = pair[1];
@@ -455,9 +453,7 @@
   }
 
   function titleDisplayText(p) {
-    var t = (p.title && typeof p.title === "object" && !Array.isArray(p.title)) ? p.title : null;
-    if (t && t.type === "image" && t.image != null) return "[图片]";
-    return (t && t.text) || "—";
+    return typeof p.title === "string" ? p.title : ((p.title && p.title.text) || "—");
   }
 
   function rosterAvatarMarkup(p) {
@@ -504,13 +500,9 @@
     var avatarJob = player.avatar
       ? Promise.resolve(app.blobUrl(player.avatar)).then(function (u) { return VSUpload.handleURL(u); }).catch(function () { return null; })
       : Promise.resolve(null);
-    var titleJob = (player.title && player.title.type === "image" && player.title.image != null)
-      ? Promise.resolve(app.blobUrl(player.title.image)).then(function (u) { return VSUpload.handleURL(u); })
-          .then(function (dataURL) { return { type: "image", text: "", image: dataURL }; })
-          .catch(function () { return { type: "text", text: (player.title && player.title.text) || "", image: null }; })
-      : Promise.resolve({ type: "text", text: (player.title && player.title.text) || "", image: null });
+    var title = typeof player.title === "string" ? player.title : ((player.title && player.title.text) || "");
 
-    Promise.all([avatarJob, titleJob]).then(function (results) {
+    avatarJob.then(function (img) {
       d.name = player.name;
       d.color = player.color || null;
       d.rosterId = player.id;
@@ -518,10 +510,9 @@
       d.tagImg = tagImg;
       d.tagImgRatio = tagImgRatio;
       d.tagImgSize = tagImgSize;
-      d.img = results[0];
-      d.title = results[1];
+      d.img = img;
+      d.title = title;
       slotChanged[side].img = false;
-      slotChanged[side].titleImg = false;
 
       sideEl(side, "name").value = player.name;
       sideEl(side, "tag").value = tag || "";
@@ -552,7 +543,7 @@
         id: (window.CanvasModel && window.CanvasModel.uid) ? window.CanvasModel.uid("p") : app.uid("p"),
         name: name,
         avatar: null,
-        title: { type: "text", text: "", image: null },
+        title: "",
         color: null,
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -560,33 +551,23 @@
       players.unshift(player);
       d.rosterId = player.id;
       slotChanged[side].img = true;
-      slotChanged[side].titleImg = true;
     }
 
-    var titleType = (d.title && d.title.type === "image" && d.title.image != null) ? "image" : "text";
-    var titleText = (d.title && d.title.text) || "";
+    var titleText = typeof d.title === "string" ? d.title : ((d.title && d.title.text) || "");
     var needAvatar = slotChanged[side].img || isNew;
-    var needTitleImg = titleType === "image" && (slotChanged[side].titleImg || isNew);
 
     var avatarJob = needAvatar ? imageForStorage(d.img, app) : Promise.resolve(null);
-    var titleImgJob = needTitleImg ? imageForStorage(d.title.image, app) : Promise.resolve(null);
 
-    Promise.all([avatarJob, titleImgJob]).then(function (results) {
+    avatarJob.then(function (avatar) {
       player.name = name;
       player.color = /^#[0-9a-fA-F]{6}$/.test(d.color || "") ? d.color : null;
+      player.title = titleText;
       player.updatedAt = Date.now();
-      if (needAvatar) player.avatar = results[0];
-      if (titleType === "image") {
-        var img = needTitleImg ? results[1] : ((player.title && player.title.image) || null);
-        player.title = { type: "image", text: "", image: img };
-      } else {
-        player.title = { type: "text", text: titleText, image: null };
-      }
+      if (needAvatar) player.avatar = avatar;
 
       app.storagePutPlayers(players).then(function () {
         app.players = players;
         slotChanged[side].img = false;
-        slotChanged[side].titleImg = false;
         renderRoster();
         saveState();
         render();
