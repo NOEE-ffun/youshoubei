@@ -32,7 +32,7 @@ npm start
 - `deck-modal.js`：卡组弹窗
 - `home.js`：主页跑马灯
 - `server.js`：静态站点 + `/api/*` 一体化服务（原 Vercel Serverless 适配到 Node 进程）
-- `api/`：健康检查、读写 OSS data.json、图片上传（Vercel/自有 Node 双兼容）
+- `api/`：健康检查、读写 OSS data.json、图片上传、OBS 舞台一次性生成（`/api/poster-stage`，管理口令 POST 创建 / 公开 GET 读取，7 天过期）
 
 ## 测试
 

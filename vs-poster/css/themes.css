@@ -1,0 +1,51 @@
+/**
+ * 主题换肤:页面 chrome 的主题色变量
+ * 色值与 js/themes.js 主题对象同源
+ */
+:root {
+  --color-accent: #ff2d2d;
+  --color-accent-2: #1e6bff;
+  --color-accent-soft: rgba(255, 45, 45, 0.16);
+}
+
+html[data-poster-theme="red-blue"] {
+  --color-accent: #ff2d2d;
+  --color-accent-2: #1e6bff;
+  --color-accent-soft: rgba(255, 45, 45, 0.16);
+}
+
+html[data-poster-theme="black-gold"] {
+  --color-accent: #d4af37;
+  --color-accent-2: #c8ccd4;
+  --color-accent-soft: rgba(212, 175, 55, 0.14);
+}
+
+html[data-poster-theme="neon"] {
+  --color-accent: #ff00e5;
+  --color-accent-2: #00e5ff;
+  --color-accent-soft: rgba(255, 0, 229, 0.16);
+}
+
+html[data-poster-theme="ice-fire"] {
+  --color-accent: #ff5a1f;
+  --color-accent-2: #00d0ff;
+  --color-accent-soft: rgba(255, 90, 31, 0.16);
+}
+
+html[data-poster-theme="purple-gold"] {
+  --color-accent: #8a2be2;
+  --color-accent-2: #ffb800;
+  --color-accent-soft: rgba(138, 43, 226, 0.18);
+}
+
+html[data-poster-theme="toxic"] {
+  --color-accent: #00e676;
+  --color-accent-2: #ff1744;
+  --color-accent-soft: rgba(0, 230, 118, 0.15);
+}
+
+html[data-poster-theme="aurora"] {
+  --color-accent: #00ffc8;
+  --color-accent-2: #7c4dff;
+  --color-accent-soft: rgba(0, 255, 200, 0.15);
+}

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="view-transition" content="same-origin">
+  <meta name="description" content="右手杯对阵海报生成器：填写选手与主题，一键导出 PNG 或推送到 OBS。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>海报生成器 - 右手杯</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
+  <link rel="prefetch" href="index.html">
+  <link rel="prefetch" href="schedule.html">
+  <link rel="prefetch" href="players.html">
+  <script src="theme-init.js"></script>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="vs-poster/css/tokens.css">
+  <link rel="stylesheet" href="vs-poster/css/themes.css">
+  <link rel="stylesheet" href="vs-poster/css/style.css">
+  <link rel="stylesheet" href="vs-poster/css/poster.css">
+</head>
+<body data-page="poster">
+  <a class="skip-link" href="#poster-app">跳到主要内容</a>
+  <div id="bg-layer" aria-hidden="true"></div>
+  <header id="app-header"></header>
+  <aside id="app-sidebar" class="app-sidebar" aria-label="主导航">
+    <nav class="side-nav" aria-label="主导航">
+      <a class="side-link" href="index.html" data-page="home" title="主页" aria-label="主页"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/home.svg" alt="主页" aria-hidden="true"></span></a>
+      <a class="side-link" href="schedule.html" data-page="match" title="比赛" aria-label="比赛"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/emoji_events.svg" alt="比赛" aria-hidden="true"></span></a>
+      <a class="side-link" href="players.html" data-page="players" title="选手库" aria-label="选手库"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/groups.svg" alt="选手库" aria-hidden="true"></span></a>
+      <a class="side-link is-active" href="poster.html" data-page="poster" title="海报" aria-label="海报"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/vs_poster.svg" alt="海报" aria-hidden="true"></span></a>
+    </nav>
+  </aside>
+
+  <div class="layout-body">
+    <main id="poster-app" tabindex="-1">
+      <header class="topbar">
+        <div class="topbar__brand">
+          <svg class="topbar__logo" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+            <path d="M13 2 4.5 13.5H11L9.5 22 19 9.5h-6.5L13 2Z" fill="currentColor"/>
+          </svg>
+          <h1 class="topbar__title">海报生成器</h1>
+        </div>
+      </header>
+
+      <div class="layout">
+        <aside class="panel" aria-label="海报编辑面板">
+          <fieldset class="group">
+            <legend class="group__legend">MATCH · 比赛信息</legend>
+            <div class="field">
+              <label class="field__label" for="match-name">比赛名称 *</label>
+              <input class="field__control" id="match-name" type="text" maxlength="40"
+                     placeholder="如:2026 电竞巅峰对决" autocomplete="off">
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field__label" for="stage">赛制</label>
+                <select class="field__control" id="stage">
+                  <option value="四分之一决赛">四分之一决赛</option>
+                  <option value="胜者组半决赛">胜者组半决赛</option>
+                  <option value="胜者组决赛">胜者组决赛</option>
+                  <option value="败者组第一轮">败者组第一轮</option>
+                  <option value="败者组第二轮">败者组第二轮</option>
+                  <option value="败者组半决赛">败者组半决赛</option>
+                  <option value="败者组决赛">败者组决赛</option>
+                  <option value="总决赛" selected>总决赛</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="field__label" for="bo">局数</label>
+                <select class="field__control" id="bo">
+                  <option value="BO1">BO1</option>
+                  <option value="BO3" selected>BO3</option>
+                  <option value="BO5">BO5</option>
+                  <option value="BO7">BO7</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field__label" for="match-date">日期</label>
+                <input class="field__control" id="match-date" type="date">
+              </div>
+              <div class="field">
+                <label class="field__label" for="venue">场馆</label>
+                <input class="field__control" id="venue" type="text" maxlength="30" placeholder="如:上海体育馆" autocomplete="off">
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="group" id="player-left">
+            <legend class="group__legend group__legend--left">PLAYER · 左侧选手</legend>
+            <div class="field">
+              <label class="field__label" for="left-name">选手名字 *</label>
+              <input class="field__control" id="left-name" type="text" maxlength="24" placeholder="如:烈焰" autocomplete="off">
+            </div>
+            <div class="field">
+              <label class="field__label" for="left-title">称号</label>
+              <div class="tag-row">
+                <input class="field__control" id="left-title" type="text" maxlength="16" placeholder="称号" autocomplete="off">
+                <button type="button" class="btn btn--ghost btn--sm" id="left-title-img" title="上传称号图片（优先于文字）">🖼</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="left-title-img-remove" title="移除称号图片，恢复文字" hidden>✕</button>
+              </div>
+              <span class="title-badge" id="left-title-badge" hidden>[图片]</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="left-tag">ID / 队名 或 队标图(可选)</label>
+              <div class="tag-row">
+                <input class="field__control" id="left-tag" type="text" maxlength="16" placeholder="如:DK.FIRE" autocomplete="off">
+                <button type="button" class="btn btn--ghost btn--sm" id="left-tag-img" title="上传队标图片,独立显示于 ID 位置(优先于文字)">🖼</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="left-tag-img-remove" title="移除队标图片,恢复文字显示" hidden>✕</button>
+              </div>
+            </div>
+            <div class="field" id="left-tag-size-field" hidden>
+              <label class="field__label" for="left-tag-size">队标大小</label>
+              <div class="tag-size-row">
+                <input type="range" id="left-tag-size" class="field__control--range" min="32" max="160" step="4" value="56" aria-label="左侧队标大小">
+                <span class="tag-size-val" id="left-tag-size-val">56</span>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field__label" for="left-color">颜色主题(可选,选后覆盖全局主题左侧色)</label>
+              <div class="color-row">
+                <span class="color-dot" id="left-color-dot" aria-hidden="true"></span>
+                <input class="field__control field__control--color" id="left-color" type="color" value="#ff2d2d" aria-label="左侧选手颜色">
+                <button type="button" class="btn btn--ghost btn--sm" id="left-color-clear">跟随主题</button>
+              </div>
+            </div>
+            <div class="avatar" data-side="left">
+              <button type="button" class="avatar__drop" id="left-drop" aria-label="上传左侧选手头像">
+                <img class="avatar__img" id="left-preview" alt="" hidden>
+                <span class="avatar__hint" id="left-hint">
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>
+                  </svg>
+                  点击 / 拖拽图片<br>或粘贴图片 URL
+                </span>
+              </button>
+              <span class="avatar__remove" id="left-remove" role="button" tabindex="0" aria-label="移除头像" hidden>✕</span>
+              <div class="field field--url">
+                <label class="field__label visually-hidden" for="left-url">头像图片 URL</label>
+                <input class="field__control" id="left-url" type="url" placeholder="https://… 图片链接" autocomplete="off">
+                <button type="button" class="btn btn--ghost" data-url-btn="left">载入</button>
+              </div>
+              <button type="button" class="btn btn--ghost btn--block" id="left-save-roster">＋ 存为选手</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="group" id="player-right">
+            <legend class="group__legend group__legend--right">PLAYER · 右侧选手</legend>
+            <div class="field">
+              <label class="field__label" for="right-name">选手名字 *</label>
+              <input class="field__control" id="right-name" type="text" maxlength="24" placeholder="如:冰霜" autocomplete="off">
+            </div>
+            <div class="field">
+              <label class="field__label" for="right-title">称号</label>
+              <div class="tag-row">
+                <input class="field__control" id="right-title" type="text" maxlength="16" placeholder="称号" autocomplete="off">
+                <button type="button" class="btn btn--ghost btn--sm" id="right-title-img" title="上传称号图片（优先于文字）">🖼</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="right-title-img-remove" title="移除称号图片，恢复文字" hidden>✕</button>
+              </div>
+              <span class="title-badge" id="right-title-badge" hidden>[图片]</span>
+            </div>
+            <div class="field">
+              <label class="field__label" for="right-tag">ID / 队名 或 队标图(可选)</label>
+              <div class="tag-row">
+                <input class="field__control" id="right-tag" type="text" maxlength="16" placeholder="如:ICE.BLIZZ" autocomplete="off">
+                <button type="button" class="btn btn--ghost btn--sm" id="right-tag-img" title="上传队标图片,独立显示于 ID 位置(优先于文字)">🖼</button>
+                <button type="button" class="btn btn--ghost btn--sm" id="right-tag-img-remove" title="移除队标图片,恢复文字显示" hidden>✕</button>
+              </div>
+            </div>
+            <div class="field" id="right-tag-size-field" hidden>
+              <label class="field__label" for="right-tag-size">队标大小</label>
+              <div class="tag-size-row">
+                <input type="range" id="right-tag-size" class="field__control--range" min="32" max="160" step="4" value="56" aria-label="右侧队标大小">
+                <span class="tag-size-val" id="right-tag-size-val">56</span>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field__label" for="right-color">颜色主题(可选,选后覆盖全局主题右侧色)</label>
+              <div class="color-row">
+                <span class="color-dot" id="right-color-dot" aria-hidden="true"></span>
+                <input class="field__control field__control--color" id="right-color" type="color" value="#1e6bff" aria-label="右侧选手颜色">
+                <button type="button" class="btn btn--ghost btn--sm" id="right-color-clear">跟随主题</button>
+              </div>
+            </div>
+            <div class="avatar" data-side="right">
+              <button type="button" class="avatar__drop" id="right-drop" aria-label="上传右侧选手头像">
+                <img class="avatar__img" id="right-preview" alt="" hidden>
+                <span class="avatar__hint" id="right-hint">
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 20h16"/>
+                  </svg>
+                  点击 / 拖拽图片<br>或粘贴图片 URL
+                </span>
+              </button>
+              <span class="avatar__remove" id="right-remove" role="button" tabindex="0" aria-label="移除头像" hidden>✕</span>
+              <div class="field field--url">
+                <label class="field__label visually-hidden" for="right-url">头像图片 URL</label>
+                <input class="field__control" id="right-url" type="url" placeholder="https://… 图片链接" autocomplete="off">
+                <button type="button" class="btn btn--ghost" data-url-btn="right">载入</button>
+              </div>
+              <button type="button" class="btn btn--ghost btn--block" id="right-save-roster">＋ 存为选手</button>
+            </div>
+          </fieldset>
+
+          <fieldset class="group">
+            <legend class="group__legend">ROSTER · 选手库</legend>
+            <p class="roster__hint">从主站选手库一键应用到左右两侧</p>
+            <ul id="roster-list" class="roster__list"></ul>
+            <p id="roster-empty" class="roster__empty">主站选手库暂无选手（管理员可在选手库添加）</p>
+          </fieldset>
+
+          <div class="panel__tools">
+            <button type="button" id="btn-random" class="btn btn--ghost">🎲 随机示例</button>
+            <button type="button" id="btn-reset" class="btn btn--ghost btn--danger">重置</button>
+          </div>
+        </aside>
+
+        <main class="stage">
+          <figure id="poster-stage" class="stage__frame">
+            <div id="poster-slot" class="stage__slot"></div>
+            <figcaption class="visually-hidden">对阵海报实时预览,可拖拽图片到头像槽</figcaption>
+            <div id="stage-hint" class="stage__hint" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M3 12h18"/><path d="M12 3v18"/>
+              </svg>
+              将图片拖到这里 → 自动放入最近的头像槽
+            </div>
+          </figure>
+          <p class="stage__note">预览为实时渲染 · 导出使用同一份矢量数据,所见即所得 · 也可直接截图(Cmd+Shift+4)</p>
+        </main>
+      </div>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+  </div>
+
+  <script src="canvas-model.js" defer></script>
+  <script src="common.js" defer></script>
+  <script src="vs-poster/js/themes.js" defer></script>
+  <script src="vs-poster/js/poster.js" defer></script>
+  <script src="vs-poster/js/upload.js" defer></script>
+  <script src="vs-poster/js/export.js" defer></script>
+  <script src="vs-poster/js/state.js" defer></script>
+  <script src="vs-poster/js/app.js" defer></script>
+</body>
+</html>

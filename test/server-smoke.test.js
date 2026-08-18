@@ -64,7 +64,14 @@ async function main() {
     const missing = await request(server, '/not-exists.html');
     assert.strictEqual(missing.status, 404);
 
-    console.log('server-smoke 全部 6 组测试通过 ✓');
+    /* 7. 舞台接口已注册：缺 id 参数走校验返回 400（不依赖 OSS），源码不可当静态文件下发 */
+    const stageNoId = await request(server, '/api/poster-stage');
+    assert.strictEqual(stageNoId.status, 400, '/api/poster-stage 应已注册(缺 id 应 400)');
+    assert.strictEqual(JSON.parse(stageNoId.body).error, 'id 必须是 32 位十六进制字符串');
+    const stageSource = await request(server, '/api/poster-stage.js');
+    assert.strictEqual(stageSource.status, 404, 'api/poster-stage.js 源码不可当静态文件下发');
+
+    console.log('server-smoke 全部 7 组测试通过 ✓');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

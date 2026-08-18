@@ -1,6 +1,6 @@
 'use strict';
 
-const crypto = require('node:crypto');
+const { adminGate } = require('./auth');
 const { DATA_PATH, readJson, writeJson } = require('./oss');
 
 /* data.json 只含文本数据（图片存 OSS 为 URL），1MB 上限绰绰有余，防内存被打爆 */
@@ -8,16 +8,6 @@ const MAX_BODY = 1024 * 1024;
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
-}
-
-function isAuthorized(req) {
-  const expected = process.env.ADMIN_TOKEN;
-  if (!expected) return null;
-  const header = req.headers.authorization || '';
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 async function readWorkspace() {
@@ -37,15 +27,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PUT') {
-    const authed = isAuthorized(req);
-    if (authed === null) {
-      sendJson(res, 403, { error: '管理功能未配置（ADMIN_TOKEN）' });
-      return;
-    }
-    if (!authed) {
-      sendJson(res, 401, { error: '管理口令错误' });
-      return;
-    }
+    if (!adminGate(req, res)) return;
 
     /* 逐块收集 Buffer 后一次性解码：中文等多字节字符跨 chunk 时，
      * 逐块 utf8 解码会产生 U+FFFD 替换符损坏数据 */
