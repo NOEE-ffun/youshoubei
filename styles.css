@@ -156,12 +156,29 @@ html {
   filter: none;
 }
 
-/* 背景光环:浅色光晕换暗色微光 */
+/* 暗色下单色 SVG 图标反白:img 引用的图标无法继承 color,只能滤镜反转 */
+[data-theme='dark'] .icon {
+  filter: invert(1);
+}
+
+/* 顶栏按钮图标:浅色规则里有 filter:none 豁免(ID 选择器),暗色需显式反转压过它 */
+[data-theme='dark'] #app-header .btn .icon {
+  filter: invert(1);
+}
+
+/* 亮色实心面(顶栏编辑按钮激活态)上的图标保持深色,与深色文字一致 */
+[data-theme='dark'] #app-header .btn.btn-primary .icon {
+  filter: none;
+}
+
+/* 背景光环:浅色光晕换暗色微光。
+ * 只覆写 image/color——用 background 简写会重置 size/position/repeat,
+ * 赛事背景图(内联 background-image)会因此从 cover 变成平铺重影 */
 [data-theme='dark'] #bg-layer {
-  background:
+  background-image:
     radial-gradient(circle at 15% 15%, oklch(28% 0.05 262 / 0.55), transparent 42%),
-    radial-gradient(circle at 85% 85%, oklch(26% 0.04 210 / 0.5), transparent 46%),
-    var(--bg);
+    radial-gradient(circle at 85% 85%, oklch(26% 0.04 210 / 0.5), transparent 46%);
+  background-color: var(--bg);
 }
 
 /* 冠军横幅:浅蓝玻璃换暗玻璃(描边已是 accent 相对色,自动适配) */
