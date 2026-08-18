@@ -134,7 +134,7 @@
     return Array.from({ length: 8 }, (_, i) => ({
       id: uid('p'),
       name: '选手 ' + (i + 1),
-      title: { type: 'text', text: '', image: null },
+      title: '',
       color: null,
       avatar: null,
       createdAt: Date.now(),
@@ -142,20 +142,17 @@
     }));
   }
 
-  /* 选手对象归一化：title 统一为 {type:'text'|'image',text,image}、color 校验为 #rrggbb 或 null。
+  /* 选手对象归一化：title(赛前垃圾话)统一为纯文本字符串、color 校验为 #rrggbb 或 null。
+   * 兼容上一版 {type,text,image} 对象结构,取其中 text 并丢弃 image。
    * 非法选手对象返回 null；字段可修复时返回浅拷贝的新对象（原对象不动）。 */
   function normalizePlayer(p) {
     if (!p || typeof p !== 'object' || Array.isArray(p)) return null;
-    const src = (p.title && typeof p.title === 'object' && !Array.isArray(p.title)) ? p.title : {};
-    const type = src.type === 'image' ? 'image' : 'text';
-    const text = typeof src.text === 'string' ? src.text : '';
-    const rawImage = src.image;
-    const image = (rawImage == null || typeof rawImage === 'string' || typeof rawImage === 'object')
-      ? (rawImage == null ? null : rawImage)
-      : null;
+    let title = '';
+    if (typeof p.title === 'string') title = p.title;
+    else if (p.title && typeof p.title === 'object' && typeof p.title.text === 'string') title = p.title.text;
     const color = /^#[0-9a-fA-F]{6}$/.test(p.color || '') ? p.color : null;
     const out = Object.assign({}, p);
-    out.title = { type, text, image };
+    out.title = title;
     out.color = color;
     return out;
   }
@@ -505,9 +502,6 @@
       for (const player of playerMap.values()) {
         if (player.avatar && typeof player.avatar !== 'string') {
           player.avatar = await uploadCloudImage(player.avatar);
-        }
-        if (player.title && player.title.image && typeof player.title.image !== 'string') {
-          player.title.image = await uploadCloudImage(player.title.image);
         }
       }
       for (const matchId of Object.keys(copy.matchDecks || {})) {
@@ -1335,7 +1329,7 @@
   /* ---------- 背景与页头 ---------- */
 
   /* 头像 HTML：有图显示图片（URL 经白名单校验），无图显示首字符占位。
-   * 颜色优先取选手自定义色(player.color,对战海报共享),未设置时按选手 id 确定性取。 */
+   * 占位色按选手 id 确定性取；选手颜色仅供海报板块使用,不在选手库展示。 */
   function avatarMarkup(player, sizeClass) {
     const cls = 'avatar ' + sizeClass;
     if (player && player.avatar) {
@@ -1344,11 +1338,9 @@
         ' alt="' + escapeHtml(player.name || '') + ' 的头像">';
     }
     const initial = String((player && player.name) || '?').trim().charAt(0) || '?';
-    const color = (player && /^#[0-9a-fA-F]{6}$/.test(player.color || ''))
-      ? player.color
-      : ((typeof CanvasModel !== 'undefined' && CanvasModel.avatarColor)
-        ? CanvasModel.avatarColor(player ? player.id : '')
-        : '#3563e9');
+    const color = (typeof CanvasModel !== 'undefined' && CanvasModel.avatarColor)
+      ? CanvasModel.avatarColor(player ? player.id : '')
+      : '#3563e9';
     return '<span class="' + cls + ' avatar-fallback" style="background:' + color + '">' +
       escapeHtml(initial) + '</span>';
   }
@@ -1714,10 +1706,7 @@
     };
     if (!record) return urls;
     const app = window.TournamentApp;
-    for (const player of (app && app.players) || []) {
-      push(player.avatar);
-      if (player.title && player.title.image) push(player.title.image);
-    }
+    for (const player of (app && app.players) || []) push(player.avatar);
     for (const decks of Object.values(record.matchDecks || {})) {
       for (const deckList of Object.values(decks || {})) {
         for (const deck of deckList || []) {

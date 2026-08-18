@@ -398,9 +398,11 @@
         player = {
           id: oldPlayer.id || uid('p'),
           name: oldPlayer.name || '选手',
-          title: (oldPlayer.title && typeof oldPlayer.title === 'object' && !Array.isArray(oldPlayer.title))
+          title: typeof oldPlayer.title === 'string'
             ? oldPlayer.title
-            : { type: 'text', text: '', image: null },
+            : (oldPlayer.title && typeof oldPlayer.title === 'object' && typeof oldPlayer.title.text === 'string'
+              ? oldPlayer.title.text
+              : ''),
           color: oldPlayer.color || null,
           avatar: oldPlayer.avatar || null,
           createdAt: oldPlayer.createdAt || Date.now(),
