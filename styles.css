@@ -258,6 +258,8 @@ body {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
+  /* 主页顶栏无标题时,按钮组仍靠右 */
+  margin-inline-start: auto;
 }
 
 .header-select {
@@ -2312,6 +2314,33 @@ body[data-page="players"] #bg-layer {
 
 .players-toolbar {
   margin-block-end: 1rem;
+}
+
+/* 新增选手输入框:与「新建比赛」输入框同款胶囊样式 */
+.players-toolbar input[type="text"] {
+  flex: 1 1 auto;
+  min-inline-size: 10rem;
+  max-inline-size: 20rem;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  min-block-size: 2rem;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.players-toolbar input[type="text"]::placeholder {
+  color: var(--text-muted);
+}
+
+.players-toolbar input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 .lock-banner {
