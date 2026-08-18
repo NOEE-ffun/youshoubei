@@ -9,6 +9,7 @@
   const LS_ACTIVE = 'ts:activeTournamentId';
   const LS_SIDEBAR = 'ts:rulesSidebarHidden';
   const LS_ADMIN_TOKEN = 'ts:adminToken';
+  const LS_THEME = 'ts:theme';
 
   const DEFAULT_RULES = [
     '8 人双败淘汰赛（BO3/BO5 混合赛制）',
@@ -1450,6 +1451,53 @@
     }
   }
 
+  /* ---------- 主题(浅/深)----------
+   * theme-init.js 已在首帧前写入初始 data-theme;这里负责读取当前生效主题、
+   * 切换与持久化,以及未显式选择时跟随系统偏好变化。 */
+
+  function currentTheme() {
+    const attr = document.documentElement.getAttribute('data-theme');
+    if (attr === 'dark' || attr === 'light') return attr;
+    try {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } catch (error) {
+      return 'light';
+    }
+  }
+
+  function applyTheme(theme) {
+    if (theme !== 'dark' && theme !== 'light') return;
+    document.documentElement.setAttribute('data-theme', theme);
+  }
+
+  function toggleTheme() {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    try {
+      localStorage.setItem(LS_THEME, next);
+    } catch (error) {
+      /* 存储不可用:仅本次会话生效 */
+    }
+    applyTheme(next);
+    renderHeader();
+  }
+
+  function bindSystemThemeChange() {
+    try {
+      const query = window.matchMedia('(prefers-color-scheme: dark)');
+      const onChange = () => {
+        let stored = null;
+        try { stored = localStorage.getItem(LS_THEME); } catch (error) { /* 忽略 */ }
+        if (stored === 'light' || stored === 'dark') return; /* 已显式选择 */
+        applyTheme(currentTheme());
+        renderHeader();
+      };
+      if (query.addEventListener) query.addEventListener('change', onChange);
+      else if (query.addListener) query.addListener(onChange);
+    } catch (error) {
+      /* 不支持 matchMedia 的环境跳过跟随 */
+    }
+  }
+
   function renderSidebar() {
     const placeholder = document.getElementById('app-sidebar');
     if (!placeholder) return;
@@ -1509,6 +1557,14 @@
       ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
         '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛">' + options + '</select>'
       : '';
+    /* 主题切换按钮:显示"将切换到"的目标模式图标(浅色时显示月亮) */
+    const theme = currentTheme();
+    const toDark = theme !== 'dark';
+    const themeLabel = toDark ? '切换为深色模式' : '切换为浅色模式';
+    const themeBtn =
+      '<button type="button" id="header-theme-btn" class="btn btn-ghost btn-sm icon-btn" title="' + themeLabel + '" aria-label="' + themeLabel + '">' +
+      iconMarkup(toDark ? 'dark_mode' : 'light_mode', themeLabel) +
+      '</button>';
     /* 赛程页 main 无 h1,顶栏标题承担 h1;其余页面 main 自带 h1,顶栏用 span 避免双 h1。
      * 主页顶栏不显示标题;状态徽章只在赛程页出现 */
     const titleTag = isSchedule ? 'h1' : 'span';
@@ -1524,10 +1580,13 @@
       '  <div class="header-actions">' +
       tournamentSwitch +
       scheduleActions +
+      themeBtn +
       '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm icon-btn" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
       '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="设置" aria-label="设置">' + iconMarkup('settings', '设置') + '</button>' +
       '  </div>' +
       '</div>';
+
+    placeholder.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
 
     const switchSelect = placeholder.querySelector('#tournament-switch');
     if (switchSelect) {
@@ -1761,6 +1820,7 @@
       fatalError: showFatalError
     };
     window.TournamentApp = appInstance;
+    bindSystemThemeChange();
     try {
       const cached = readWorkspaceCache();
       if (cached) {

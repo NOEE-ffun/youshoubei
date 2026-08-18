@@ -1,7 +1,7 @@
 # Design System Master File
 
 > ⚠️ **项目决策覆盖(2026-08-17,用户已确认)**:本文件由 ui-ux-pro-max 按品类数据生成,以下决策优先于本文件其余内容——
-> 1. **全站保持浅色主题**,不采用下方暗色 Gaming 配色;色彩真源是 `styles.css` 的 `:root` 令牌(主色 `#3563e9`)。奖牌金/状态色仅作点缀强调。
+> 1. **双主题:浅色默认 + 暗色可切换**(2026-08-18 更新,取代早前"仅浅色"决策)。色彩真源是 `styles.css`:`:root` 浅色令牌 + `[data-theme="dark"]` 暗色令牌块;`theme-init.js` 首帧前写入 `<html data-theme>`(显式选择存 localStorage `ts:theme`,未选跟随系统)。仍不采用下方暗紫 Gaming 配色。
 > 2. **展示字体为自托管 Bebas Neue**(`fonts/BebasNeue-latin-400.woff2`,仅数字与拉丁字形);禁止任何外部字体 CDN(站点 CSP `default-src 'self'` 会拦截)。
 > 3. 下方的 Russo One / Chakra Petch / Google Fonts import、#7C3AED 紫色系、#0F0F23 深底**均不采用**,仅作品类参考。
 > 4. 组件形态、间距节奏、动效规范以现有代码库为准(impeccable 评审基线 18/40,精修而非重设计)。
