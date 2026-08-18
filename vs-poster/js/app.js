@@ -213,13 +213,29 @@
 
   /* ---------- 图片转换工具 ---------- */
 
+  /* dataURL → Blob:优先走 atob(不经 fetch,兼容 connect-src 'self' CSP),base64 之外回退 fetch */
+  function dataUrlToBlob(dataURL) {
+    var m = /^data:([^;,]+)(;base64)?,(.*)$/.exec(dataURL);
+    if (!m) return Promise.reject(new Error("图片数据无效"));
+    var mime = m[1];
+    var payload = m[3];
+    if (m[2]) {
+      try {
+        var binary = atob(payload);
+        var bytes = new Uint8Array(binary.length);
+        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return Promise.resolve(new Blob([bytes], { type: mime }));
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    }
+    return fetch(dataURL).then(function (r) { return r.blob(); });
+  }
+
   function imageForStorage(dataURL, app) {
     if (!dataURL) return Promise.resolve(null);
     if (!/^data:/i.test(dataURL)) return Promise.resolve(dataURL);
-    return fetch(dataURL).then(function (r) {
-      if (!r.ok) throw new Error("图片转换失败");
-      return r.blob();
-    }).then(function (blob) {
+    return dataUrlToBlob(dataURL).then(function (blob) {
       if (app.mode === "cloud") return app.uploadImage(blob);
       return blob;
     });
