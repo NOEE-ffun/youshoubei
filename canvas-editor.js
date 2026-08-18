@@ -77,7 +77,10 @@
   function enter() {
     active = true;
     const b = board();
-    if (b) b.classList.add('editing');
+    if (b) {
+      b.classList.add('editing');
+      syncToolClasses();
+    }
     bindBoardEvents();
     bindWheel();
     syncZoom();
@@ -113,14 +116,19 @@
   function setTool(next) {
     tool = next;
     /* 切换工具保留选择(Figma 语义);Esc / 空白单击才会清空 */
-    const b = board();
-    if (b) {
-      b.classList.toggle('tool-link', next === 'link');
-      b.classList.toggle('tool-delete', next === 'delete');
-      b.classList.toggle('tool-select', next === 'select');
-    }
+    syncToolClasses();
     highlightSelected();
     refreshToolbarUI();
+  }
+
+  /* 工具类统一同步:setTool 和 enter(退出编辑再进入)都走这里,
+   * 避免默认 select 工具重新进入编辑时丢失 crosshair 光标提示 */
+  function syncToolClasses() {
+    const b = board();
+    if (!b) return;
+    b.classList.toggle('tool-link', tool === 'link');
+    b.classList.toggle('tool-delete', tool === 'delete');
+    b.classList.toggle('tool-select', tool === 'select');
   }
 
   function getTool() {
@@ -513,7 +521,7 @@
   function toggleBatchSelected(id) {
     if (batchSelected.has(id)) batchSelected.delete(id);
     else batchSelected.add(id);
-    if (batchSelected.size) selectedCardId = [...batchSelected][0];
+    selectedCardId = batchSelected.size ? [...batchSelected][0] : null;
     highlightSelected();
     refreshToolbarUI();
   }
@@ -546,6 +554,7 @@
     if (tool === 'delete') setTool('select');
     batchSelected = new Set([card.id]);
     selectedCardId = card.id;
+    refreshToolbarUI();
     saveCanvas().then(() => {
       if (window.BracketRender) window.BracketRender.renderCanvas();
       highlightSelected();
