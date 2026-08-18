@@ -483,6 +483,36 @@
     };
   }
 
+  /* ========== 多卡剪贴板 ========== */
+
+  /* 深拷贝一组卡片用于粘贴：全部换新 id、整体平移 (dx, dy) 格、label 加「副本」后缀；
+   * 卡片之间的连线（flow 槽引用被复制集内的旧 id）重映射到对应新 id，
+   * 指向集外卡片的引用原样保留（Figma/CAD 的粘贴语义）。
+   * makeId 可注入（测试传确定性函数），默认用 uid。 */
+  function cloneCardsForPaste(cards, dx, dy, makeId) {
+    const list = (Array.isArray(cards) ? cards : []).filter(Boolean);
+    const idOf = typeof makeId === 'function' ? makeId : uid;
+    const idMap = new Map();
+    const clones = list.map((card) => {
+      const clone = JSON.parse(JSON.stringify(card));
+      idMap.set(clone.id, idOf('c'));
+      return clone;
+    });
+    clones.forEach((clone) => {
+      clone.id = idMap.get(clone.id);
+      clone.label = (clone.label || '未命名对局') + ' 副本';
+      clone.x = (Number(clone.x) || 0) + (Number(dx) || 0);
+      clone.y = (Number(clone.y) || 0) + (Number(dy) || 0);
+      clone.slots = (clone.slots || []).map((slot) => {
+        if (slot && slot.type === 'flow' && idMap.has(slot.cardId)) {
+          return Object.assign({}, slot, { cardId: idMap.get(slot.cardId) });
+        }
+        return slot ? Object.assign({}, slot) : { type: 'empty' };
+      });
+    });
+    return clones;
+  }
+
   return {
     AVATAR_COLORS,
     avatarColor,
@@ -495,6 +525,7 @@
     createDefaultCanvas,
     createDefaultTournament,
     createBlankTournament,
+    cloneCardsForPaste,
     normalizeCanvas,
     normalizeCard,
     deriveRoster,
