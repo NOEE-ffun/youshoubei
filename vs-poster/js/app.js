@@ -581,33 +581,6 @@
   }
 
   var titleDebounce = {};
-  var titleFileInput = null;
-  var pendingTitleSide = null;
-  function ensureTitleFileInput() {
-    if (titleFileInput) return titleFileInput;
-    titleFileInput = document.createElement("input");
-    titleFileInput.type = "file";
-    titleFileInput.accept = "image/*";
-    titleFileInput.hidden = true;
-    document.body.appendChild(titleFileInput);
-    titleFileInput.addEventListener("change", function () {
-      var file = titleFileInput.files && titleFileInput.files[0];
-      titleFileInput.value = "";
-      var side = pendingTitleSide;
-      pendingTitleSide = null;
-      if (!file || !side) return;
-      VSUpload.handleFile(file)
-        .then(function (dataURL) {
-          state.data[side].title = { type: "image", text: "", image: dataURL };
-          slotChanged[side].titleImg = true;
-          saveState();
-          render();
-          toast("称号图片已应用(优先于文字显示)");
-        })
-        .catch(function (e) { toast(e.message, true); });
-    });
-    return titleFileInput;
-  }
 
   /* ---------- 主题选择器(页头) ---------- */
 

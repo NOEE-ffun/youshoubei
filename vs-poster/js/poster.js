@@ -323,13 +323,11 @@
     // 大号名字(发光 + 描边;空名字不渲染「?」,避免像故障——2026-08-12 审计)
     parts.push('<text x="' + cx + '" y="810" text-anchor="middle" font-family="Impact, Arial Black, PingFang SC, Microsoft YaHei, sans-serif" font-size="' + fontSize + '" font-style="italic" font-weight="900" letter-spacing="4" fill="#ffffff" stroke="' + col.dark + '" stroke-width="9" stroke-linejoin="round" paint-order="stroke" filter="url(#fglow)">' + escapeXml(displayName) + "</text>");
 
-    // 称号:图片优先(等比缩放,封顶 280×72),否则小号文字;缺失时跳过
-    var title = (data.title && typeof data.title === "object" && !Array.isArray(data.title)) ? data.title : null;
-    if (title && title.type === "image" && title.image && /^(data:image\/|https?:\/\/|blob:)/i.test(title.image)) {
-      parts.push('<image href="' + title.image + '" x="' + (cx - 140) + '" y="838" width="280" height="72" preserveAspectRatio="xMidYMid meet"/>');
-    } else if (title && title.text) {
+    // 赛前垃圾话(纯文本,显示在名字下方)
+    var title = typeof data.title === "string" ? data.title : ((data.title && data.title.text) || "");
+    if (title) {
       var titleFont = Math.max(22, Math.round(fontSize * 0.45));
-      parts.push('<text x="' + cx + '" y="876" text-anchor="middle" font-family="PingFang SC, Microsoft YaHei, Noto Sans SC, sans-serif" font-size="' + titleFont + '" font-weight="700" letter-spacing="3" fill="' + col.glow + '">' + escapeXml(title.text) + "</text>");
+      parts.push('<text x="' + cx + '" y="876" text-anchor="middle" font-family="PingFang SC, Microsoft YaHei, Noto Sans SC, sans-serif" font-size="' + titleFont + '" font-weight="700" letter-spacing="3" fill="' + col.glow + '">' + escapeXml(title) + "</text>");
     }
 
     parts.push("</g>");
