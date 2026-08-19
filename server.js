@@ -46,6 +46,17 @@ const API_ROUTES = {
   '/api/poster-stage': apiPosterStage
 };
 
+/* 不对外下发的内部目录与根级文件;比对前统一转小写,顺带堵住 /API/ 这类大小写变体 */
+const BLOCKED_SEGMENTS = new Set(['api', 'node_modules', 'test', 'scripts', 'deploy', 'docs', 'design-system']);
+const BLOCKED_ROOT_FILES = new Set(['server.js', 'bracket-model.js', 'package.json', 'package-lock.json']);
+
+/* 点击劫持/引用裁剪/权限收敛。frame-ancestors 无法写进 meta CSP,只能走响应头 */
+const SECURITY_HEADERS = {
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+};
+
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -99,6 +110,7 @@ function apiResponse(rawRes) {
       rawRes.setHeader('Content-Type', 'application/json; charset=utf-8');
       rawRes.setHeader('Cache-Control', cacheControl);
       rawRes.setHeader('X-Content-Type-Options', 'nosniff');
+      for (const [key, value] of Object.entries(SECURITY_HEADERS)) rawRes.setHeader(key, value);
       rawRes.setHeader('Content-Length', body.length);
       rawRes.end(body);
     }
@@ -111,7 +123,7 @@ function handleApi(handler, req, rawRes) {
     .catch((error) => {
       console.error('[api]', req.url, error);
       if (rawRes.headersSent) return;
-      const body = Buffer.from(JSON.stringify({ error: '服务器内部错误：' + error.message }), 'utf8');
+      const body = Buffer.from(JSON.stringify({ error: '服务器内部错误' }), 'utf8');
       rawRes.statusCode = 500;
       rawRes.setHeader('Content-Type', 'application/json; charset=utf-8');
       rawRes.setHeader('Cache-Control', 'no-store');
@@ -124,7 +136,8 @@ function handleApi(handler, req, rawRes) {
 function sendPlain(rawRes, statusCode, text, headers) {
   rawRes.writeHead(statusCode, Object.assign({
     'Content-Type': 'text/plain; charset=utf-8',
-    'X-Content-Type-Options': 'nosniff'
+    'X-Content-Type-Options': 'nosniff',
+    ...SECURITY_HEADERS
   }, headers || {}));
   rawRes.end(text);
 }
@@ -138,13 +151,31 @@ function requestHandler(req, res) {
     return;
   }
 
-  /* API 先路由;未注册的 /api/* 一律 404,避免把 api/oss.js 等源码当静态文件下发 */
+  /* null 字节会让 fs 调用同步抛 ERR_INVALID_ARG_VALUE 击穿进程,必须在此拒绝 */
+  if (pathname.includes('\0')) {
+    sendPlain(res, 400, 'Bad Request');
+    return;
+  }
+
+  /* API 先路由;未注册的 /api/* 一律 404,避免把 api/oss.js 等源码当静态文件下发。
+   * 前缀比对走小写:大小写不敏感文件系统上 /API/oss.js 同样命中磁盘文件 */
   if (API_ROUTES[pathname]) {
     handleApi(API_ROUTES[pathname], req, res);
     return;
   }
-  if (pathname.startsWith('/api/')) {
+  const lowerPathname = pathname.toLowerCase();
+  if (lowerPathname.startsWith('/api/')) {
     sendPlain(res, 404, '404 Not Found');
+    return;
+  }
+
+  /* 服务端内部目录/文件不作为静态资源下发(源码、依赖、测试与部署配置) */
+  const segments = pathname.split('/').filter((seg) => seg && seg !== '.');
+  const blocked =
+    segments.some((seg) => BLOCKED_SEGMENTS.has(seg.toLowerCase())) ||
+    (segments.length === 1 && BLOCKED_ROOT_FILES.has(segments[0].toLowerCase()));
+  if (blocked) {
+    sendPlain(res, 403, 'Forbidden');
     return;
   }
 
@@ -170,24 +201,30 @@ function requestHandler(req, res) {
     // 文件不存在时继续走 readFile，返回 404
   }
 
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      sendPlain(res, 404, '404 Not Found');
-      return;
-    }
-    const ext = path.extname(filePath).toLowerCase();
-    const headers = {
-      'Content-Type': MIME[ext] || 'application/octet-stream',
-      'Cache-Control': cacheControlFor(filePath),
-      'X-Content-Type-Options': 'nosniff',
-      'Vary': 'Accept-Encoding'
-    };
-    const { body, encoding } = encodeBody(req, data);
-    if (encoding) headers['Content-Encoding'] = encoding;
-    headers['Content-Length'] = body.length;
-    res.writeHead(200, headers);
-    res.end(body);
-  });
+  /* readFile 对非法路径(如残留 \0)会同步抛出,包一层避免击穿进程 */
+  try {
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        sendPlain(res, 404, '404 Not Found');
+        return;
+      }
+      const ext = path.extname(filePath).toLowerCase();
+      const headers = {
+        'Content-Type': MIME[ext] || 'application/octet-stream',
+        'Cache-Control': cacheControlFor(filePath),
+        'X-Content-Type-Options': 'nosniff',
+        ...SECURITY_HEADERS,
+        'Vary': 'Accept-Encoding'
+      };
+      const { body, encoding } = encodeBody(req, data);
+      if (encoding) headers['Content-Encoding'] = encoding;
+      headers['Content-Length'] = body.length;
+      res.writeHead(200, headers);
+      res.end(body);
+    });
+  } catch {
+    sendPlain(res, 404, '404 Not Found');
+  }
 }
 
 function createServer() {

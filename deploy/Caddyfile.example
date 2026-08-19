@@ -2,5 +2,7 @@
 
 youshoubei.cn, www.youshoubei.cn {
     encode zstd gzip
+    # 强制后续访问走 HTTPS,防止首访/中间人被降级到 HTTP
+    header Strict-Transport-Security "max-age=31536000"
     reverse_proxy 127.0.0.1:3000
 }

@@ -25,6 +25,9 @@ server {
     ssl_certificate_key /etc/letsencrypt/live/youshoubei.cn/privkey.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
 
+    # 强制后续访问走 HTTPS,防止首访/中间人被降级到 HTTP
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
     client_max_body_size 6m;
 
     # 所有请求都由 Node 进程处理:静态缓存头在 server.js 里已设置

@@ -3,7 +3,7 @@
 
   /* 主页：跑马灯 + 比赛背景幻灯片渐变 */
 
-  const { escapeHtml, medalMap, avatarMarkup, safeUrl } = window.TournamentUtils;
+  const { escapeHtml, medalMap, avatarMarkup, cssUrl } = window.TournamentUtils;
 
   let slideTimer = null;
   let slideIndex = 0;
@@ -68,7 +68,7 @@
     const url = window.TournamentApp.blobUrl(slideBackgrounds[slideIndex % slideBackgrounds.length]);
     const layer = document.createElement('div');
     layer.className = 'slideshow-layer';
-    layer.style.backgroundImage = "url('" + safeUrl(url) + "')";
+    layer.style.backgroundImage = cssUrl(url);
     el.appendChild(layer);
     requestAnimationFrame(() => layer.classList.add('show'));
     setTimeout(() => {
