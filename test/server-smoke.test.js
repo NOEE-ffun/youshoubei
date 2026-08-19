@@ -71,7 +71,34 @@ async function main() {
     const stageSource = await request(server, '/api/poster-stage.js');
     assert.strictEqual(stageSource.status, 404, 'api/poster-stage.js 源码不可当静态文件下发');
 
-    console.log('server-smoke 全部 7 组测试通过 ✓');
+    /* 8. null 字节路径返回 400 且进程存活(曾因 readFile 同步抛出击穿进程) */
+    const nullByte = await request(server, '/%00');
+    assert.strictEqual(nullByte.status, 400, '/%00 应返回 400 而不是击穿进程');
+    const stillAlive = await request(server, '/api/health');
+    assert.strictEqual(stillAlive.status, 200, 'null 字节请求后服务器应继续服务');
+
+    /* 9. 内部目录/文件不作为静态资源下发(含大小写变体,防 /API/ 绕过) */
+    for (const p of [
+      '/node_modules/ali-oss/package.json',
+      '/test/server-smoke.test.js',
+      '/scripts/backfill-oss-cache.js',
+      '/deploy/nginx.conf.example',
+      '/server.js',
+      '/package.json',
+      '/API/oss.js',
+      '/Api/data.js'
+    ]) {
+      const resp = await request(server, p);
+      assert.notStrictEqual(resp.status, 200, p + ' 不应可被下载');
+    }
+
+    /* 10. 安全响应头:静态与 API 出口都要带 */
+    assert.strictEqual(js.headers['x-frame-options'], 'DENY');
+    assert.strictEqual(js.headers['referrer-policy'], 'strict-origin-when-cross-origin');
+    assert.strictEqual(health.headers['x-frame-options'], 'DENY');
+    assert.strictEqual(health.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
+
+    console.log('server-smoke 全部 10 组测试通过 ✓');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

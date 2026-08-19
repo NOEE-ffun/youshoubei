@@ -78,6 +78,10 @@
     var h = hex.replace("#", "");
     return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
   }
+
+  var HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+  /** 颜色会被拼进 SVG 属性,非法值(如手工改过的 localStorage 状态)回退中性色,杜绝属性注入 */
+  var FALLBACK_COLOR = "#4a5568";
   function rgba(hex, a) {
     var r = hexToRgb(hex);
     return "rgba(" + r[0] + "," + r[1] + "," + r[2] + "," + a + ")";
@@ -85,13 +89,23 @@
 
   /** 主色 → 完整选手色 {main, glow, dark}:glow 提亮、dark 加深(自由选色只需一个主色) */
   function deriveColor(main) {
-    var r = hexToRgb(main);
+    var hex = HEX_COLOR_RE.test(String(main || "")) ? main : FALLBACK_COLOR;
+    var r = hexToRgb(hex);
     var mix = function (t, target) {
       var tgt = hexToRgb(target);
       var c = r.map(function (v, i) { return Math.round(v * (1 - t) + tgt[i] * t); });
       return "#" + c.map(function (v) { return v.toString(16).padStart(2, "0"); }).join("");
     };
-    return { main: main, glow: mix(0.35, "#ffffff"), dark: mix(0.5, "#000000") };
+    return { main: hex, glow: mix(0.35, "#ffffff"), dark: mix(0.5, "#000000") };
+  }
+
+  /* ---------- 图片链接白名单 ---------- */
+
+  /** 与 VSUpload.isAllowedURL 同源(http/https、image data:、blob:);poster.js 可被单独加载,内置兜底 */
+  function isAllowedImgURL(raw) {
+    if (window.VSUpload && window.VSUpload.isAllowedURL) return window.VSUpload.isAllowedURL(raw);
+    var url = String(raw || "").trim();
+    return /^(https?:\/\/|data:image\/|blob:)/i.test(url);
   }
 
   /* ---------- 占位头像 ---------- */
@@ -143,8 +157,8 @@
     var leftCol = data.left.color ? deriveColor(data.left.color) : L;
     var rightCol = data.right.color ? deriveColor(data.right.color) : R;
 
-    var leftImg = data.left.img || placeholderAvatar(leftName, leftCol);
-    var rightImg = data.right.img || placeholderAvatar(rightName, rightCol);
+    var leftImg = isAllowedImgURL(data.left.img) ? data.left.img : placeholderAvatar(leftName, leftCol);
+    var rightImg = isAllowedImgURL(data.right.img) ? data.right.img : placeholderAvatar(rightName, rightCol);
 
     // 撕裂边缘(左右对称,mirror 使锯齿镜像)
     var jagAmp = 34, jagSeed = 7;
@@ -303,17 +317,17 @@
     }
     // 头像(圆形裁剪)
     parts.push('<g clip-path="url(#clip' + (side === "left" ? "L" : "R") + ')">');
-    parts.push('<image href="' + img + '" x="' + (cx - r) + '" y="' + (cy - r) + '" width="' + r * 2 + '" height="' + r * 2 + '" preserveAspectRatio="xMidYMid slice"/>');
+    parts.push('<image href="' + escapeXml(img) + '" x="' + (cx - r) + '" y="' + (cy - r) + '" width="' + r * 2 + '" height="' + r * 2 + '" preserveAspectRatio="xMidYMid slice"/>');
     parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="url(#vig)" opacity="0.5"/>');
     parts.push("</g>");
 
     // ID 区:队标图片优先 —— 独立展示(无胶囊,大小可调 tagImgSize,等比缩放,高 24–200 封顶宽 420),否则文字胶囊(回退名字)
-    if (data.tagImg) {
+    if (isAllowedImgURL(data.tagImg)) {
       var tiRatio = Number(data.tagImgRatio) > 0 ? Number(data.tagImgRatio) : 1;
       var tiH = Math.min(200, Math.max(24, Number(data.tagImgSize) > 0 ? Number(data.tagImgSize) : 56));
       var tiW = tiH * tiRatio;
       if (tiW > 420) { tiW = 420; tiH = tiW / tiRatio; }
-      parts.push('<image href="' + data.tagImg + '" x="' + (cx - tiW / 2).toFixed(1) + '" y="' + (285 - tiH / 2).toFixed(1) + '" width="' + tiW.toFixed(1) + '" height="' + tiH.toFixed(1) + '" preserveAspectRatio="xMidYMid meet"/>');
+      parts.push('<image href="' + escapeXml(data.tagImg) + '" x="' + (cx - tiW / 2).toFixed(1) + '" y="' + (285 - tiH / 2).toFixed(1) + '" width="' + tiW.toFixed(1) + '" height="' + tiH.toFixed(1) + '" preserveAspectRatio="xMidYMid meet"/>');
     } else {
       var tagW = Math.ceil(textWidth(tag, 26)) + 52;
       parts.push('<rect x="' + (cx - tagW / 2) + '" y="258" width="' + tagW + '" height="54" rx="27" fill="rgba(0,0,0,0.55)" stroke="' + col.main + '" stroke-width="2"/>');

@@ -94,7 +94,7 @@ function createHandler(storage, options) {
         });
       } catch (error) {
         console.error('[poster-stage] GET 失败:', error.message);
-        res.status(500).json({ error: '读取舞台失败：' + error.message });
+        res.status(500).json({ error: '读取舞台失败' });
       }
       return;
     }
@@ -139,7 +139,7 @@ function createHandler(storage, options) {
         res.status(200).json({ id, url: '/poster-stage.html?id=' + id });
       } catch (error) {
         console.error('[poster-stage] POST 失败:', error.message);
-        res.status(500).json({ error: '保存舞台失败：' + error.message });
+        res.status(500).json({ error: '保存舞台失败' });
       }
       return;
     }

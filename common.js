@@ -478,8 +478,24 @@
 
   function setAdminToken(token) {
     appInstance.adminToken = (token || '').trim();
-    if (appInstance.adminToken) localStorage.setItem(LS_ADMIN_TOKEN, appInstance.adminToken);
-    else localStorage.removeItem(LS_ADMIN_TOKEN);
+    if (appInstance.adminToken) sessionStorage.setItem(LS_ADMIN_TOKEN, appInstance.adminToken);
+    else sessionStorage.removeItem(LS_ADMIN_TOKEN);
+  }
+
+  /* 口令只放 sessionStorage,关闭标签页即清;旧版本曾落在 localStorage,首次加载迁走并删除 */
+  function loadAdminToken() {
+    try {
+      const legacy = localStorage.getItem(LS_ADMIN_TOKEN);
+      if (legacy !== null) {
+        if (legacy && sessionStorage.getItem(LS_ADMIN_TOKEN) === null) {
+          sessionStorage.setItem(LS_ADMIN_TOKEN, legacy);
+        }
+        localStorage.removeItem(LS_ADMIN_TOKEN);
+      }
+      return sessionStorage.getItem(LS_ADMIN_TOKEN) || '';
+    } catch {
+      return '';
+    }
   }
 
   function isAdmin() {
@@ -1847,7 +1863,7 @@
       list: [],
       players: [],
       mode: 'local',
-      adminToken: localStorage.getItem(LS_ADMIN_TOKEN) || '',
+      adminToken: loadAdminToken(),
       uid,
       blobUrl,
       compressImage,

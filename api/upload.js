@@ -69,6 +69,6 @@ module.exports = async function handler(req, res) {
     sendJson(res, 200, { url: publicUrl(key) });
   } catch (error) {
     console.error('[upload] 失败:', error.message);
-    sendJson(res, 500, { error: '图片上传失败：' + error.message });
+    sendJson(res, 500, { error: '图片上传失败' });
   }
 };
