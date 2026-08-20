@@ -488,7 +488,7 @@
       return '<li class="roster__card" data-id="' + esc(p.id) + '">' +
         rosterAvatarMarkup(p) + dot +
         '<div class="roster__meta">' +
-        '<span class="roster__name">' + esc(p.name || "?") + "</span>" +
+        '<span class="roster__name">' + esc(p.name || "?") + (p.tag ? ' <em class="roster__id">' + esc(p.tag) + "</em>" : "") + "</span>" +
         '<span class="roster__tag">' + esc(titleDisplayText(p)) + "</span>" +
         "</div>" +
         '<div class="roster__ops">' +

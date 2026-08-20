@@ -375,7 +375,6 @@
     if (drawer.hidden) {
       fillCardStyleInputs();
       drawer.hidden = false;
-      document.addEventListener('click', closeStyleDrawerOutside);
     } else {
       closeStyleDrawer();
     }
@@ -384,15 +383,6 @@
   function closeStyleDrawer() {
     const drawer = document.getElementById('card-style-drawer');
     if (drawer) drawer.hidden = true;
-    document.removeEventListener('click', closeStyleDrawerOutside);
-  }
-
-  function closeStyleDrawerOutside(event) {
-    const target = event.target;
-    if (!target || !target.closest) return;
-    if (!target.closest('#card-style-drawer') && !target.closest('[data-tool="style"]')) {
-      closeStyleDrawer();
-    }
   }
 
   /* 滑杆实时改内联变量(不重绘画布),停手后防抖落盘 */
