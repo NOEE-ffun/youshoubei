@@ -2425,8 +2425,6 @@ body[data-page="players"] #bg-layer {
   gap: 0.25rem;
   align-items: center;
   width: 100%;
-  padding-block-start: 0.4rem;
-  border-top: 1px solid var(--border);
 }
 
 .side-action {
@@ -2561,15 +2559,15 @@ body[data-page="home"] {
   stroke: #d64545;
 }
 
-/* ========== Photoshop 式 icon 编辑工具栏(含底部卡片样式面板) ========== */
+/* ========== Photoshop 式 icon 编辑工具栏(样式面板收纳为抽屉) ========== */
 
 .edit-toolbar {
-  width: 9.5rem;
+  width: 3.25rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.5rem 0.35rem;
+  padding: 0.5rem 0.2rem;
   background: var(--surface-float);
   border-left: 1px solid var(--border);
   overflow-y: auto;
@@ -2579,25 +2577,37 @@ body[data-page="home"] {
   display: none;
 }
 
-/* 卡片样式面板:毛玻璃可调 + 染色 */
-.tool-panel {
-  width: 100%;
-  margin-block-start: 0.35rem;
-  padding-block-start: 0.5rem;
-  border-top: 1px solid var(--border);
+/* 卡片样式抽屉:palette 按钮唤出,浮在画布右上 */
+.style-drawer {
+  position: absolute;
+  top: 1rem;
+  right: calc(3.25rem + 0.75rem);
+  z-index: 30;
+  width: 15rem;
+  padding: 0.85rem 0.9rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.7rem;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
 }
 
-.tool-panel-title {
-  font-size: 0.7rem;
+.style-drawer[hidden] {
+  display: none;
+}
+
+.style-drawer-title {
+  font-size: 0.74rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   color: var(--text-muted);
-  text-align: center;
 }
 
+/* 抽屉内部的字段行 */
 .tool-field {
   display: flex;
   flex-direction: column;

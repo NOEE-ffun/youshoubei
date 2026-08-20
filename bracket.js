@@ -337,11 +337,11 @@
       btn.classList.toggle('btn-primary', editMode);
       btn.classList.toggle('btn-secondary', !editMode);
     }
-    if (editMode) fillCardStyleInputs();
+    if (!editMode) closeStyleDrawer();
     updateToolbarState();
   }
 
-  /* ---------- 卡片样式面板(毛玻璃可调 + 染色) ---------- */
+  /* ---------- 卡片样式抽屉(毛玻璃可调 + 染色) ---------- */
 
   const CARD_STYLE_DEFAULT = { opacity: 0.7, blur: 8 };
 
@@ -369,6 +369,32 @@
     document.getElementById('glass-blur-val').textContent = style.blur + 'px';
   }
 
+  function toggleStyleDrawer() {
+    const drawer = document.getElementById('card-style-drawer');
+    if (!drawer) return;
+    if (drawer.hidden) {
+      fillCardStyleInputs();
+      drawer.hidden = false;
+      document.addEventListener('click', closeStyleDrawerOutside);
+    } else {
+      closeStyleDrawer();
+    }
+  }
+
+  function closeStyleDrawer() {
+    const drawer = document.getElementById('card-style-drawer');
+    if (drawer) drawer.hidden = true;
+    document.removeEventListener('click', closeStyleDrawerOutside);
+  }
+
+  function closeStyleDrawerOutside(event) {
+    const target = event.target;
+    if (!target || !target.closest) return;
+    if (!target.closest('#card-style-drawer') && !target.closest('[data-tool="style"]')) {
+      closeStyleDrawer();
+    }
+  }
+
   /* 滑杆实时改内联变量(不重绘画布),停手后防抖落盘 */
   let styleSaveTimer = null;
   function onStyleInput() {
@@ -387,22 +413,37 @@
     styleSaveTimer = setTimeout(() => { save(); }, 400);
   }
 
-  /* 染色作用于当前选中卡片:单选一张,框选/Shift 多选批量 */
-  function applyTintToSelection(color) {
+  /* 染色:input 拖动只做 DOM 实时预览(不重绘不落盘不提示),
+   * change(松手/选定)才写数据并保存一次 */
+  function tintSelection(color, commit) {
     const record = currentRecord();
     if (!record || !record.canvas) return;
     const ids = CanvasEditor.getSelectedIds();
     if (!ids.length) {
-      notify('先选中要染色的卡片(可框选或 Shift 多选)', 'danger');
+      if (commit) notify('先选中要染色的卡片(可框选或 Shift 多选)', 'danger');
       return;
     }
     const idSet = new Set(ids);
+    const board = document.getElementById('canvas-board');
     for (const card of record.canvas.cards || []) {
-      if (idSet.has(card.id)) card.color = color;
+      if (!idSet.has(card.id)) continue;
+      card.color = commit ? color : (color || card.color);
+      if (!commit && !color) continue;
+      const el = board && board.querySelector('.canvas-card[data-match="' + card.id + '"]');
+      if (el) {
+        if (color) {
+          el.setAttribute('data-tint', '');
+          el.style.setProperty('--card-tint', color);
+        } else {
+          el.removeAttribute('data-tint');
+          el.style.removeProperty('--card-tint');
+        }
+      }
     }
-    renderAll();
-    save();
-    notify(color ? '已染色 ' + ids.length + ' 张卡片' : '已清除 ' + ids.length + ' 张卡片的染色');
+    if (commit) {
+      save();
+      notify(color ? '已染色 ' + ids.length + ' 张卡片' : '已清除 ' + ids.length + ' 张卡片的染色');
+    }
   }
 
   function bindCardStylePanel() {
@@ -411,9 +452,12 @@
     if (opacityInput) opacityInput.addEventListener('input', onStyleInput);
     if (blurInput) blurInput.addEventListener('input', onStyleInput);
     const tintInput = document.getElementById('card-tint-input');
-    if (tintInput) tintInput.addEventListener('input', () => applyTintToSelection(tintInput.value));
+    if (tintInput) {
+      tintInput.addEventListener('input', () => tintSelection(tintInput.value, false));
+      tintInput.addEventListener('change', () => tintSelection(tintInput.value, true));
+    }
     const clearBtn = document.getElementById('card-tint-clear');
-    if (clearBtn) clearBtn.addEventListener('click', () => applyTintToSelection(null));
+    if (clearBtn) clearBtn.addEventListener('click', () => tintSelection(null, true));
   }
 
   function updateToolbarState() {
@@ -805,6 +849,7 @@
       else if (kind === 'zoom-out') editor.zoomOut();
       else if (kind === 'fit') editor.fitCanvas();
       else if (kind === 'format-size') openCanvasSizeDialog();
+      else if (kind === 'style') toggleStyleDrawer();
       else if (kind === 'delete') editor.setTool('delete');
       else if (kind === 'save') {
         save().then(() => notify('已保存'));

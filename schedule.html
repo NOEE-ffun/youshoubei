@@ -62,22 +62,10 @@
           <button type="button" class="zoom-btn" data-zoom="fit" title="适应画布" aria-label="缩放到适应画布"><img class="icon" src="icons/fit_screen.svg" alt="" aria-hidden="true"></button>
         </div>
       </div>
-    </main>
 
-    <aside class="edit-toolbar" id="edit-toolbar" aria-label="编辑工具" hidden>
-      <button type="button" class="tool-btn is-active" data-tool="select" title="选择 / 拖拽" aria-label="选择 / 拖拽"><img class="icon" src="icons/open_with.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn" data-tool="link" title="连线" aria-label="连线"><img class="icon" src="icons/link.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn" data-tool="add" title="添加卡片" aria-label="添加卡片"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn" data-tool="format-size" title="画布大小" aria-label="画布大小"><img class="icon" src="icons/format_size.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn" data-tool="zoom" title="缩放模式" aria-label="缩放模式"><img class="icon" src="icons/search.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn" data-tool="zoom-in" title="放大" aria-label="放大"><img class="icon" src="icons/zoom_in.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn" data-tool="zoom-out" title="缩小" aria-label="缩小"><img class="icon" src="icons/zoom_out.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn" data-tool="fit" title="适应画布" aria-label="适应画布"><img class="icon" src="icons/fit_screen.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn" data-tool="delete" title="批量删除模式" aria-label="批量删除模式"><img class="icon" src="icons/delete_sweep.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn danger" id="edit-delete-selected-btn" title="删除选中卡片" aria-label="删除选中卡片" hidden><img class="icon" src="icons/delete.svg" alt="" aria-hidden="true"></button>
-      <button type="button" class="tool-btn" data-tool="save" title="保存" aria-label="保存"><img class="icon" src="icons/save.svg" alt="" aria-hidden="true"></button>
-      <div class="tool-panel" id="card-style-panel">
-        <div class="tool-panel-title">卡片样式</div>
+      <!-- 卡片样式抽屉:palette 工具按钮唤出 -->
+      <aside class="style-drawer" id="card-style-drawer" aria-label="卡片样式" hidden>
+        <div class="style-drawer-title">卡片样式</div>
         <label class="tool-field">
           <span>不透明度 <output id="glass-opacity-val" for="glass-opacity">70%</output></span>
           <input type="range" id="glass-opacity" min="0.3" max="1" step="0.05" value="0.7">
@@ -93,7 +81,22 @@
             <button type="button" id="card-tint-clear" class="btn btn-secondary btn-sm">清除</button>
           </div>
         </div>
-      </div>
+      </aside>
+    </main>
+
+    <aside class="edit-toolbar" id="edit-toolbar" aria-label="编辑工具" hidden>
+      <button type="button" class="tool-btn is-active" data-tool="select" title="选择 / 拖拽" aria-label="选择 / 拖拽"><img class="icon" src="icons/open_with.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="link" title="连线" aria-label="连线"><img class="icon" src="icons/link.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="add" title="添加卡片" aria-label="添加卡片"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="format-size" title="画布大小" aria-label="画布大小"><img class="icon" src="icons/format_size.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="zoom" title="缩放模式" aria-label="缩放模式"><img class="icon" src="icons/search.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="zoom-in" title="放大" aria-label="放大"><img class="icon" src="icons/zoom_in.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="zoom-out" title="缩小" aria-label="缩小"><img class="icon" src="icons/zoom_out.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="fit" title="适应画布" aria-label="适应画布"><img class="icon" src="icons/fit_screen.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="delete" title="批量删除模式" aria-label="批量删除模式"><img class="icon" src="icons/delete_sweep.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn danger" id="edit-delete-selected-btn" title="删除选中卡片" aria-label="删除选中卡片" hidden><img class="icon" src="icons/delete.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="style" title="卡片样式" aria-label="卡片样式"><img class="icon" src="icons/palette.svg" alt="" aria-hidden="true"></button>
+      <button type="button" class="tool-btn" data-tool="save" title="保存" aria-label="保存"><img class="icon" src="icons/save.svg" alt="" aria-hidden="true"></button>
     </aside>
   </div>
 
