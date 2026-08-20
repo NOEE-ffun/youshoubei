@@ -201,7 +201,7 @@
     try {
       const hasAbort = typeof AbortController !== 'undefined';
       const controller = hasAbort ? new AbortController() : null;
-      timer = setTimeout(() => controller && controller.abort(), 2000);
+      timer = controller ? setTimeout(() => controller.abort(), 2000) : null;
       const response = await fetch('/api/data', controller ? { signal: controller.signal } : {});
       clearTimeout(timer);
       timer = null;
@@ -492,6 +492,12 @@
     const localPlayers = (await idbGetMeta(META_PLAYERS)) || [];
     const playerMap = new Map(localPlayers.map((p) => [p.id, p]));
     const tournaments = [];
+    /* 头像与赛事无关,只上传一轮;放在赛事循环外,避免每条记录重复扫描全部选手 */
+    for (const player of playerMap.values()) {
+      if (player.avatar && typeof player.avatar !== 'string') {
+        player.avatar = await uploadCloudImage(player.avatar);
+      }
+    }
     for (const record of local) {
       const copy = structuredClone(record);
       if (CanvasModel.migrateLegacyTournament) {
@@ -499,11 +505,6 @@
       }
       if (CanvasModel.ensureCanvasDecks) {
         CanvasModel.ensureCanvasDecks(copy);
-      }
-      for (const player of playerMap.values()) {
-        if (player.avatar && typeof player.avatar !== 'string') {
-          player.avatar = await uploadCloudImage(player.avatar);
-        }
       }
       for (const matchId of Object.keys(copy.matchDecks || {})) {
         for (const playerId of Object.keys(copy.matchDecks[matchId])) {
