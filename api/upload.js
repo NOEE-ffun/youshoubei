@@ -2,13 +2,10 @@
 
 const crypto = require('node:crypto');
 const { adminGate } = require('./auth');
+const { sendJson, readBody } = require('./helpers');
 const { uploadImageBuffer, publicUrl } = require('./oss');
 
 const MAX_SIZE = 5 * 1024 * 1024;
-
-function sendJson(res, status, payload) {
-  res.status(status).json(payload);
-}
 
 const EXT_BY_TYPE = {
   'image/png': '.png',
@@ -40,17 +37,11 @@ module.exports = async function handler(req, res) {
 
   if (!adminGate(req, res)) return;
 
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of req) {
-    size += chunk.length;
-    if (size > MAX_SIZE) {
-      sendJson(res, 413, { error: '图片过大' });
-      return;
-    }
-    chunks.push(chunk);
+  const buffer = await readBody(req, MAX_SIZE);
+  if (buffer === null) {
+    sendJson(res, 413, { error: '图片过大' });
+    return;
   }
-  const buffer = Buffer.concat(chunks);
   if (!buffer.length) {
     sendJson(res, 400, { error: '空文件' });
     return;
