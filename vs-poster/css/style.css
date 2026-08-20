@@ -59,134 +59,11 @@
 #poster-app .panel::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-faint);
 }
-/* ---------- 顶栏 ---------- */
-#poster-app .topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--size-16);
-  flex-wrap: wrap;
-  /* min 而非固定高:窄视口换行时自动长高,内容不再溢出 60px 条(单行时视觉不变) */
-  min-block-size: var(--topbar-height);
-  padding-inline: var(--size-20);
-  background: var(--color-surface);
-  border-block-end: 1px solid var(--color-border);
-}
-#poster-app .topbar__brand {
-  display: flex;
-  align-items: center;
-  gap: var(--size-12);
-  min-inline-size: 0;
-}
-#poster-app .topbar__logo {
-  color: var(--color-accent);
-  filter: drop-shadow(0 0 6px var(--color-accent));
-}
-#poster-app .topbar__title {
-  margin: 0;
-  font-size: var(--text-lg);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-#poster-app .topbar__tag {
-  font-family: var(--font-family-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.18em;
-  color: var(--color-text-faint);
-  white-space: nowrap;
-}
-#poster-app .topbar__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--size-12);
-  flex-wrap: wrap;
-}
-/* 中宽度带(60–70rem):品牌区+动作区放不进一行,收起装饰性副标题保顶栏单行
-   (此区间面板为 sticky,顶栏必须保持 --topbar-height,否则 sticky 偏移失准) */
-@media (60rem <= width < 70rem){#poster-app .topbar__tag {
-    display: none;
-  }}
-/* 触屏设备没有 Cmd/Ctrl+Enter,提示芯片只占位不传达信息 */
-@media (pointer: coarse){#poster-app .kbd {
-    display: none;
-  }}
 /* ---------- 主题选择器(单按钮 + 下拉菜单) ---------- */
+/* 按钮与下拉 ul 由主站 common.js renderHeader 生成(poster-theme-btn / poster-theme-menu),
+ * 样式在主站 styles.css;本文件只保留 JS 动态生成的菜单子元素覆盖样式 */
 #poster-app .picker {
   position: relative;
-}
-#poster-app .theme-picker {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--size-8);
-  block-size: 34px;
-  padding-inline: var(--size-12);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-}
-#poster-app .theme-picker:hover,
-#poster-app .theme-picker[aria-expanded="true"] {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--color-focus-ring);
-}
-#poster-app .theme-picker__dot {
-  inline-size: 14px;
-  block-size: 14px;
-  border-radius: var(--radius-full);
-  box-shadow: 0 0 6px currentColor;
-  flex-shrink: 0;
-}
-#poster-app .theme-picker__name {
-  white-space: nowrap;
-}
-#poster-app .theme-picker__caret {
-  color: var(--color-text-faint);
-  transition: transform var(--transition-fast);
-}
-#poster-app .theme-picker[aria-expanded="true"] .theme-picker__caret {
-  transform: rotate(180deg);
-}
-#poster-app .theme-menu {
-  position: absolute;
-  inset-block-start: calc(100% + 6px);
-  inset-inline-start: 0;
-  z-index: var(--layer-dropdown);
-  margin: 0;
-  padding: 6px;
-  list-style: none;
-  min-inline-size: 210px;
-  background: var(--color-surface-raised);
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-md);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
-}
-#poster-app .theme-menu li {
-  display: flex;
-  align-items: center;
-  gap: var(--size-12);
-  padding: var(--size-8) var(--size-12);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  outline-offset: -2px;
-}
-#poster-app .theme-menu li:hover {
-  background: var(--color-surface-sunken);
-  color: var(--color-text);
-}
-#poster-app .theme-menu li[aria-selected="true"] {
-  color: var(--color-text);
-  background: var(--color-accent-soft);
-}
-#poster-app .theme-menu li.theme-menu__item--focused {
-  outline: 2px solid var(--color-accent);
 }
 #poster-app .theme-menu__dot {
   inline-size: 12px;
@@ -197,11 +74,6 @@
 }
 #poster-app .theme-menu__name {
   flex: 1;
-}
-#poster-app .theme-menu li[aria-selected="true"]::after {
-  content: "✓";
-  color: var(--color-accent);
-  font-weight: var(--font-weight-bold);
 }
 /* ---------- OBS 舞台模式(隐藏界面,仅渲染海报) ---------- */
 /* ---------- 按钮 ---------- */
@@ -221,23 +93,6 @@
 }
 #poster-app .btn:active {
   transform: translateY(1px);
-}
-#poster-app .btn--primary {
-  border: 0;
-  /* 2026-08-12 审计:原亮渐变白字最低 1.53:1;与 #101018 各 50% 混合后三主题白字 ≥5.0:1 */
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--color-accent) 50%, #101018),
-    color-mix(in srgb, var(--color-accent-2) 50%, #101018));
-  color: #fff;
-  box-shadow: 0 0 14px var(--color-accent-soft), inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-#poster-app .btn--primary:hover {
-  box-shadow: 0 0 22px var(--color-accent-soft), inset 0 0 0 1px rgba(255, 255, 255, 0.28);
-}
-#poster-app .btn--primary:disabled {
-  opacity: 0.65;
-  cursor: progress;
 }
 #poster-app .btn--ghost {
   border: 1px solid var(--color-border-strong);
@@ -262,15 +117,6 @@
   border-color: var(--color-error);
   background: var(--color-error);
   color: #fff;
-}
-#poster-app .kbd {
-  padding: 2px 7px;
-  border: 1px solid var(--color-border-strong);
-  border-block-end-width: 2px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-family-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text-faint);
 }
 /* ---------- 布局 ---------- */
 #poster-app .layout {
@@ -522,11 +368,6 @@
   gap: 4px;
   flex-shrink: 0;
 }
-#poster-app .roster__del--armed {
-  border-color: var(--color-error) !important;
-  background: var(--color-error) !important;
-  color: #fff !important;
-}
 #poster-app .roster__empty {
   margin: 0;
   font-size: var(--text-sm);
@@ -708,22 +549,7 @@
 #poster-app .panel {
     position: static;
     max-block-size: none;
-  }
-#poster-app .topbar {
-    min-block-size: 0;
-    padding-block: var(--size-12);
   }}
-/* ---------- title (player title) controls ---------- */
-
-#poster-app .title-badge {
-  display: inline-block;
-  margin-block-start: 4px;
-  font-family: var(--font-family-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.05em;
-  color: var(--color-accent);
-}
-
 #poster-app .field__control:disabled {
   opacity: 0.6;
   cursor: not-allowed;
