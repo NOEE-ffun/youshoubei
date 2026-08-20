@@ -1653,7 +1653,9 @@
 
   function renderHeader() {
     buildSideActions();
-    if (!headerBuilt && !buildHeaderSkeleton()) return;
+    /* 主页无页头:buildHeaderSkeleton 返回 false,但侧栏按钮的主题图标/
+     * 可见性同步仍需执行(syncHeaderState 内部对页头部分自带守卫) */
+    if (!headerBuilt) buildHeaderSkeleton();
     syncHeaderState();
   }
 
