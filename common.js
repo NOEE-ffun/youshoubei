@@ -128,6 +128,7 @@
     return Array.from({ length: 8 }, (_, i) => ({
       id: uid('p'),
       name: '选手 ' + (i + 1),
+      tag: '',
       title: '',
       color: null,
       avatar: null,
@@ -136,7 +137,8 @@
     }));
   }
 
-  /* 选手对象归一化：title(赛前垃圾话)统一为纯文本字符串、color 校验为 #rrggbb 或 null。
+  /* 选手对象归一化：title(赛前垃圾话)统一为纯文本字符串、color 校验为 #rrggbb 或 null、
+   * tag(ID/队名)为 ≤16 字符纯文本(与海报输入框 maxlength 一致)。
    * 兼容上一版 {type,text,image} 对象结构,取其中 text 并丢弃 image。
    * 非法选手对象返回 null；字段可修复时返回浅拷贝的新对象（原对象不动）。 */
   function normalizePlayer(p) {
@@ -145,37 +147,23 @@
     if (typeof p.title === 'string') title = p.title;
     else if (p.title && typeof p.title === 'object' && typeof p.title.text === 'string') title = p.title.text;
     const color = /^#[0-9a-fA-F]{6}$/.test(p.color || '') ? p.color : null;
+    const tag = typeof p.tag === 'string' ? p.tag.trim().slice(0, 16) : '';
     const out = Object.assign({}, p);
     out.title = title;
     out.color = color;
+    out.tag = tag;
     return out;
   }
 
   function makeDefaultTournament(name, roster) {
     const r = roster || [];
-    const record = CanvasModel.createDefaultTournament      ? CanvasModel.createDefaultTournament(name, r)
-      : {
-          id: uid('t'),
-          name: (name && name.trim()) || '我的赛事',
-          status: 'upcoming',
-          startTime: null,
-          liveUrl: '',
-          rules: DEFAULT_RULES,
-          background: null,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          roster: r.slice(),
-          canvas: { cards: [] },
-          scores: {},
-          matchDecks: {}
-        };
+    const record = CanvasModel.createDefaultTournament(name, r);
     record.rules = DEFAULT_RULES;
     return record;
   }
 
   function makeBlankTournament(name) {
-    const record = CanvasModel.createBlankTournament      ? CanvasModel.createBlankTournament(name)
-      : makeDefaultTournament(name, []);
+    const record = CanvasModel.createBlankTournament(name);
     record.rules = DEFAULT_RULES;
     return record;
   }

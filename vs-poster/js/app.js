@@ -502,7 +502,8 @@
   function applyPlayer(side, player) {
     var d = state.data[side];
     var sameRoster = d.rosterId === player.id;
-    var tag = sameRoster ? (d.tag || "") : "";
+    /* 换选手时带出选手库的 ID/队名(tag),同人重应用则保留现场编辑值 */
+    var tag = sameRoster ? (d.tag || "") : (player.tag || "");
     var tagImg = sameRoster ? (d.tagImg || null) : null;
     var tagImgRatio = sameRoster ? (d.tagImgRatio || null) : null;
     var tagImgSize = sameRoster ? (d.tagImgSize || null) : null;
@@ -555,6 +556,7 @@
         name: name,
         avatar: null,
         title: "",
+        tag: "",
         color: null,
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -573,6 +575,7 @@
       player.name = name;
       player.color = /^#[0-9a-fA-F]{6}$/.test(d.color || "") ? d.color : null;
       player.title = titleText;
+      player.tag = String(d.tag || "").trim().slice(0, 16);
       player.updatedAt = Date.now();
       if (needAvatar) player.avatar = avatar;
 

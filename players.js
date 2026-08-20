@@ -124,6 +124,7 @@
         id: (window.CanvasModel && CanvasModel.uid) ? CanvasModel.uid('p') : ('p_' + Date.now()),
         name,
         title: '',
+        tag: '',
         color: null,
         avatar: null,
         createdAt: Date.now(),

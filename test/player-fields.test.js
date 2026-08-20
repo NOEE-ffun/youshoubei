@@ -62,4 +62,11 @@ assert.equal(normalizePlayer({ id: 'p1', color: 'blue' }).color, null);
 assert.equal(normalizePlayer({ id: 'p1', color: '#abc' }).color, null);
 assert.equal(normalizePlayer({ id: 'p1', color: '#A1B2C3' }).color, '#A1B2C3');
 
+// 7. tag(ID/队名)归一化：字符串保留并截 16 字，非字符串归空，缺省补空串
+assert.equal(normalizePlayer({ id: 'p1', tag: 'DK.FIRE' }).tag, 'DK.FIRE');
+assert.equal(normalizePlayer({ id: 'p1', tag: '  前后空格  ' }).tag, '前后空格');
+assert.equal(normalizePlayer({ id: 'p1', tag: 'x'.repeat(20) }).tag.length, 16, '超长 tag 应截到 16 字符');
+assert.equal(normalizePlayer({ id: 'p1', tag: 42 }).tag, '');
+assert.equal(normalizePlayer({ id: 'p1' }).tag, '');
+
 console.log('player-fields 全部测试通过 ✓');
