@@ -1452,29 +1452,32 @@
     document.documentElement.style.setProperty('--header-height', placeholder.offsetHeight + 'px');
   }
 
-  function renderHeader() {
+  /* 顶栏骨架只在首次渲染时构建一次并绑定事件;后续数据/主题/权限变化
+   * 走 syncHeaderState 增量更新——全量重建会销毁海报页头的主题菜单、
+   * 分辨率选择等控件状态,还会在每次保存后重放整段 HTML 解析 */
+  let headerBuilt = false;
+
+  function buildHeaderSkeleton() {
     const app = window.TournamentApp;
     const placeholder = document.getElementById('app-header');
-    if (!placeholder) return;
-    const active = app.current;
-    const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器' };
-    const headerTitle = pageTitles[app.activePage] || active.name;
-    const options = app.list.map((item) =>
-      '<option value="' + item.id + '"' + (item.id === active.id ? ' selected' : '') + '>' +
-      escapeHtml(item.name) +
-      '</option>'
-    ).join('');
+    if (!placeholder) return false;
     const isSchedule = app.activePage === 'schedule';
     const isPoster = app.activePage === 'poster';
-    const showTournamentSwitch = app.activePage === 'schedule';
+    /* 赛程页 main 无 h1,顶栏标题承担 h1;其余页面 main 自带 h1,顶栏用 span 避免双 h1 */
+    const titleTag = isSchedule ? 'h1' : 'span';
+    const titleGroup = app.activePage === 'home'
+      ? ''
+      : '  <div class="header-title-group">' +
+        '    <' + titleTag + ' class="header-title"></' + titleTag + '>' +
+        '  </div>';
+    const tournamentSwitch = isSchedule
+      ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
+        '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛"></select>'
+      : '';
     const scheduleActions = isSchedule
       ? '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
         '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单" aria-label="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
         '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>'
-      : '';
-    const tournamentSwitch = showTournamentSwitch
-      ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
-        '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛">' + options + '</select>'
       : '';
     /* 海报页页头专属控制（主题选择/分辨率/导出/OBS），仅海报页渲染 */
     const posterControls = isPoster
@@ -1492,23 +1495,6 @@
         '  <button type="button" id="poster-obs" class="btn btn-ghost btn-sm" title="复制 OBS 浏览器源链接">OBS 源</button>' +
         '</div>'
       : '';
-    /* 主题切换按钮:显示"将切换到"的目标模式图标(浅色时显示月亮) */
-    const theme = currentTheme();
-    const toDark = theme !== 'dark';
-    const themeLabel = toDark ? '切换为深色模式' : '切换为浅色模式';
-    const themeBtn =
-      '<button type="button" id="header-theme-btn" class="btn btn-ghost btn-sm icon-btn" title="' + themeLabel + '" aria-label="' + themeLabel + '">' +
-      iconMarkup(toDark ? 'dark_mode' : 'light_mode', themeLabel) +
-      '</button>';
-    /* 赛程页 main 无 h1,顶栏标题承担 h1;其余页面 main 自带 h1,顶栏用 span 避免双 h1。
-     * 主页顶栏不显示标题;状态徽章只在赛程页出现 */
-    const titleTag = isSchedule ? 'h1' : 'span';
-    const titleGroup = app.activePage === 'home'
-      ? ''
-      : '  <div class="header-title-group">' +
-        '    <' + titleTag + ' class="header-title" title="' + escapeHtml(headerTitle) + '">' + escapeHtml(headerTitle) + '</' + titleTag + '>' +
-        (isSchedule ? statusBadgeMarkup(active.status) : '') +
-        '  </div>';
     placeholder.innerHTML =
       '<div class="header-inner">' +
       titleGroup +
@@ -1516,17 +1502,13 @@
       tournamentSwitch +
       scheduleActions +
       posterControls +
-      themeBtn +
+      '    <button type="button" id="header-theme-btn" class="btn btn-ghost btn-sm icon-btn"></button>' +
       '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm icon-btn" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
       '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="设置" aria-label="设置">' + iconMarkup('settings', '设置') + '</button>' +
       '  </div>' +
       '</div>';
 
     placeholder.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
-
-    /* 海报 OBS 推送按钮仅管理员可见（访客只读渲染） */
-    const posterObs = placeholder.querySelector('#poster-obs');
-    if (posterObs) posterObs.hidden = !canEdit();
 
     const switchSelect = placeholder.querySelector('#tournament-switch');
     if (switchSelect) {
@@ -1540,7 +1522,6 @@
       });
     }
     const manageBtn = placeholder.querySelector('#manage-btn');
-    manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
     manageBtn.addEventListener('click', openManageDialog);
     placeholder.querySelector('#settings-btn').addEventListener('click', () => openSettingsDialog(false));
 
@@ -1563,11 +1544,82 @@
         if (window.BracketActions && window.BracketActions.requestEdit) window.BracketActions.requestEdit();
       });
     }
-    syncHeaderHeight();
     if (!headerHeightBound) {
       headerHeightBound = true;
       window.addEventListener('resize', debounce(syncHeaderHeight, 120));
     }
+    headerBuilt = true;
+    return true;
+  }
+
+  function syncHeaderState() {
+    const app = window.TournamentApp;
+    const header = document.getElementById('app-header');
+    if (!header || !app.current) return;
+    const active = app.current;
+    const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器' };
+    const headerTitle = pageTitles[app.activePage] || active.name;
+
+    const titleEl = header.querySelector('.header-title');
+    if (titleEl && titleEl.textContent !== headerTitle) {
+      titleEl.textContent = headerTitle;
+      titleEl.setAttribute('title', headerTitle);
+    }
+
+    /* 状态徽章只在赛程页出现;值未变时不碰 DOM */
+    if (app.activePage === 'schedule') {
+      const group = header.querySelector('.header-title-group');
+      let badge = group.querySelector('.status-badge');
+      const statusKey = String(active.status || '');
+      if (!badge || badge.dataset.status !== statusKey) {
+        if (badge) badge.remove();
+        group.insertAdjacentHTML('beforeend', statusBadgeMarkup(active.status));
+        badge = group.querySelector('.status-badge');
+        if (badge) badge.dataset.status = statusKey;
+      }
+    }
+
+    /* 切换比赛下拉:列表签名变化才重建 options,否则只同步选中值 */
+    const switchSelect = header.querySelector('#tournament-switch');
+    if (switchSelect) {
+      const signature = app.list.map((item) => item.id + ':' + item.name).join('|');
+      if (switchSelect.dataset.sig !== signature) {
+        switchSelect.dataset.sig = signature;
+        switchSelect.innerHTML = app.list.map((item) =>
+          '<option value="' + item.id + '"' + (item.id === active.id ? ' selected' : '') + '>' +
+          escapeHtml(item.name) +
+          '</option>'
+        ).join('');
+      } else if (switchSelect.value !== active.id) {
+        switchSelect.value = active.id;
+      }
+    }
+
+    /* 权限相关的按钮可见性 */
+    const manageBtn = header.querySelector('#manage-btn');
+    if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
+    /* 海报 OBS 推送按钮仅管理员可见（访客只读渲染） */
+    const posterObs = header.querySelector('#poster-obs');
+    if (posterObs) posterObs.hidden = !canEdit();
+
+    /* 主题切换按钮:显示"将切换到"的目标模式图标(浅色时显示月亮) */
+    const theme = currentTheme();
+    const themeBtn = header.querySelector('#header-theme-btn');
+    if (themeBtn && themeBtn.dataset.mode !== theme) {
+      themeBtn.dataset.mode = theme;
+      const toDark = theme !== 'dark';
+      const themeLabel = toDark ? '切换为深色模式' : '切换为浅色模式';
+      themeBtn.title = themeLabel;
+      themeBtn.setAttribute('aria-label', themeLabel);
+      themeBtn.innerHTML = iconMarkup(toDark ? 'dark_mode' : 'light_mode', themeLabel);
+    }
+
+    syncHeaderHeight();
+  }
+
+  function renderHeader() {
+    if (!headerBuilt && !buildHeaderSkeleton()) return;
+    syncHeaderState();
   }
 
   /* ---------- 主流程 ---------- */
