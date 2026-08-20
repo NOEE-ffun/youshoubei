@@ -2401,6 +2401,47 @@ body[data-page="players"] #bg-layer {
   height: 1.15rem;
 }
 
+/* 侧栏底部的功能按钮组(主题/管理/设置),与主导航隔开沉底 */
+.side-actions {
+  margin-block-start: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: center;
+  width: 100%;
+  padding-block-start: 0.4rem;
+  border-top: 1px solid var(--border);
+}
+
+.side-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  min-block-size: 2.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.side-action:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+.side-action .icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* 主页无页头:高度变量归零,home-main 的 calc(100vh - var) 自动全屏 */
+body[data-page="home"] {
+  --header-height: 0px;
+}
+
 .side-link.is-active .icon,
 .tool-btn.is-active .icon {
   filter: invert(1);

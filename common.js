@@ -1535,13 +1535,8 @@
       tournamentSwitch +
       scheduleActions +
       posterControls +
-      '    <button type="button" id="header-theme-btn" class="btn btn-ghost btn-sm icon-btn"></button>' +
-      '    <button type="button" id="manage-btn" class="btn btn-secondary btn-sm icon-btn" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
-      '    <button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="设置" aria-label="设置">' + iconMarkup('settings', '设置') + '</button>' +
       '  </div>' +
       '</div>';
-
-    placeholder.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
 
     const switchSelect = placeholder.querySelector('#tournament-switch');
     if (switchSelect) {
@@ -1554,9 +1549,6 @@
         }
       });
     }
-    const manageBtn = placeholder.querySelector('#manage-btn');
-    manageBtn.addEventListener('click', openManageDialog);
-    placeholder.querySelector('#settings-btn').addEventListener('click', () => openSettingsDialog(false));
 
     const rulesBtn = placeholder.querySelector('#header-rules-btn');
     if (rulesBtn) {
@@ -1588,56 +1580,59 @@
   function syncHeaderState() {
     const app = window.TournamentApp;
     const header = document.getElementById('app-header');
-    if (!header || !app.current) return;
-    const active = app.current;
-    const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器' };
-    const headerTitle = pageTitles[app.activePage] || active.name;
+    if (header && app.current) {
+      const active = app.current;
+      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器' };
+      const headerTitle = pageTitles[app.activePage] || active.name;
 
-    const titleEl = header.querySelector('.header-title');
-    if (titleEl && titleEl.textContent !== headerTitle) {
-      titleEl.textContent = headerTitle;
-      titleEl.setAttribute('title', headerTitle);
-    }
-
-    /* 状态徽章只在赛程页出现;值未变时不碰 DOM */
-    if (app.activePage === 'schedule') {
-      const group = header.querySelector('.header-title-group');
-      let badge = group.querySelector('.status-badge');
-      const statusKey = String(active.status || '');
-      if (!badge || badge.dataset.status !== statusKey) {
-        if (badge) badge.remove();
-        group.insertAdjacentHTML('beforeend', statusBadgeMarkup(active.status));
-        badge = group.querySelector('.status-badge');
-        if (badge) badge.dataset.status = statusKey;
+      const titleEl = header.querySelector('.header-title');
+      if (titleEl && titleEl.textContent !== headerTitle) {
+        titleEl.textContent = headerTitle;
+        titleEl.setAttribute('title', headerTitle);
       }
-    }
 
-    /* 切换比赛下拉:列表签名变化才重建 options,否则只同步选中值 */
-    const switchSelect = header.querySelector('#tournament-switch');
-    if (switchSelect) {
-      const signature = app.list.map((item) => item.id + ':' + item.name).join('|');
-      if (switchSelect.dataset.sig !== signature) {
-        switchSelect.dataset.sig = signature;
-        switchSelect.innerHTML = app.list.map((item) =>
-          '<option value="' + item.id + '"' + (item.id === active.id ? ' selected' : '') + '>' +
-          escapeHtml(item.name) +
-          '</option>'
-        ).join('');
-      } else if (switchSelect.value !== active.id) {
-        switchSelect.value = active.id;
+      /* 状态徽章只在赛程页出现;值未变时不碰 DOM */
+      if (app.activePage === 'schedule') {
+        const group = header.querySelector('.header-title-group');
+        let badge = group.querySelector('.status-badge');
+        const statusKey = String(active.status || '');
+        if (!badge || badge.dataset.status !== statusKey) {
+          if (badge) badge.remove();
+          group.insertAdjacentHTML('beforeend', statusBadgeMarkup(active.status));
+          badge = group.querySelector('.status-badge');
+          if (badge) badge.dataset.status = statusKey;
+        }
       }
+
+      /* 切换比赛下拉:列表签名变化才重建 options,否则只同步选中值 */
+      const switchSelect = header.querySelector('#tournament-switch');
+      if (switchSelect) {
+        const signature = app.list.map((item) => item.id + ':' + item.name).join('|');
+        if (switchSelect.dataset.sig !== signature) {
+          switchSelect.dataset.sig = signature;
+          switchSelect.innerHTML = app.list.map((item) =>
+            '<option value="' + item.id + '"' + (item.id === active.id ? ' selected' : '') + '>' +
+            escapeHtml(item.name) +
+            '</option>'
+          ).join('');
+        } else if (switchSelect.value !== active.id) {
+          switchSelect.value = active.id;
+        }
+      }
+
+      /* 海报 OBS 推送按钮仅管理员可见（访客只读渲染） */
+      const posterObs = header.querySelector('#poster-obs');
+      if (posterObs) posterObs.hidden = !canEdit();
+
+      syncHeaderHeight();
     }
 
-    /* 权限相关的按钮可见性 */
-    const manageBtn = header.querySelector('#manage-btn');
+    /* 主题/管理按钮在侧栏底部,与页头是否存在无关 */
+    const manageBtn = document.getElementById('manage-btn');
     if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
-    /* 海报 OBS 推送按钮仅管理员可见（访客只读渲染） */
-    const posterObs = header.querySelector('#poster-obs');
-    if (posterObs) posterObs.hidden = !canEdit();
 
-    /* 主题切换按钮:显示"将切换到"的目标模式图标(浅色时显示月亮) */
     const theme = currentTheme();
-    const themeBtn = header.querySelector('#header-theme-btn');
+    const themeBtn = document.getElementById('header-theme-btn');
     if (themeBtn && themeBtn.dataset.mode !== theme) {
       themeBtn.dataset.mode = theme;
       const toDark = theme !== 'dark';
@@ -1646,11 +1641,30 @@
       themeBtn.setAttribute('aria-label', themeLabel);
       themeBtn.innerHTML = iconMarkup(toDark ? 'dark_mode' : 'light_mode', themeLabel);
     }
+  }
 
-    syncHeaderHeight();
+  /* 左侧栏底部的功能按钮组(主题/管理/设置),独立于页头存在——主页无页头也能用 */
+  let sideActionsBuilt = false;
+
+  function buildSideActions() {
+    if (sideActionsBuilt) return;
+    const sidebar = document.getElementById('app-sidebar');
+    if (!sidebar) return;
+    const group = document.createElement('div');
+    group.className = 'side-actions';
+    group.innerHTML =
+      '<button type="button" id="header-theme-btn" class="side-action" aria-label="切换主题"></button>' +
+      '<button type="button" id="manage-btn" class="side-action" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
+      '<button type="button" id="settings-btn" class="side-action" title="设置" aria-label="设置">' + iconMarkup('settings', '设置') + '</button>';
+    sidebar.appendChild(group);
+    group.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
+    group.querySelector('#manage-btn').addEventListener('click', openManageDialog);
+    group.querySelector('#settings-btn').addEventListener('click', () => openSettingsDialog(false));
+    sideActionsBuilt = true;
   }
 
   function renderHeader() {
+    buildSideActions();
     if (!headerBuilt && !buildHeaderSkeleton()) return;
     syncHeaderState();
   }
