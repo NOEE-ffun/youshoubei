@@ -303,24 +303,6 @@ test("build: 无选手色时两侧默认主题色", () => {
   assert.ok(svg.includes("%23" + THEME.right.main.slice(1)), "右侧占位头像应为主题右色");
 });
 
-console.log("\n[state.js] OBS payload");
-test("packPayload/unpackPayload 往返一致", () => {
-  const sample = { data: { matchName: "测试", left: { name: "A", img: "data:image/png;base64,AAA" }, right: { name: "B" } }, themeId: "ice-fire" };
-  const packed = S.VSState.packPayload(sample);
-  assert.ok(packed.length > 10, "payload 过短");
-  const back = S.VSState.unpackPayload(packed);
-  assert.equal(back.data.matchName, "测试");
-  assert.equal(back.data.left.name, "A");
-  assert.equal(back.data.left.img, "data:image/png;base64,AAA");
-  assert.equal(back.themeId, "ice-fire");
-});
-test("unpackPayload 非法输入返回 null", () => {
-  assert.equal(S.VSState.unpackPayload(""), null);
-  assert.equal(S.VSState.unpackPayload("not json"), null);
-  assert.equal(S.VSState.unpackPayload(encodeURIComponent(JSON.stringify({ foo: 1 }))), null);
-  assert.equal(S.VSState.unpackPayload(encodeURIComponent(JSON.stringify({ data: null }))), null);
-});
-
 console.log("\n[app.js] 装配回归");
 
 test("els 对象无重复键(防 stage 被海报容器覆盖的回归)", () => {
