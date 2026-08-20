@@ -8,6 +8,13 @@
   const META_PLAYERS = 'globalPlayers';
   const LS_ACTIVE = 'ts:activeTournamentId';
   const LS_ADMIN_TOKEN = 'ts:adminToken';
+  /* 跨文件事件协议:数据变更 / 应用就绪。common.js 派发,各页面监听 */
+  const EVT_CHANGED = 'ts:changed';
+  const EVT_READY = 'ts:ready';
+  const pad2 = (n) => String(n).padStart(2, '0');
+  /* Vercel Blob 额度耗尽/暂停的错误识别,写数据与传图片共用 */
+  const BLOB_QUOTA_RE = /suspended|quota|exceed|满额|额度/i;
+  const BLOB_QUOTA_MESSAGE = 'Vercel Blob 存储额度已用尽或已暂停，请在 Vercel 控制台恢复 / 升级 Blob 后重试。';
   const LS_THEME = 'ts:theme';
 
   const DEFAULT_RULES = [
@@ -46,49 +53,34 @@
     return dbPromise;
   }
 
-  function idbPut(record) {
+  /* 事务模板:五个 idb 操作共用,resolve 请求结果(写操作为 key,无消费方) */
+  function withStore(storeName, mode, run) {
     return openDb().then((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(record);
-      tx.oncomplete = () => resolve();
+      const tx = db.transaction(storeName, mode);
+      const request = run(tx.objectStore(storeName));
+      tx.oncomplete = () => resolve(request ? request.result : undefined);
       tx.onerror = () => reject(tx.error);
     }));
+  }
+
+  function idbPut(record) {
+    return withStore(STORE, 'readwrite', (store) => store.put(record));
   }
 
   function idbGetAll() {
-    return openDb().then((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const request = tx.objectStore(STORE).getAll();
-      request.onsuccess = () => resolve(request.result || []);
-      request.onerror = () => reject(request.error);
-    }));
+    return withStore(STORE, 'readonly', (store) => store.getAll()).then((rows) => rows || []);
   }
 
   function idbDelete(id) {
-    return openDb().then((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).delete(id);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    }));
+    return withStore(STORE, 'readwrite', (store) => store.delete(id));
   }
 
   function idbGetMeta(key) {
-    return openDb().then((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction(META_STORE, 'readonly');
-      const request = tx.objectStore(META_STORE).get(key);
-      request.onsuccess = () => resolve(request.result ? request.result.value : null);
-      request.onerror = () => reject(request.error);
-    }));
+    return withStore(META_STORE, 'readonly', (store) => store.get(key)).then((row) => (row ? row.value : null));
   }
 
   function idbPutMeta(key, value) {
-    return openDb().then((db) => new Promise((resolve, reject) => {
-      const tx = db.transaction(META_STORE, 'readwrite');
-      tx.objectStore(META_STORE).put({ key, value });
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    }));
+    return withStore(META_STORE, 'readwrite', (store) => store.put({ key, value }));
   }
 
   function uid(prefix) {
@@ -158,8 +150,7 @@
 
   function makeDefaultTournament(name, roster) {
     const r = roster || [];
-    const record = (typeof CanvasModel !== 'undefined' && CanvasModel.createDefaultTournament)
-      ? CanvasModel.createDefaultTournament(name, r)
+    const record = CanvasModel.createDefaultTournament      ? CanvasModel.createDefaultTournament(name, r)
       : {
           id: uid('t'),
           name: (name && name.trim()) || '我的赛事',
@@ -180,8 +171,7 @@
   }
 
   function makeBlankTournament(name) {
-    const record = (typeof CanvasModel !== 'undefined' && CanvasModel.createBlankTournament)
-      ? CanvasModel.createBlankTournament(name)
+    const record = CanvasModel.createBlankTournament      ? CanvasModel.createBlankTournament(name)
       : makeDefaultTournament(name, []);
     record.rules = DEFAULT_RULES;
     return record;
@@ -302,7 +292,7 @@
       }
       setCloudWorkspace(fresh);
       await refreshApp();
-      document.dispatchEvent(new CustomEvent('ts:changed'));
+      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
     } catch (error) {
       /* 后台校新失败:沿用现有数据,不打扰用户 */
     }
@@ -367,10 +357,8 @@
       });
       if (response.status === 401) throw new Error('管理口令错误');
       if (!response.ok) {
-        const message = (await apiErrorMessage(response)) || '保存云端数据失败';
-        if (/suspended|quota|exceed|满额|额度/i.test(message)) {
-          throw new Error('Vercel Blob 存储额度已用尽或已暂停，请在 Vercel 控制台恢复 / 升级 Blob 后重试。');
-        }
+        const message = (await apiErrorMessage(response)) || fallbackMessage;
+        if (BLOB_QUOTA_RE.test(message)) throw new Error(BLOB_QUOTA_MESSAGE);
         throw new Error(message);
       }
       /* 上传成功后本地快照与上传内容对齐 */
@@ -394,9 +382,7 @@
     if (response.status === 401) throw new Error('管理口令错误');
     if (!response.ok) {
       const message = (await apiErrorMessage(response)) || '图片上传失败';
-      if (/suspended|quota|exceed|满额|额度/i.test(message)) {
-        throw new Error('Vercel Blob 存储额度已用尽或已暂停，请在 Vercel 控制台恢复 / 升级 Blob 后重试。');
-      }
+      if (BLOB_QUOTA_RE.test(message)) throw new Error(BLOB_QUOTA_MESSAGE);
       throw new Error(message);
     }
     const data = await response.json();
@@ -508,10 +494,10 @@
     const tournaments = [];
     for (const record of local) {
       const copy = structuredClone(record);
-      if (typeof CanvasModel !== 'undefined' && CanvasModel.migrateLegacyTournament) {
+      if (CanvasModel.migrateLegacyTournament) {
         CanvasModel.migrateLegacyTournament(copy, playerMap);
       }
-      if (typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
+      if (CanvasModel.ensureCanvasDecks) {
         CanvasModel.ensureCanvasDecks(copy);
       }
       for (const player of playerMap.values()) {
@@ -572,7 +558,10 @@
     notify('已从云端拉取 ' + workspace.tournaments.length + ' 场比赛到本机');
   }
 
-  function compressImage(file, maxDim, quality) {
+  /* 压缩公共管线:加载文件 → canvas 重采样 → WebP 优先、JPEG 回退。
+   * draw 负责设置画布尺寸并绘制(等比缩放 or 头像中心裁切)。 */
+  function compressToBlob(file, draw, quality) {
+    const q = quality || 0.85;
     return new Promise((resolve, reject) => {
       if (!file || !file.type || !file.type.startsWith('image/')) {
         reject(new Error('请选择图片文件'));
@@ -582,22 +571,16 @@
       const image = new Image();
       image.onload = () => {
         URL.revokeObjectURL(url);
-        const scale = Math.min(1, maxDim / Math.max(image.naturalWidth, image.naturalHeight));
-        const width = Math.max(1, Math.round(image.naturalWidth * scale));
-        const height = Math.max(1, Math.round(image.naturalHeight * scale));
         const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(image, 0, 0, width, height);
+        draw(image, canvas);
         canvas.toBlob((blob) => {
           if (blob && blob.type === 'image/webp') { resolve(blob); return; }
           /* 不支持 WebP 编码的浏览器回退 JPEG */
           canvas.toBlob((fallback) => {
             if (fallback) resolve(fallback);
             else reject(new Error('图片压缩失败'));
-          }, 'image/jpeg', quality || 0.85);
-        }, 'image/webp', quality || 0.85);
+          }, 'image/jpeg', q);
+        }, 'image/webp', q);
       };
       image.onerror = () => {
         URL.revokeObjectURL(url);
@@ -607,40 +590,26 @@
     });
   }
 
-  /* 头像压缩：中心裁切成 200×200 方形后转 JPEG */
+  function compressImage(file, maxDim, quality) {
+    return compressToBlob(file, (image, canvas) => {
+      const scale = Math.min(1, maxDim / Math.max(image.naturalWidth, image.naturalHeight));
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+    }, quality);
+  }
+
+  /* 头像压缩：中心裁切成 200×200 方形 */
   function compressAvatar(file) {
-    return new Promise((resolve, reject) => {
-      if (!file || !file.type || !file.type.startsWith('image/')) {
-        reject(new Error('请选择图片文件'));
-        return;
-      }
-      const url = URL.createObjectURL(file);
-      const image = new Image();
-      image.onload = () => {
-        URL.revokeObjectURL(url);
-        const size = Math.min(image.naturalWidth, image.naturalHeight);
-        const canvas = document.createElement('canvas');
-        canvas.width = 200;
-        canvas.height = 200;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(image,
-          (image.naturalWidth - size) / 2,
-          (image.naturalHeight - size) / 2,
-          size, size,
-          0, 0, 200, 200);
-        canvas.toBlob((blob) => {
-          if (blob && blob.type === 'image/webp') { resolve(blob); return; }
-          canvas.toBlob((fallback) => {
-            if (fallback) resolve(fallback);
-            else reject(new Error('图片压缩失败'));
-          }, 'image/jpeg', 0.85);
-        }, 'image/webp', 0.85);
-      };
-      image.onerror = () => {
-        URL.revokeObjectURL(url);
-        reject(new Error('无法读取图片'));
-      };
-      image.src = url;
+    return compressToBlob(file, (image, canvas) => {
+      const size = Math.min(image.naturalWidth, image.naturalHeight);
+      canvas.width = 200;
+      canvas.height = 200;
+      canvas.getContext('2d').drawImage(image,
+        (image.naturalWidth - size) / 2,
+        (image.naturalHeight - size) / 2,
+        size, size,
+        0, 0, 200, 200);
     });
   }
 
@@ -942,7 +911,7 @@
       await setActiveId(record.id);
       input.value = '';
       renderManageList();
-      document.dispatchEvent(new CustomEvent('ts:changed'));
+      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
     });
 
     settingsDialog.querySelector('#settings-form').addEventListener('submit', async (event) => {
@@ -977,7 +946,7 @@
       applyBackground(record);
       renderHeader();
       settingsDialog.close();
-      document.dispatchEvent(new CustomEvent('ts:changed'));
+      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
     });
 
     settingsDialog.querySelector('#bg-upload').addEventListener('click', () => {
@@ -1014,7 +983,7 @@
         status.textContent = '已清除口令';
         syncSettingsAdminState(true);
         renderHeader();
-        document.dispatchEvent(new CustomEvent('ts:changed'));
+        document.dispatchEvent(new CustomEvent(EVT_CHANGED));
         return;
       }
       if (!cloudWorkspace) {
@@ -1038,7 +1007,7 @@
         await cloudPutWorkspace(cloudWorkspace);
         status.textContent = '口令正确，已解锁';
         renderHeader();
-        document.dispatchEvent(new CustomEvent('ts:changed'));
+        document.dispatchEvent(new CustomEvent(EVT_CHANGED));
       } catch (error) {
         setAdminToken('');
         input.value = '';
@@ -1127,7 +1096,7 @@
           }
           await refreshApp();
           renderManageList();
-          document.dispatchEvent(new CustomEvent('ts:changed'));
+          document.dispatchEvent(new CustomEvent(EVT_CHANGED));
         } catch (error) {
           notify('重命名失败：' + errMsg(error), 'danger');
         }
@@ -1139,7 +1108,7 @@
         try {
           await setActiveId(btn.dataset.switch);
           renderManageList();
-          document.dispatchEvent(new CustomEvent('ts:changed'));
+          document.dispatchEvent(new CustomEvent(EVT_CHANGED));
         } catch (error) {
           notify('切换比赛失败：' + errMsg(error), 'danger');
         }
@@ -1175,7 +1144,7 @@
           await storagePut(copy);
           await setActiveId(copy.id);
           renderManageList();
-          document.dispatchEvent(new CustomEvent('ts:changed'));
+          document.dispatchEvent(new CustomEvent(EVT_CHANGED));
         } catch (error) {
           notify('复制比赛失败：' + errMsg(error), 'danger');
         }
@@ -1216,7 +1185,7 @@
           notify('删除后刷新失败：' + errMsg(error), 'danger');
         }
         renderManageList();
-        document.dispatchEvent(new CustomEvent('ts:changed'));
+        document.dispatchEvent(new CustomEvent(EVT_CHANGED));
       });
     });
   }
@@ -1231,9 +1200,8 @@
     if (!value) return '';
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '';
-    const pad = (n) => String(n).padStart(2, '0');
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
-      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) +
+      'T' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
 
   function openSettingsDialog(focusRules) {
@@ -1280,8 +1248,7 @@
         ' alt="' + escapeHtml(player.name || '') + ' 的头像">';
     }
     const initial = String((player && player.name) || '?').trim().charAt(0) || '?';
-    const color = (typeof CanvasModel !== 'undefined' && CanvasModel.avatarColor)
-      ? CanvasModel.avatarColor(player ? player.id : '')
+    const color = CanvasModel.avatarColor      ? CanvasModel.avatarColor(player ? player.id : '')
       : '#3563e9';
     return '<span class="' + cls + ' avatar-fallback" style="background:' + color + '">' +
       escapeHtml(initial) + '</span>';
@@ -1317,16 +1284,14 @@
     if (!value) return '';
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '';
-    const pad = (n) => String(n).padStart(2, '0');
-    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
   }
 
   /* 比赛已分出冠亚季军时，返回 playerId → 奖牌信息 的映射；未结束返回空 Map */
   function medalMap(record) {
     const map = new Map();
     if (!record || !record.canvas || !Array.isArray(record.roster)) return map;
-    const standings = (typeof CanvasModel !== 'undefined' && CanvasModel.deriveStandings)
-      ? CanvasModel.deriveStandings(record)
+    const standings = CanvasModel.deriveStandings      ? CanvasModel.deriveStandings(record)
       : { champion: null, runnerUp: null, thirdPlace: null };
     if (!standings.champion) return map;
     if (standings.champion) map.set(standings.champion, { type: 'gold', emoji: '🥇' });
@@ -1564,7 +1529,7 @@
       switchSelect.addEventListener('change', async (event) => {
         try {
           await setActiveId(event.target.value);
-          document.dispatchEvent(new CustomEvent('ts:changed'));
+          document.dispatchEvent(new CustomEvent(EVT_CHANGED));
         } catch (error) {
           notify('切换比赛失败：' + errMsg(error), 'danger');
         }
@@ -1683,15 +1648,15 @@
       const needsMigration = record.schemaVersion !== SCHEMA_VERSION;
       const before = needsMigration ? JSON.stringify(record) : JSON.stringify(record.roster || null);
       if (needsMigration) {
-        if (typeof CanvasModel !== 'undefined' && CanvasModel.migrateLegacyTournament) {
+        if (CanvasModel.migrateLegacyTournament) {
           CanvasModel.migrateLegacyTournament(record, playerMap);
         }
-        if (typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
+        if (CanvasModel.ensureCanvasDecks) {
           CanvasModel.ensureCanvasDecks(record);
         }
         record.schemaVersion = SCHEMA_VERSION;
       }
-      if (typeof CanvasModel !== 'undefined' && CanvasModel.deriveRoster && record.canvas) {
+      if (CanvasModel.deriveRoster && record.canvas) {
         record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => playerMap.has(id));
       }
       const after = needsMigration ? JSON.stringify(record) : JSON.stringify(record.roster || null);
@@ -1793,7 +1758,7 @@
         setCloudWorkspace(normalizeWorkspace(cached.workspace));
         appInstance.mode = mode;
         await refreshApp();
-        document.dispatchEvent(new CustomEvent('ts:ready'));
+        document.dispatchEvent(new CustomEvent(EVT_READY));
         if (Date.now() - cached.savedAt > WORKSPACE_CACHE_TTL) revalidateWorkspaceQuietly();
         return;
       }
@@ -1816,7 +1781,7 @@
       showFatalError(error);
       return;
     }
-    document.dispatchEvent(new CustomEvent('ts:ready'));
+    document.dispatchEvent(new CustomEvent(EVT_READY));
   }
 
   window.TournamentAppInit = init;

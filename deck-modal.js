@@ -43,8 +43,7 @@
     const app = window.TournamentApp;
     const record = app.current;
     const card = cardDef();
-    const match = (typeof CanvasModel !== 'undefined' && CanvasModel.resolveCardById)
-      ? CanvasModel.resolveCardById(record.canvas, record.roster || [], record.scores || {}, currentMatchId)
+    const match = CanvasModel.resolveCardById      ? CanvasModel.resolveCardById(record.canvas, record.roster || [], record.scores || {}, currentMatchId)
       : null;
     const names = new Map((app.players || []).map((p) => [p.id, p.name]));
     return { record, match, card, names };
@@ -53,7 +52,7 @@
   function open(matchId) {
     if (!dialog) buildDialog();
     currentMatchId = matchId;
-    if (typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
+    if (CanvasModel.ensureCanvasDecks) {
       CanvasModel.ensureCanvasDecks(window.TournamentApp.current);
     }
     render();

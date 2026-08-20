@@ -126,12 +126,12 @@
     closeRosterDropdown();
     closeRulesDropdown();
     const record = app.current;
-    if (typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
+    if (CanvasModel.ensureCanvasDecks) {
       CanvasModel.ensureCanvasDecks(record);
     }
     if (!record.scores) record.scores = {};
     if (!record.canvas) record.canvas = { cards: [] };
-    if (typeof CanvasModel !== 'undefined' && CanvasModel.deriveRoster && record.canvas) {
+    if (CanvasModel.deriveRoster && record.canvas) {
       const known = new Set((window.TournamentApp.players || []).map((p) => p.id));
       record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => known.has(id));
     }
@@ -157,8 +157,7 @@
     const app = window.TournamentApp;
     const record = app.current;
     const names = new Map((app.players || []).map((p) => [p.id, p.name]));
-    const standings = (typeof CanvasModel !== 'undefined' && CanvasModel.deriveStandings)
-      ? CanvasModel.deriveStandings(record)
+    const standings = CanvasModel.deriveStandings      ? CanvasModel.deriveStandings(record)
       : { champion: null, runnerUp: null, thirdPlace: null };
     const banner = document.getElementById('champion-banner');
     const text = document.getElementById('champion-text');
@@ -279,18 +278,16 @@
     const record = currentRecord();
     const board = document.getElementById('canvas-board');
     if (!board) return;
-    if (record && record.canvas && typeof CanvasModel !== 'undefined' && CanvasModel.deriveRoster) {
+    if (record && record.canvas && CanvasModel.deriveRoster) {
       const known = new Set((window.TournamentApp.players || []).map((p) => p.id));
       record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => known.has(id));
     }
     const canvas = record.canvas || { cards: [] };
-    const resolved = (typeof CanvasModel !== 'undefined' && CanvasModel.resolveCanvas)
-      ? CanvasModel.resolveCanvas(canvas, record.roster || [], record.scores || {})
+    const resolved = CanvasModel.resolveCanvas      ? CanvasModel.resolveCanvas(canvas, record.roster || [], record.scores || {})
       : { cards: (canvas.cards || []).map((c) => ({ ...c, a: null, b: null, played: false })) };
     const names = new Map((window.TournamentApp.players || []).map((p) => [p.id, p.name]));
     const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match)).join('');
-    const size = (typeof CanvasModel !== 'undefined' && CanvasModel.getCanvasSize)
-      ? CanvasModel.getCanvasSize(canvas)
+    const size = CanvasModel.getCanvasSize      ? CanvasModel.getCanvasSize(canvas)
       : { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS };
     const cardMaxX = Math.max(0, ...(canvas.cards || []).map((c) => (Number(c.x) || 0) * COL_GAP + CARD_WIDTH + 40));
     const cardMaxY = Math.max(0, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * ROW_GAP + CARD_HEIGHT + 40));
@@ -396,8 +393,7 @@
     const record = currentRecord();
     if (!record || !record.canvas) return;
     buildCanvasSizeDialog();
-    const size = (typeof CanvasModel !== 'undefined' && CanvasModel.getCanvasSize)
-      ? CanvasModel.getCanvasSize(record.canvas)
+    const size = CanvasModel.getCanvasSize      ? CanvasModel.getCanvasSize(record.canvas)
       : { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS };
     canvasSizeDialog.querySelector('#canvas-size-cols').value = size.cols;
     canvasSizeDialog.querySelector('#canvas-size-rows').value = size.rows;
@@ -413,8 +409,7 @@
       notify('请输入有效的画布大小', 'danger');
       return;
     }
-    const size = (typeof CanvasModel !== 'undefined' && CanvasModel.clampCanvasSize)
-      ? CanvasModel.clampCanvasSize(cols, rows)
+    const size = CanvasModel.clampCanvasSize      ? CanvasModel.clampCanvasSize(cols, rows)
       : { cols: Math.max(1, Math.min(200, Math.round(cols))), rows: Math.max(1, Math.min(200, Math.round(rows))) };
     record.canvas.size = size;
     canvasSizeDialog.close();
@@ -565,8 +560,7 @@
   function openScoreDialog(cardId) {
     buildScoreDialog();
     const record = currentRecord();
-    const resolved = (typeof CanvasModel !== 'undefined' && CanvasModel.resolveCanvas)
-      ? CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {})
+    const resolved = CanvasModel.resolveCanvas      ? CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {})
       : null;
     const match = resolved && resolved.cards.find((c) => c.id === cardId);
     const title = match ? (match.label || cardId) : cardId;
