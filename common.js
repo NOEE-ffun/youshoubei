@@ -1422,7 +1422,7 @@
       item.text + '</span>';
   }
 
-  /* 两页（赛程/library）共用的浮动缩放控件绑定 */
+  /* 赛程页的浮动缩放控件绑定 */
   function bindZoomDock(handlers) {
     const dock = document.getElementById('zoom-dock');
     if (!dock || !handlers) return;
@@ -1435,17 +1435,6 @@
       else if (kind === 'reset' && handlers.onReset) handlers.onReset();
       else if (kind === 'fit' && handlers.onFit) handlers.onFit();
     });
-  }
-
-  /* library 页 Ctrl/Cmd+滚轮缩放（赛程页由 canvas-editor 处理，避免双重缩放） */
-  function bindZoomWheel(scrollId, zoomAtCenter) {
-    const sc = document.getElementById(scrollId);
-    if (!sc || typeof zoomAtCenter !== 'function') return;
-    sc.addEventListener('wheel', (event) => {
-      if (!event.ctrlKey && !event.metaKey) return;
-      event.preventDefault();
-      zoomAtCenter(Math.exp(-event.deltaY * 0.0018));
-    }, { passive: false });
   }
 
   function bindZoomFitOnResize(shouldFit, fit) {
@@ -1472,7 +1461,6 @@
     notify,
     uiConfirm,
     bindZoomDock,
-    bindZoomWheel,
     bindZoomFitOnResize
   };
 
