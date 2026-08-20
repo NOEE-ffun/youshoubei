@@ -34,6 +34,14 @@
   const MAX_CANVAS_COLS = 200;
   const MAX_CANVAS_ROWS = 200;
 
+  /* 画布几何唯一真源:卡片尺寸、网格间距、连线端口纵向偏移,
+   * bracket.js(渲染)与 canvas-editor.js(编辑)统一引用,改这里即可全局生效 */
+  const CARD_WIDTH = 280;
+  const CARD_HEIGHT = 176;
+  const COL_GAP = 320;
+  const ROW_GAP = 210;
+  const PORT_Y = { winner: 70, loser: 108 };
+
   function clampCanvasSize(cols, rows) {
     const c = Number(cols);
     const r = Number(rows);
@@ -527,6 +535,11 @@
     DEFAULT_CANVAS_ROWS,
     MAX_CANVAS_COLS,
     MAX_CANVAS_ROWS,
+    CARD_WIDTH,
+    CARD_HEIGHT,
+    COL_GAP,
+    ROW_GAP,
+    PORT_Y,
     createEmptyCanvas,
     createDefaultCanvas,
     createDefaultTournament,
