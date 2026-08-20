@@ -797,9 +797,9 @@
   let settingsDialog = null;
   let pendingBackground = null;
 
-  function buildDialogs() {
-    if (manageDialog) return;
+  /* ---------- 管理弹窗 ---------- */
 
+  function buildManageDialog() {
     manageDialog = document.createElement('dialog');
     manageDialog.id = 'manage-dialog';
     manageDialog.setAttribute('aria-labelledby', 'manage-title');
@@ -825,6 +825,33 @@
       '</div>';
     document.body.appendChild(manageDialog);
 
+    manageDialog.querySelector('#create-tournament-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = manageDialog.querySelector('#new-tournament-name');
+      const template = manageDialog.querySelector('#new-tournament-template');
+      const name = input.value.trim() || '我的赛事';
+      let record;
+      if (template && template.value === 'double') {
+        record = makeDefaultTournament(name);
+      } else {
+        record = makeBlankTournament(name);
+      }
+      try {
+        await storagePut(record);
+      } catch (error) {
+        notify('新建比赛失败：' + errMsg(error), 'danger');
+        return;
+      }
+      await setActiveId(record.id);
+      input.value = '';
+      renderManageList();
+      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+    });
+  }
+
+  /* ---------- 设置弹窗 ---------- */
+
+  function buildSettingsDialog() {
     settingsDialog = document.createElement('dialog');
     settingsDialog.id = 'settings-dialog';
     settingsDialog.setAttribute('aria-labelledby', 'settings-title');
@@ -889,35 +916,13 @@
       '<input type="file" id="bg-file-input" accept="image/*" hidden>';
     document.body.appendChild(settingsDialog);
 
-    for (const dialog of [manageDialog, settingsDialog]) {
-      dialog.querySelectorAll('[data-dialog-close]').forEach((btn) => {
-        btn.addEventListener('click', () => dialog.close());
-      });
-    }
+    bindSettingsForm();
+    bindBackgroundControls();
+    bindAdminUnlock();
+    bindMigrationButtons();
+  }
 
-    manageDialog.querySelector('#create-tournament-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const input = manageDialog.querySelector('#new-tournament-name');
-      const template = manageDialog.querySelector('#new-tournament-template');
-      const name = input.value.trim() || '我的赛事';
-      let record;
-      if (template && template.value === 'double') {
-        record = makeDefaultTournament(name);
-      } else {
-        record = makeBlankTournament(name);
-      }
-      try {
-        await storagePut(record);
-      } catch (error) {
-        notify('新建比赛失败：' + errMsg(error), 'danger');
-        return;
-      }
-      await setActiveId(record.id);
-      input.value = '';
-      renderManageList();
-      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
-    });
-
+  function bindSettingsForm() {
     settingsDialog.querySelector('#settings-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       if (mode === 'cloud' && !appInstance.isAdmin()) {
@@ -952,7 +957,9 @@
       settingsDialog.close();
       document.dispatchEvent(new CustomEvent(EVT_CHANGED));
     });
+  }
 
+  function bindBackgroundControls() {
     settingsDialog.querySelector('#bg-upload').addEventListener('click', () => {
       settingsDialog.querySelector('#bg-file-input').click();
     });
@@ -978,7 +985,9 @@
         event.target.value = '';
       }
     });
+  }
 
+  function bindAdminUnlock() {
     settingsDialog.querySelector('#admin-unlock').addEventListener('click', async () => {
       const input = settingsDialog.querySelector('#settings-admin-token');
       const status = settingsDialog.querySelector('#admin-status');
@@ -1019,7 +1028,9 @@
       }
       syncSettingsAdminState(true);
     });
+  }
 
+  function bindMigrationButtons() {
     settingsDialog.querySelector('#migrate-up').addEventListener('click', async () => {
       try {
         await migrateLocalToCloud();
@@ -1036,6 +1047,17 @@
         notify(errMsg(error), 'danger');
       }
     });
+  }
+
+  function buildDialogs() {
+    if (manageDialog) return;
+    buildManageDialog();
+    buildSettingsDialog();
+    for (const dialog of [manageDialog, settingsDialog]) {
+      dialog.querySelectorAll('[data-dialog-close]').forEach((btn) => {
+        btn.addEventListener('click', () => dialog.close());
+      });
+    }
   }
 
   function syncSettingsAdminState(preserveStatus) {
@@ -1067,6 +1089,113 @@
     for (const field of fields) field.disabled = !admin;
   }
 
+  /* 深拷贝赛事:画布卡片换新 id 并重映射集内连线,比分与卡组清零 */
+  function cloneTournament(source) {
+    const copy = structuredClone(source);
+    copy.id = uid('t');
+    copy.name = source.name + ' 副本';
+    copy.createdAt = Date.now();
+    copy.updatedAt = Date.now();
+    copy.scores = {};
+    copy.matchDecks = {};
+    const idMap = new Map();
+    for (const card of copy.canvas.cards || []) {
+      const newId = uid('c');
+      idMap.set(card.id, newId);
+      card.id = newId;
+    }
+    for (const card of copy.canvas.cards || []) {
+      for (const slot of card.slots || []) {
+        if (slot && slot.type === 'flow' && idMap.has(slot.cardId)) {
+          slot.cardId = idMap.get(slot.cardId);
+        }
+      }
+    }
+    return copy;
+  }
+
+  async function renameTournament(input) {
+    try {
+      const id = input.closest('.manage-item').querySelector('[data-switch]').dataset.switch;
+      const all = await storageGetAll();
+      const record = all.find((t) => t.id === id);
+      if (!record) return;
+      record.name = input.value.trim() || record.name;
+      try {
+        await storagePut(record);
+      } catch (error) {
+        notify('重命名失败：' + errMsg(error), 'danger');
+        return;
+      }
+      await refreshApp();
+      renderManageList();
+      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+    } catch (error) {
+      notify('重命名失败：' + errMsg(error), 'danger');
+    }
+  }
+
+  async function switchTournament(id) {
+    try {
+      await setActiveId(id);
+      renderManageList();
+      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+    } catch (error) {
+      notify('切换比赛失败：' + errMsg(error), 'danger');
+    }
+  }
+
+  async function copyTournament(id) {
+    try {
+      const all = await storageGetAll();
+      const source = all.find((t) => t.id === id);
+      if (!source) return;
+      const copy = cloneTournament(source);
+      await storagePut(copy);
+      await setActiveId(copy.id);
+      renderManageList();
+      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+    } catch (error) {
+      notify('复制比赛失败：' + errMsg(error), 'danger');
+    }
+  }
+
+  async function deleteTournament(id) {
+    const item = window.TournamentApp.list.find((t) => t.id === id);
+    if (!item) return;
+    if (!(await uiConfirm('确定删除比赛「' + item.name + '」吗？该操作不可恢复。'))) return;
+    try {
+      await storageDelete(id);
+    } catch (error) {
+      notify('删除失败：' + errMsg(error), 'danger');
+      return;
+    }
+    try {
+      const remaining = (await storageGetAll());
+      if (!remaining.length) {
+        /* 删光后兜底重建默认赛事,避免空工作区 */
+        const playerIds = (window.TournamentApp.players || []).slice(0, 8).map((p) => p.id);
+        const fresh = makeDefaultTournament('我的赛事', playerIds);
+        try {
+          await storagePut(fresh);
+        } catch (error) {
+          notify('新建默认比赛失败：' + errMsg(error), 'danger');
+          return;
+        }
+        remaining.push(fresh);
+      }
+      if (id === window.TournamentApp.current.id) {
+        await setActiveId(remaining[0].id);
+      } else {
+        await refreshApp();
+      }
+    } catch (error) {
+      notify('删除后刷新失败：' + errMsg(error), 'danger');
+    }
+    renderManageList();
+    document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+  }
+
   function renderManageList() {
     if (!manageDialog) return;
     const list = manageDialog.querySelector('#manage-list');
@@ -1085,112 +1214,16 @@
     }).join('');
 
     list.querySelectorAll('.manage-item-name').forEach((input) => {
-      input.addEventListener('change', async () => {
-        try {
-          const id = input.closest('.manage-item').querySelector('[data-switch]').dataset.switch;
-          const all = await storageGetAll();
-          const record = all.find((t) => t.id === id);
-          if (!record) return;
-          record.name = input.value.trim() || record.name;
-          try {
-            await storagePut(record);
-          } catch (error) {
-            notify('重命名失败：' + errMsg(error), 'danger');
-            return;
-          }
-          await refreshApp();
-          renderManageList();
-          document.dispatchEvent(new CustomEvent(EVT_CHANGED));
-        } catch (error) {
-          notify('重命名失败：' + errMsg(error), 'danger');
-        }
-      });
+      input.addEventListener('change', () => { renameTournament(input); });
     });
-
     list.querySelectorAll('[data-switch]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        try {
-          await setActiveId(btn.dataset.switch);
-          renderManageList();
-          document.dispatchEvent(new CustomEvent(EVT_CHANGED));
-        } catch (error) {
-          notify('切换比赛失败：' + errMsg(error), 'danger');
-        }
-      });
+      btn.addEventListener('click', () => { switchTournament(btn.dataset.switch); });
     });
-
     list.querySelectorAll('[data-copy]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        try {
-          const all = await storageGetAll();
-          const source = all.find((t) => t.id === btn.dataset.copy);
-          if (!source) return;
-          const copy = structuredClone(source);
-          copy.id = uid('t');
-          copy.name = source.name + ' 副本';
-          copy.createdAt = Date.now();
-          copy.updatedAt = Date.now();
-          copy.scores = {};
-          copy.matchDecks = {};
-          const idMap = new Map();
-          for (const card of copy.canvas.cards || []) {
-            const newId = uid('c');
-            idMap.set(card.id, newId);
-            card.id = newId;
-          }
-          for (const card of copy.canvas.cards || []) {
-            for (const slot of card.slots || []) {
-              if (slot && slot.type === 'flow' && idMap.has(slot.cardId)) {
-                slot.cardId = idMap.get(slot.cardId);
-              }
-            }
-          }
-          await storagePut(copy);
-          await setActiveId(copy.id);
-          renderManageList();
-          document.dispatchEvent(new CustomEvent(EVT_CHANGED));
-        } catch (error) {
-          notify('复制比赛失败：' + errMsg(error), 'danger');
-        }
-      });
+      btn.addEventListener('click', () => { copyTournament(btn.dataset.copy); });
     });
-
     list.querySelectorAll('[data-delete]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.delete;
-        const item = window.TournamentApp.list.find((t) => t.id === id);
-        if (!item) return;
-        if (!(await uiConfirm('确定删除比赛「' + item.name + '」吗？该操作不可恢复。'))) return;
-        try {
-          await storageDelete(id);
-        } catch (error) {
-          notify('删除失败：' + errMsg(error), 'danger');
-          return;
-        }
-        try {
-          const remaining = (await storageGetAll());
-          if (!remaining.length) {
-            const playerIds = (window.TournamentApp.players || []).slice(0, 8).map((p) => p.id);
-            const fresh = makeDefaultTournament('我的赛事', playerIds);
-            try {
-              await storagePut(fresh);
-            } catch (error) {
-              notify('新建默认比赛失败：' + errMsg(error), 'danger');
-              return;
-            }
-            remaining.push(fresh);
-          }
-          if (id === window.TournamentApp.current.id) {
-            await setActiveId(remaining[0].id);
-          } else {
-            await refreshApp();
-          }
-        } catch (error) {
-          notify('删除后刷新失败：' + errMsg(error), 'danger');
-        }
-        renderManageList();
-        document.dispatchEvent(new CustomEvent(EVT_CHANGED));
-      });
+      btn.addEventListener('click', () => { deleteTournament(btn.dataset.delete); });
     });
   }
 
