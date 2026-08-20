@@ -242,123 +242,124 @@
     });
   }
 
-  function bindFormControls() {
-    SIDES.forEach(function (side) {
-      var drop = sideEl(side, "drop");
-      var fileInput = document.createElement("input");
-      fileInput.type = "file";
-      fileInput.accept = "image/*";
-      fileInput.hidden = true;
-      drop.appendChild(fileInput);
+  /* 单侧选手控件:头像(点击/拖拽/URL/移除)、队标图、垃圾话、选色、存为选手 */
+  function bindSideControls(side) {
+    var drop = sideEl(side, "drop");
+    var fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*";
+    fileInput.hidden = true;
+    drop.appendChild(fileInput);
 
-      drop.addEventListener("click", function () { fileInput.click(); });
-      fileInput.addEventListener("change", function () {
-        VSUpload.handleFile(fileInput.files[0])
-          .then(function (dataURL) { setAvatar(side, dataURL); })
-          .catch(function (e) { toast(e.message, true); });
-        fileInput.value = "";
-      });
-
-      drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("avatar__drop--over"); });
-      drop.addEventListener("dragleave", function () { drop.classList.remove("avatar__drop--over"); });
-      drop.addEventListener("drop", function (e) {
-        e.preventDefault();
-        drop.classList.remove("avatar__drop--over");
-        var file = e.dataTransfer.files && e.dataTransfer.files[0];
-        if (file) {
-          VSUpload.handleFile(file)
-            .then(function (dataURL) { setAvatar(side, dataURL); })
-            .catch(function (err) { toast(err.message, true); });
-        }
-      });
-
-      var urlBtn = document.querySelector('[data-url-btn="' + side + '"]');
-      function loadFromURL() {
-        var url = sideEl(side, "url").value.trim();
-        if (!url) {
-          toast("请先粘贴图片链接", true);
-          return;
-        }
-        VSUpload.handleURL(url)
-          .then(function (dataURL) { setAvatar(side, dataURL); })
-          .catch(function (e) { toast(e.message, true); });
-      }
-      urlBtn.addEventListener("click", loadFromURL);
-      sideEl(side, "url").addEventListener("keydown", function (e) { if (e.key === "Enter") loadFromURL(); });
-
-      var remove = sideEl(side, "remove");
-      function removeAvatar() {
-        setAvatar(side, null);
-        sideEl(side, "url").value = "";
-      }
-      remove.addEventListener("click", removeAvatar);
-      remove.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); removeAvatar(); }
-      });
-
-      // 队标图片
-      var tagImgBtn = sideEl(side, "tag-img");
-      var tagRemoveBtn = sideEl(side, "tag-img-remove");
-      var tagFileInput = document.createElement("input");
-      tagFileInput.type = "file";
-      tagFileInput.accept = "image/*";
-      tagFileInput.hidden = true;
-      tagImgBtn.appendChild(tagFileInput);
-      tagImgBtn.addEventListener("click", function () { tagFileInput.click(); });
-      tagFileInput.addEventListener("change", function () {
-        VSUpload.handleFile(tagFileInput.files[0])
-          .then(function (dataURL) {
-            measureImageRatio(dataURL).then(function (ratio) {
-              state.data[side].tagImg = dataURL;
-              state.data[side].tagImgRatio = ratio;
-              saveState();
-              render();
-              toast("队标图片已应用到 ID 胶囊(优先于文字)");
-            });
-          })
-          .catch(function (e) { toast(e.message, true); });
-        tagFileInput.value = "";
-      });
-      tagRemoveBtn.addEventListener("click", function () {
-        state.data[side].tagImg = null;
-        state.data[side].tagImgRatio = null;
-        state.data[side].tagImgSize = null;
-        saveState();
-        render();
-        toast("已移除队标图片,恢复文字显示");
-      });
-
-      sideEl(side, "tag-size").addEventListener("input", function () {
-        state.data[side].tagImgSize = Number(sideEl(side, "tag-size").value) || null;
-        saveState();
-        render();
-      });
-
-      // 赛前垃圾话(纯文本)
-      sideEl(side, "title").addEventListener("input", function () {
-        state.data[side].title = sideEl(side, "title").value.trim();
-        clearTimeout(titleDebounce[side]);
-        titleDebounce[side] = setTimeout(function () { saveState(); render(); }, 160);
-      });
-
-      // 自由选色
-      sideEl(side, "color").addEventListener("input", function () {
-        state.data[side].color = sideEl(side, "color").value;
-        saveState();
-        render();
-      });
-      sideEl(side, "color-clear").addEventListener("click", function () {
-        state.data[side].color = null;
-        saveState();
-        render();
-        toast("已恢复跟随全局主题");
-      });
-
-      // 存为选手
-      sideEl(side, "save-roster").addEventListener("click", function () { saveSlotToPlayer(side); });
+    drop.addEventListener("click", function () { fileInput.click(); });
+    fileInput.addEventListener("change", function () {
+      VSUpload.handleFile(fileInput.files[0])
+        .then(function (dataURL) { setAvatar(side, dataURL); })
+        .catch(function (e) { toast(e.message, true); });
+      fileInput.value = "";
     });
 
-    // 整页拖图
+    drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("avatar__drop--over"); });
+    drop.addEventListener("dragleave", function () { drop.classList.remove("avatar__drop--over"); });
+    drop.addEventListener("drop", function (e) {
+      e.preventDefault();
+      drop.classList.remove("avatar__drop--over");
+      var file = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (file) {
+        VSUpload.handleFile(file)
+          .then(function (dataURL) { setAvatar(side, dataURL); })
+          .catch(function (err) { toast(err.message, true); });
+      }
+    });
+
+    var urlBtn = document.querySelector('[data-url-btn="' + side + '"]');
+    function loadFromURL() {
+      var url = sideEl(side, "url").value.trim();
+      if (!url) {
+        toast("请先粘贴图片链接", true);
+        return;
+      }
+      VSUpload.handleURL(url)
+        .then(function (dataURL) { setAvatar(side, dataURL); })
+        .catch(function (e) { toast(e.message, true); });
+    }
+    urlBtn.addEventListener("click", loadFromURL);
+    sideEl(side, "url").addEventListener("keydown", function (e) { if (e.key === "Enter") loadFromURL(); });
+
+    var remove = sideEl(side, "remove");
+    function removeAvatar() {
+      setAvatar(side, null);
+      sideEl(side, "url").value = "";
+    }
+    remove.addEventListener("click", removeAvatar);
+    remove.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); removeAvatar(); }
+    });
+
+    // 队标图片
+    var tagImgBtn = sideEl(side, "tag-img");
+    var tagRemoveBtn = sideEl(side, "tag-img-remove");
+    var tagFileInput = document.createElement("input");
+    tagFileInput.type = "file";
+    tagFileInput.accept = "image/*";
+    tagFileInput.hidden = true;
+    tagImgBtn.appendChild(tagFileInput);
+    tagImgBtn.addEventListener("click", function () { tagFileInput.click(); });
+    tagFileInput.addEventListener("change", function () {
+      VSUpload.handleFile(tagFileInput.files[0])
+        .then(function (dataURL) {
+          measureImageRatio(dataURL).then(function (ratio) {
+            state.data[side].tagImg = dataURL;
+            state.data[side].tagImgRatio = ratio;
+            saveState();
+            render();
+            toast("队标图片已应用到 ID 胶囊(优先于文字)");
+          });
+        })
+        .catch(function (e) { toast(e.message, true); });
+      tagFileInput.value = "";
+    });
+    tagRemoveBtn.addEventListener("click", function () {
+      state.data[side].tagImg = null;
+      state.data[side].tagImgRatio = null;
+      state.data[side].tagImgSize = null;
+      saveState();
+      render();
+      toast("已移除队标图片,恢复文字显示");
+    });
+
+    sideEl(side, "tag-size").addEventListener("input", function () {
+      state.data[side].tagImgSize = Number(sideEl(side, "tag-size").value) || null;
+      saveState();
+      render();
+    });
+
+    // 赛前垃圾话(纯文本)
+    sideEl(side, "title").addEventListener("input", function () {
+      state.data[side].title = sideEl(side, "title").value.trim();
+      clearTimeout(titleDebounce[side]);
+      titleDebounce[side] = setTimeout(function () { saveState(); render(); }, 160);
+    });
+
+    // 自由选色
+    sideEl(side, "color").addEventListener("input", function () {
+      state.data[side].color = sideEl(side, "color").value;
+      saveState();
+      render();
+    });
+    sideEl(side, "color-clear").addEventListener("click", function () {
+      state.data[side].color = null;
+      saveState();
+      render();
+      toast("已恢复跟随全局主题");
+    });
+
+    // 存为选手
+    sideEl(side, "save-roster").addEventListener("click", function () { saveSlotToPlayer(side); });
+  }
+
+  /* 整页拖图:按落点左右半区放入对应选手 */
+  function bindStageDrop() {
     els.posterStage.addEventListener("dragenter", function (e) { e.preventDefault(); dragDepth++; els.posterStage.classList.add("stage__frame--over"); });
     els.posterStage.addEventListener("dragover", function (e) { e.preventDefault(); });
     els.posterStage.addEventListener("dragleave", function (e) {
@@ -379,7 +380,10 @@
         })
         .catch(function (err) { toast(err.message, true); });
     });
+  }
 
+  /* 选手库卡片:左右应用按钮 */
+  function bindRosterList() {
     els.rosterList.addEventListener("click", function (e) {
       var btn = e.target.closest ? e.target.closest("button[data-act]") : null;
       if (!btn) return;
@@ -391,7 +395,10 @@
       if (act === "left" && player) applyPlayer("left", player);
       else if (act === "right" && player) applyPlayer("right", player);
     });
+  }
 
+  /* 比赛信息字段:文本防抖 + 下拉即时 */
+  function bindMatchFields() {
     var inputIds = ["match-name", "venue", "left-name", "left-tag", "right-name", "right-tag"];
     var debounce = {};
     inputIds.forEach(function (id) {
@@ -403,7 +410,10 @@
     ["stage", "bo", "match-date"].forEach(function (id) {
       $(id).addEventListener("change", function () { saveState(); render(); });
     });
+  }
 
+  /* 随机对阵与双击确认重置 */
+  function bindGlobalActions() {
     $("btn-random").addEventListener("click", function () {
       var pair = RANDOM_PAIRS[Math.floor(Math.random() * RANDOM_PAIRS.length)];
       state.data.left = { name: pair[0], tag: pair[2], img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: "" };
@@ -436,6 +446,14 @@
       render();
       toast("已重置为默认");
     });
+  }
+
+  function bindFormControls() {
+    SIDES.forEach(bindSideControls);
+    bindStageDrop();
+    bindRosterList();
+    bindMatchFields();
+    bindGlobalActions();
   }
 
   /* ---------- 选手库(主站全局选手) ---------- */
