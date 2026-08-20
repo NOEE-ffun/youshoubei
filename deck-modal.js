@@ -4,7 +4,6 @@
   let dialog = null;
   let currentMatchId = null;
   let pendingTarget = null;
-  let readOnly = false;
 
   const { escapeHtml, debounce, canEdit, save, avatarMarkup, cssUrl, notify, errMsg, iconMarkup, uiConfirm } =
     window.TournamentUtils;
@@ -51,15 +50,10 @@
     return { record, match, card, names };
   }
 
-  function canModify() {
-    return canEdit() && !readOnly;
-  }
-
-  function open(matchId, options) {
+  function open(matchId) {
     if (!dialog) buildDialog();
     currentMatchId = matchId;
-    readOnly = Boolean(options && options.readOnly);
-    if (!readOnly && typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
+    if (typeof CanvasModel !== 'undefined' && CanvasModel.ensureCanvasDecks) {
       CanvasModel.ensureCanvasDecks(window.TournamentApp.current);
     }
     render();
@@ -92,7 +86,7 @@
     }
     const record = window.TournamentApp.current;
     const decks = (record.matchDecks[currentMatchId] && record.matchDecks[currentMatchId][playerId]) || [];
-    const editable = canModify();
+    const editable = canEdit();
     const avatarPlayer = (window.TournamentApp.players || []).find((p) => p.id === playerId);
     return (
       '<section class="deck-player" data-player="' + playerId + '">' +
@@ -167,7 +161,7 @@
 
     body.querySelectorAll('[data-add], [data-replace]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        if (!canModify()) return;
+        if (!canEdit()) return;
         pendingTarget = btn.dataset.add || btn.dataset.replace;
         dialog.querySelector('#deck-file-input').click();
       });
@@ -175,12 +169,12 @@
 
     body.querySelectorAll('[data-add]').forEach((btn) => {
       btn.addEventListener('dragenter', (event) => {
-        if (!canModify()) return;
+        if (!canEdit()) return;
         event.preventDefault();
         btn.classList.add('drag-over');
       });
       btn.addEventListener('dragover', (event) => {
-        if (!canModify()) return;
+        if (!canEdit()) return;
         event.preventDefault();
         if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
       });
@@ -188,7 +182,7 @@
         if (!btn.contains(event.relatedTarget)) btn.classList.remove('drag-over');
       });
       btn.addEventListener('drop', (event) => {
-        if (!canModify()) return;
+        if (!canEdit()) return;
         event.preventDefault();
         btn.classList.remove('drag-over');
         const file = event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0];
