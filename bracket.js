@@ -82,8 +82,6 @@
     const toolbar = document.getElementById('edit-toolbar');
     if (layout) layout.classList.toggle('has-toolbar', editMode);
     if (toolbar) toolbar.hidden = !editMode;
-    const hint = document.getElementById('canvas-hint');
-    if (hint) hint.textContent = editMode ? '编辑模式' : '查看模式 · Ctrl/⌘+滚轮缩放';
     renderEditToolbar();
   }
 
