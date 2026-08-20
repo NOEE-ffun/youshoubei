@@ -61,6 +61,15 @@
     return [...batchSelected];
   }
 
+  /* bracket.js 经 connect() 注入的回调,使依赖单向化:editor 不再反向引用 BracketRender。
+   * renderCanvas 在编辑操作落盘后重绘画布;updateToolbar 刷新编辑工具栏按钮状态 */
+  let renderHook = null;
+  let toolbarHook = null;
+
+  function requestRender() {
+    if (renderHook) renderHook();
+  }
+
   function setSelection(ids) {
     batchSelected = new Set(ids || []);
     selectedCardId = [...batchSelected][0] || null;
@@ -69,11 +78,13 @@
   }
 
   function refreshToolbarUI() {
-    if (window.BracketRender && window.BracketRender.updateToolbar) window.BracketRender.updateToolbar();
+    if (toolbarHook) toolbarHook();
   }
 
   /* ---------- 编辑模式生命周期 ---------- */
 
+  /* 提示文案由 bracket.js syncEditUI 统一维护(enter/exit 之后必经 syncEditUI),
+   * editing class 是本编辑器的自身状态,由 enter/exit 增删 */
   function enter() {
     active = true;
     const b = board();
@@ -84,8 +95,6 @@
     bindBoardEvents();
     bindWheel();
     syncZoom();
-    const hint = document.getElementById('canvas-hint');
-    if (hint) hint.textContent = '编辑模式';
     refreshToolbarUI();
   }
 
@@ -105,8 +114,6 @@
       b.classList.remove('editing');
       b.classList.remove('tool-link', 'tool-delete', 'tool-select', 'zoom-mode');
     }
-    const hint = document.getElementById('canvas-hint');
-    if (hint) hint.textContent = '查看模式 · Ctrl/⌘+滚轮缩放';
     if (cardDialog && cardDialog.open) cardDialog.close();
     refreshToolbarUI();
   }
@@ -361,7 +368,7 @@
             outcome: connectState.outcome
           };
           saveCanvas().then(() => {
-            if (window.BracketRender) window.BracketRender.renderCanvas();
+            requestRender();
           });
         }
       }
@@ -382,7 +389,7 @@
     if (dragState) {
       if (dragState.moved) {
         saveCanvas().then(() => {
-          if (window.BracketRender) window.BracketRender.renderCanvas();
+          requestRender();
           highlightSelected();
         });
       }
@@ -476,7 +483,7 @@
     if (!nudgeCommit) {
       nudgeCommit = debounce(() => {
         saveCanvas().then(() => {
-          if (window.BracketRender) window.BracketRender.renderCanvas();
+          requestRender();
           highlightSelected();
         });
       }, 500);
@@ -549,7 +556,7 @@
     selectedCardId = card.id;
     refreshToolbarUI();
     saveCanvas().then(() => {
-      if (window.BracketRender) window.BracketRender.renderCanvas();
+      requestRender();
       highlightSelected();
       openCardDialog(card.id);
     });
@@ -580,7 +587,7 @@
     batchSelected.clear();
     selectedCardId = null;
     return saveCanvas().then(() => {
-      if (window.BracketRender) window.BracketRender.renderCanvas();
+      requestRender();
       refreshToolbarUI();
     });
   }
@@ -627,7 +634,7 @@
     batchSelected = new Set(clones.map((c) => c.id));
     selectedCardId = clones[0].id;
     saveCanvas().then(() => {
-      if (window.BracketRender) window.BracketRender.renderCanvas();
+      requestRender();
       highlightSelected();
       refreshToolbarUI();
     });
@@ -735,7 +742,7 @@
     card.exitRanks.loser = Number.isFinite(rl) ? rl : null;
     cardDialog.close();
     saveCanvas().then(() => {
-      if (window.BracketRender) window.BracketRender.renderCanvas();
+      requestRender();
     });
   }
 
@@ -856,7 +863,14 @@
 
   /* ---------- 暴露接口 ---------- */
 
+  /* bracket.js 启动时注入渲染回调;canvas-editor 只经此回调请求重绘,不引用上层全局 */
+  function connect(handlers) {
+    renderHook = handlers && typeof handlers.renderCanvas === 'function' ? handlers.renderCanvas : null;
+    toolbarHook = handlers && typeof handlers.updateToolbar === 'function' ? handlers.updateToolbar : null;
+  }
+
   window.CanvasEditor = {
+    connect,
     enter,
     exit,
     addCard,

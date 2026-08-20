@@ -49,14 +49,14 @@
     if (editMode) return;
     editMode = true;
     renderAll();
-    if (window.CanvasEditor && window.CanvasEditor.enter) window.CanvasEditor.enter();
+    CanvasEditor.enter();
     syncEditUI();
   }
 
   function exitEditMode() {
     if (!editMode) return;
     editMode = false;
-    if (window.CanvasEditor && window.CanvasEditor.exit) window.CanvasEditor.exit();
+    CanvasEditor.exit();
     renderAll();
     syncEditUI();
   }
@@ -73,7 +73,7 @@
   function syncEditUI() {
     if (editMode && !canEdit()) {
       editMode = false;
-      if (window.CanvasEditor && window.CanvasEditor.exit) window.CanvasEditor.exit();
+      CanvasEditor.exit();
       hideEditLock();
     } else if (canEdit()) {
       hideEditLock();
@@ -287,15 +287,14 @@
       : { cards: (canvas.cards || []).map((c) => ({ ...c, a: null, b: null, played: false })) };
     const names = new Map((window.TournamentApp.players || []).map((p) => [p.id, p.name]));
     const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match)).join('');
-    const size = CanvasModel.getCanvasSize      ? CanvasModel.getCanvasSize(canvas)
-      : { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS };
+    const size = CanvasModel.getCanvasSize(canvas);
     const cardMaxX = Math.max(0, ...(canvas.cards || []).map((c) => (Number(c.x) || 0) * COL_GAP + CARD_WIDTH + 40));
     const cardMaxY = Math.max(0, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * ROW_GAP + CARD_HEIGHT + 40));
     const maxX = Math.max(cardMaxX, size.cols * COL_GAP + 80);
     const maxY = Math.max(cardMaxY, size.rows * ROW_GAP + 80);
     board.style.width = maxX + 'px';
     board.style.height = maxY + 'px';
-    board.classList.toggle('editing', editMode);
+    /* editing class 由 CanvasEditor.enter/exit 维护(编辑器自身状态) */
     board.innerHTML = '';
     const boundary = document.createElement('div');
     boundary.className = 'canvas-boundary';
@@ -308,7 +307,7 @@
     wrap.className = 'canvas-cards';
     wrap.innerHTML = cardsHtml;
     board.appendChild(wrap);
-    if (window.CanvasEditor && window.CanvasEditor.syncZoom) window.CanvasEditor.syncZoom();
+    CanvasEditor.syncZoom();
     if (editMode) {
       // 编辑模式额外显示端口（连线交互在 canvas-editor.js 中实现）
       board.querySelectorAll('.canvas-card').forEach((el) => {
@@ -338,18 +337,17 @@
   }
 
   function updateToolbarState() {
-    if (!window.CanvasEditor) return;
     const toolbar = document.getElementById('edit-toolbar');
     if (!toolbar) return;
-    const tool = window.CanvasEditor.getTool ? window.CanvasEditor.getTool() : 'select';
-    const zoomMode = window.CanvasEditor.isZoomMode ? window.CanvasEditor.isZoomMode() : false;
+    const tool = CanvasEditor.getTool();
+    const zoomMode = CanvasEditor.isZoomMode();
     toolbar.querySelectorAll('.tool-btn[data-tool]').forEach((btn) => {
       const kind = btn.dataset.tool;
       btn.classList.toggle('is-active', kind === tool || (kind === 'zoom' && zoomMode));
     });
     const deleteBtn = document.getElementById('edit-delete-selected-btn');
     if (deleteBtn) {
-      const count = window.CanvasEditor.getSelectedCount ? window.CanvasEditor.getSelectedCount() : 0;
+      const count = CanvasEditor.getSelectedCount();
       /* 框选/多选后任何工具下都可删除选中,不再限定批量删除模式 */
       deleteBtn.hidden = count <= 0;
       const label = count > 0 ? '删除选中 ' + count + ' 张卡片' : '删除选中卡片';
@@ -393,8 +391,7 @@
     const record = currentRecord();
     if (!record || !record.canvas) return;
     buildCanvasSizeDialog();
-    const size = CanvasModel.getCanvasSize      ? CanvasModel.getCanvasSize(record.canvas)
-      : { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS };
+    const size = CanvasModel.getCanvasSize(record.canvas);
     canvasSizeDialog.querySelector('#canvas-size-cols').value = size.cols;
     canvasSizeDialog.querySelector('#canvas-size-rows').value = size.rows;
     canvasSizeDialog.showModal();
@@ -409,8 +406,7 @@
       notify('请输入有效的画布大小', 'danger');
       return;
     }
-    const size = CanvasModel.clampCanvasSize      ? CanvasModel.clampCanvasSize(cols, rows)
-      : { cols: Math.max(1, Math.min(200, Math.round(cols))), rows: Math.max(1, Math.min(200, Math.round(rows))) };
+    const size = CanvasModel.clampCanvasSize(cols, rows);
     record.canvas.size = size;
     canvasSizeDialog.close();
     save().then(() => {
@@ -699,13 +695,13 @@
       if (!btn) return;
       const kind = btn.dataset.tool;
       if (!kind) {
-        if (btn.id === 'edit-delete-selected-btn' && window.CanvasEditor && window.CanvasEditor.deleteSelected) {
-          window.CanvasEditor.deleteSelected();
+        if (btn.id === 'edit-delete-selected-btn') {
+          CanvasEditor.deleteSelected();
         }
         return;
       }
       if (!canEdit()) return;
-      const editor = window.CanvasEditor;
+      const editor = CanvasEditor;
       if (!editor) return;
       if (kind === 'select') editor.setTool('select');
       else if (kind === 'link') editor.setTool('link');
@@ -738,12 +734,11 @@
   /* 查看态且用户未手动缩放时贴合视口，让双败图首屏可见（总决赛不再在视口外） */
   function autoFitCanvas() {
     if (editMode || userZoomed) return;
-    if (window.CanvasEditor && window.CanvasEditor.fitCanvas) window.CanvasEditor.fitCanvas();
+    CanvasEditor.fitCanvas();
   }
 
   function bindZoomDock() {
-    const editor = window.CanvasEditor;
-    if (!editor) return;
+    const editor = CanvasEditor;
     bindZoomDockControls({
       onZoomIn: () => { userZoomed = true; editor.zoomIn(); },
       onZoomOut: () => { userZoomed = true; editor.zoomOut(); },
@@ -753,12 +748,6 @@
     bindZoomFitOnResize(() => !editMode && !userZoomed, () => editor.fitCanvas());
   }
 
-  window.BracketRender = {
-    renderAll,
-    renderCanvas,
-    updateToolbar: updateToolbarState
-  };
-
   window.BracketActions = {
     requestEdit,
     openRoster,
@@ -766,6 +755,8 @@
   };
 
   document.addEventListener('ts:ready', () => {
+    /* 依赖单向化:把重绘/工具栏刷新注入编辑器,编辑器经回调请求重绘 */
+    CanvasEditor.connect({ renderCanvas, updateToolbar: updateToolbarState });
     renderAll();
     autoFitCanvas();
     syncEditUI();
