@@ -22,8 +22,10 @@
   white-space: nowrap;
   border: 0;
 }
+/* UI 焦点/选中与海报主题色解耦:统一用主站 --accent/--focus-ring(styles.css 先加载),
+ * --color-accent 只留给海报主题自身的装饰(legend、按钮 hover 等) */
 #poster-app :focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
@@ -33,13 +35,13 @@
 }
 /* ---------- 浏览器表面细节(主题化默认行为) ---------- */
 #poster-app ::selection {
-  background: var(--color-accent);
+  background: var(--accent);
   color: #fff;
 }
 #poster-app input,
 #poster-app select,
 #poster-app textarea {
-  caret-color: var(--color-accent);
+  caret-color: var(--accent);
 }
 #poster-app ::placeholder {
   color: var(--color-text-muted);
@@ -201,8 +203,8 @@
 }
 #poster-app .field__control:focus-visible {
   outline: none;
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 3px var(--color-focus-ring);
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 #poster-app .field--inline {
   flex-direction: row;
@@ -401,7 +403,7 @@
   padding: 0;
   border: 0;
   background: transparent;
-  accent-color: var(--color-accent);
+  accent-color: var(--accent);
   cursor: pointer;
 }
 #poster-app .tag-size-val {
