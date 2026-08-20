@@ -6,7 +6,6 @@
   "use strict";
 
   var KEY = "vs-poster-state";
-  var ROSTER_KEY = "vs-poster-roster";
   var STORE_EDGE = 512;
 
   function today() {
@@ -106,64 +105,10 @@
     try { localStorage.removeItem(KEY); } catch (e) { /* ignore */ }
   }
 
-  /* ---------- 选手库(独立存储) ---------- */
-
-  /** 选手条目:{ id, name, tag, img, color|null, tagImg, tagImgRatio|null } */
-  function loadRoster() {
-    try {
-      var raw = localStorage.getItem(ROSTER_KEY);
-      if (!raw) return [];
-      var list = JSON.parse(raw);
-      return Array.isArray(list) ? list : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  /** 头像/队标压缩到 ≤512px 后写入(异步) */
-  function saveRoster(list) {
-    var jobs = list.map(function (item) {
-      return Promise.all([
-        compressForStorage(item.img || null),
-        compressForStorage(item.tagImg || null)
-      ]).then(function (out) {
-        item.img = out[0];
-        item.tagImg = out[1];
-      });
-    });
-    return Promise.all(jobs).then(function () {
-      try { localStorage.setItem(ROSTER_KEY, JSON.stringify(list)); } catch (e) { /* 存储满时静默 */ }
-    });
-  }
-
-  /* ---------- OBS 舞台模式 payload(纯函数,可单测) ---------- */
-
-  /** 打包海报状态为 URL 参数(自包含,任何浏览器/OBS 实例均可渲染) */
-  function packPayload(partial) {
-    return encodeURIComponent(JSON.stringify({
-      data: (partial && partial.data) || null,
-      themeId: (partial && partial.themeId) || null
-    }));
-  }
-
-  /** 解包 payload;非法/缺失返回 null */
-  function unpackPayload(str) {
-    try {
-      var parsed = JSON.parse(decodeURIComponent(String(str || "")));
-      return parsed && parsed.data ? parsed : null;
-    } catch (e) {
-      return null;
-    }
-  }
-
   window.VSState = {
     defaults: defaults,
     load: load,
     save: save,
-    reset: reset,
-    loadRoster: loadRoster,
-    saveRoster: saveRoster,
-    packPayload: packPayload,
-    unpackPayload: unpackPayload
+    reset: reset
   };
 })();

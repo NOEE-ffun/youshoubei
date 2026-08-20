@@ -34,8 +34,8 @@ function isExpired(createdAt, nowMs, ttlDays) {
   return nowMs - created > ttlDays * 24 * 60 * 60 * 1000;
 }
 
-/* 校验 POST 请求体：与 vs-poster VSState.packPayload 产出的
- * { data, themeId } 契约对齐。返回 null 表示合法，否则返回错误文案。 */
+/* 校验 POST 请求体:合法结构为 { data, themeId },
+ * data 即海报页 VSState.data,themeId 为主题 id(可缺省)。返回 null 表示合法,否则返回错误文案。 */
 function validatePosterStagePayload(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     return '请求体必须是 JSON 对象';
