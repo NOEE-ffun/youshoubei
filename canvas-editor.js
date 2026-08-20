@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { escapeHtml, canEdit, save, notify, errMsg, uiConfirm, debounce } = window.TournamentUtils;
+  const { escapeHtml, save, notify, uiConfirm, debounce } = window.TournamentUtils;
 
   const COL_GAP = 320;
   const ROW_GAP = 210;
@@ -404,13 +404,6 @@
     addCard(x, y);
   }
 
-  function onClick(event) {
-    /* 选择语义已全部在 onPointerDown 处理;click 期间不改动选择,
-     * 否则整组拖拽松手后的 click 会把多选打回单选 */
-    if (!active) return;
-    void event;
-  }
-
   function onKeyDown(event) {
     if (!active) return;
     if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
@@ -600,10 +593,6 @@
     const names = cards.map((c) => c.label || c.id).join('、');
     if (!(await uiConfirm('确定删除卡片：' + names + ' 吗？'))) return;
     return performRemoval(ids);
-  }
-
-  function deleteCard(id) {
-    return deleteCards([id]);
   }
 
   function deleteSelected() {
@@ -871,7 +860,6 @@
     enter,
     exit,
     addCard,
-    deleteCard,
     deleteSelected,
     setTool,
     getTool,
