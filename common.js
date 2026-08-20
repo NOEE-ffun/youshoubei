@@ -1592,7 +1592,6 @@
     if (editBtn) {
       editBtn.addEventListener('click', () => {
         if (window.BracketActions && window.BracketActions.requestEdit) window.BracketActions.requestEdit();
-        else if (window.BracketActions && window.BracketActions.toggleEdit) window.BracketActions.toggleEdit();
       });
     }
     syncHeaderHeight();

@@ -3,7 +3,7 @@
 
   /* 共享工具统一来自 common.js */
   const {
-    escapeHtml, debounce, canEdit, save, avatarMarkup, notify, uiConfirm,
+    escapeHtml, canEdit, save, avatarMarkup, notify, uiConfirm,
     formatStartTime, bindZoomDock: bindZoomDockControls, bindZoomFitOnResize
   } = window.TournamentUtils;
 
@@ -72,10 +72,6 @@
     }
     if (editMode) exitEditMode();
     else enterEditMode();
-  }
-
-  function toggleEdit() {
-    requestEdit();
   }
 
   function syncEditUI() {
@@ -197,7 +193,7 @@
     return (Number(card.y) || 0) * ROW_GAP;
   }
 
-  function playerRow(match, side, card) {
+  function playerRow(match, side) {
     const participant = side === 0 ? match.a : match.b;
     const name = participant ? playerName(participant) : '待定';
     const score = side === 0 ? match.scoreA : match.scoreB;
@@ -238,8 +234,8 @@
       '<span class="match-state' + stateClass + '">' + stateText + '</span>' +
       '</header>' +
       (match.phase ? '<div class="match-phase">' + escapeHtml(match.phase) + '</div>' : '') +
-      playerRow(match, 0, card) +
-      playerRow(match, 1, card) +
+      playerRow(match, 0) +
+      playerRow(match, 1) +
       '<div class="score-actions">' +
       '<button type="button" class="btn btn-secondary btn-sm score-open"' +
       (editable && ready ? '' : ' disabled') + ' data-score-open="' + match.id + '">' +
@@ -609,19 +605,6 @@
     });
   }
 
-  async function resetScores() {
-    if (!canEdit()) {
-      notify('需要管理员密码', 'danger');
-      return;
-    }
-    const record = currentRecord();
-    if (!record.scores || !Object.keys(record.scores).length) return;
-    if (!(await uiConfirm('确定清空所有比分吗？选手与卡组会保留。'))) return;
-    record.scores = {};
-    await save();
-    renderAll();
-  }
-
   function openRoster() {
     toggleRosterDropdown();
   }
@@ -788,8 +771,6 @@
 
   window.BracketActions = {
     requestEdit,
-    toggleEdit,
-    resetScores,
     openRoster,
     openRules
   };
