@@ -2445,23 +2445,6 @@ body[data-page="players"] #bg-layer {
   padding: 0.75rem 1.5rem;
 }
 
-/* ========== 比赛库 ========== */
-
-.library-canvas-wrap {
-  position: relative;
-  height: calc(100vh - 9rem);
-  min-height: 480px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: auto;
-  background: var(--surface);
-  padding: 0.5rem;
-}
-
-.library-toolbar {
-  margin-block-end: 1rem;
-}
-
 /* ========== 选手库 ========== */
 
 .players-toolbar {
