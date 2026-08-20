@@ -60,6 +60,19 @@
     return { cards: [], size: { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS } };
   }
 
+  /* 卡片玻璃样式:不透明度 0.3-1,模糊 0-24px;缺省 0.7/8 */
+  function normalizeCardStyle(style) {
+    const s = style || {};
+    const opacity = Number(s.opacity);
+    const blur = Number(s.blur);
+    return {
+      opacity: Number.isFinite(opacity) ? Math.min(1, Math.max(0.3, opacity)) : 0.7,
+      blur: Number.isFinite(blur) ? Math.min(24, Math.max(0, Math.round(blur))) : 8
+    };
+  }
+
+  const CARD_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
   function normalizeCard(card, index) {
     const c = card || {};
     return {
@@ -75,7 +88,9 @@
       exitRanks: c.exitRanks && typeof c.exitRanks === 'object'
         ? { winner: c.exitRanks.winner, loser: c.exitRanks.loser }
         : {},
-      deckCount: c.deckCount && Number.isFinite(Number(c.deckCount)) ? Number(c.deckCount) : null
+      deckCount: c.deckCount && Number.isFinite(Number(c.deckCount)) ? Number(c.deckCount) : null,
+      /* 单卡染色(null = 不染色,跟随玻璃默认) */
+      color: CARD_COLOR_RE.test(c.color || '') ? c.color : null
     };
   }
 
@@ -93,7 +108,7 @@
   function normalizeCanvas(canvas) {
     const c = canvas || {};
     const cards = Array.isArray(c.cards) ? c.cards : [];
-    return { cards: cards.map(normalizeCard), size: getCanvasSize(c) };
+    return { cards: cards.map(normalizeCard), size: getCanvasSize(c), style: normalizeCardStyle(c.style) };
   }
 
   /* 方案 A：参赛名单自动从画布直接引用选手的槽位推导 */

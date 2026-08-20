@@ -218,9 +218,12 @@
     const stateText = match.invalid ? '无效' : match.draw ? '平局' : cycle ? '连线成环' : live ? '进行中' : played ? '已结束' : ready ? '未开始' : '待定';
     const stateClass = match.invalid ? ' invalid' : match.draw ? ' draw' : cycle ? ' cycle' : live ? ' live' : played ? ' done' : '';
 
+    const styleAttr = 'left:' + cardLeft(card) + 'px;top:' + cardTop(card) + 'px' +
+      (card.color ? ';--card-tint:' + card.color : '');
     return (
       '<article class="match-card canvas-card' + (played ? ' played' : '') + (cycle ? ' cycle' : '') + (live ? ' match-live' : '') + '"' +
-      ' data-match="' + match.id + '" style="left:' + cardLeft(card) + 'px;top:' + cardTop(card) + 'px">' +
+      ' data-match="' + match.id + '"' + (card.color ? ' data-tint' : '') +
+      ' style="' + styleAttr + '">' +
       '<header class="match-head">' +
       '<h2 class="match-title">' + escapeHtml(match.label || match.id) + '</h2>' +
       '<span class="match-format">' + escapeHtml(match.format || 'BO3') + '</span>' +
@@ -281,8 +284,7 @@
       record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => known.has(id));
     }
     const canvas = record.canvas || { cards: [] };
-    const resolved = CanvasModel.resolveCanvas      ? CanvasModel.resolveCanvas(canvas, record.roster || [], record.scores || {})
-      : { cards: (canvas.cards || []).map((c) => ({ ...c, a: null, b: null, played: false })) };
+    const resolved = CanvasModel.resolveCanvas(canvas, record.roster || [], record.scores || {});
     const names = new Map((window.TournamentApp.players || []).map((p) => [p.id, p.name]));
     const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match)).join('');
     const size = CanvasModel.getCanvasSize(canvas);
@@ -292,6 +294,10 @@
     const maxY = Math.max(cardMaxY, size.rows * ROW_GAP + 80);
     board.style.width = maxX + 'px';
     board.style.height = maxY + 'px';
+    /* 玻璃样式:写在内联变量上,卡片 CSS 消费 */
+    const cardStyle = cardStyleOf(canvas);
+    board.style.setProperty('--card-glass', cardStyle.opacity);
+    board.style.setProperty('--card-blur', cardStyle.blur + 'px');
     /* editing class 由 CanvasEditor.enter/exit 维护(编辑器自身状态) */
     board.innerHTML = '';
     const boundary = document.createElement('div');
@@ -331,7 +337,83 @@
       btn.classList.toggle('btn-primary', editMode);
       btn.classList.toggle('btn-secondary', !editMode);
     }
+    if (editMode) fillCardStyleInputs();
     updateToolbarState();
+  }
+
+  /* ---------- 卡片样式面板(毛玻璃可调 + 染色) ---------- */
+
+  const CARD_STYLE_DEFAULT = { opacity: 0.7, blur: 8 };
+
+  /* 画布级玻璃样式;旧数据无 style 字段时回默认,读取侧与 normalize 同口径 */
+  function cardStyleOf(canvas) {
+    const s = (canvas && canvas.style) || {};
+    const opacity = Number(s.opacity);
+    const blur = Number(s.blur);
+    return {
+      opacity: Number.isFinite(opacity) ? Math.min(1, Math.max(0.3, opacity)) : CARD_STYLE_DEFAULT.opacity,
+      blur: Number.isFinite(blur) ? Math.min(24, Math.max(0, blur)) : CARD_STYLE_DEFAULT.blur
+    };
+  }
+
+  function fillCardStyleInputs() {
+    const record = currentRecord();
+    if (!record) return;
+    const style = cardStyleOf(record.canvas);
+    const opacityInput = document.getElementById('glass-opacity');
+    const blurInput = document.getElementById('glass-blur');
+    if (!opacityInput || !blurInput) return;
+    opacityInput.value = style.opacity;
+    blurInput.value = style.blur;
+    document.getElementById('glass-opacity-val').textContent = Math.round(style.opacity * 100) + '%';
+    document.getElementById('glass-blur-val').textContent = style.blur + 'px';
+  }
+
+  /* 滑杆实时改内联变量(不重绘画布),停手后防抖落盘 */
+  let styleSaveTimer = null;
+  function onStyleInput() {
+    const record = currentRecord();
+    const board = document.getElementById('canvas-board');
+    if (!record || !board) return;
+    const opacity = Number(document.getElementById('glass-opacity').value);
+    const blur = Number(document.getElementById('glass-blur').value);
+    document.getElementById('glass-opacity-val').textContent = Math.round(opacity * 100) + '%';
+    document.getElementById('glass-blur-val').textContent = blur + 'px';
+    if (!record.canvas) record.canvas = { cards: [], size: {} };
+    record.canvas.style = { opacity, blur };
+    board.style.setProperty('--card-glass', opacity);
+    board.style.setProperty('--card-blur', blur + 'px');
+    clearTimeout(styleSaveTimer);
+    styleSaveTimer = setTimeout(() => { save(); }, 400);
+  }
+
+  /* 染色作用于当前选中卡片:单选一张,框选/Shift 多选批量 */
+  function applyTintToSelection(color) {
+    const record = currentRecord();
+    if (!record || !record.canvas) return;
+    const ids = CanvasEditor.getSelectedIds();
+    if (!ids.length) {
+      notify('先选中要染色的卡片(可框选或 Shift 多选)', 'danger');
+      return;
+    }
+    const idSet = new Set(ids);
+    for (const card of record.canvas.cards || []) {
+      if (idSet.has(card.id)) card.color = color;
+    }
+    renderAll();
+    save();
+    notify(color ? '已染色 ' + ids.length + ' 张卡片' : '已清除 ' + ids.length + ' 张卡片的染色');
+  }
+
+  function bindCardStylePanel() {
+    const opacityInput = document.getElementById('glass-opacity');
+    const blurInput = document.getElementById('glass-blur');
+    if (opacityInput) opacityInput.addEventListener('input', onStyleInput);
+    if (blurInput) blurInput.addEventListener('input', onStyleInput);
+    const tintInput = document.getElementById('card-tint-input');
+    if (tintInput) tintInput.addEventListener('input', () => applyTintToSelection(tintInput.value));
+    const clearBtn = document.getElementById('card-tint-clear');
+    if (clearBtn) clearBtn.addEventListener('click', () => applyTintToSelection(null));
   }
 
   function updateToolbarState() {
@@ -351,6 +433,12 @@
       const label = count > 0 ? '删除选中 ' + count + ' 张卡片' : '删除选中卡片';
       deleteBtn.title = label;
       deleteBtn.setAttribute('aria-label', label);
+    }
+    /* 染色目标计数与删除按钮同源 */
+    const tintTarget = document.getElementById('tint-target');
+    if (tintTarget) {
+      const count = CanvasEditor.getSelectedCount();
+      tintTarget.textContent = count > 0 ? count + ' 张' : '未选中';
     }
   }
 
@@ -761,6 +849,7 @@
     hideEditLock();
     bindCanvasLock();
     bindEditToolbar();
+    bindCardStylePanel();
     bindZoomDock();
   });
   document.addEventListener('ts:changed', () => {

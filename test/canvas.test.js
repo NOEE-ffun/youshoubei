@@ -123,4 +123,22 @@ const blank = createBlankTournament('空白');
 assert.equal(blank.canvas.cards.length, 0);
 assert.equal(blank.roster.length, 0);
 
-console.log('canvas-model 全部 9 组测试通过 ✓');
+// 10. 卡片样式与染色归一化
+const model = require('../canvas-model.js');
+{
+  const styled = model.normalizeCanvas({
+    cards: [{ id: 'c1', color: '#FF8800' }, { id: 'c2', color: 'red' }],
+    style: { opacity: 0.5, blur: 12 }
+  });
+  assert.deepEqual(styled.style, { opacity: 0.5, blur: 12 }, '合法样式应保留');
+  assert.equal(styled.cards[0].color, '#FF8800', '合法染色应保留');
+  assert.equal(styled.cards[1].color, null, '非法染色应归 null');
+
+  const clamped = model.normalizeCanvas({ cards: [], style: { opacity: 2, blur: 99 } });
+  assert.deepEqual(clamped.style, { opacity: 1, blur: 24 }, '越界样式应夹紧');
+
+  const defaults = model.normalizeCanvas({ cards: [] });
+  assert.deepEqual(defaults.style, { opacity: 0.7, blur: 8 }, '缺省样式应回默认');
+}
+
+console.log('canvas-model 全部 10 组测试通过 ✓');

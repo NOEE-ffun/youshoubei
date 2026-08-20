@@ -875,6 +875,7 @@
     exit,
     addCard,
     deleteSelected,
+    getSelectedIds: selectedIds,
     setTool,
     getTool,
     isZoomMode,

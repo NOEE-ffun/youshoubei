@@ -12,12 +12,15 @@
    * 颜色均为 hex（旧浏览器回退）+ oklch（现代浏览器主值）双写。 */
   --bg: #f4f6fb;
   --surface: #ffffff;
-  /* 半透明卡片表面：透出背景图；配合 backdrop-filter 模糊保证文字可读 */
-  --surface-glass: rgba(255, 255, 255, 0.88);
-  --surface-glass: oklch(100% 0 0 / 0.88);
+  /* 半透明卡片表面：透出背景图；配合 backdrop-filter 模糊保证文字可读。
+   * 画布卡片的不透明度/模糊由编辑工具栏调节(写在内联 --card-glass/--card-blur),
+   * 此令牌是主页跑马灯等非画布场景的默认 */
+  --card-glass-base: 255 255 255;
+  --surface-glass: rgba(255, 255, 255, 0.7);
+  --surface-glass: oklch(100% 0 0 / 0.7);
   /* 玻璃卡片悬停表面与深色遮罩家族 */
-  --surface-glass-hover: rgba(255, 255, 255, 0.95);
-  --surface-glass-hover: oklch(100% 0 0 / 0.95);
+  --surface-glass-hover: rgba(255, 255, 255, 0.85);
+  --surface-glass-hover: oklch(100% 0 0 / 0.85);
   /* 悬浮面板(顶栏/侧栏/工具栏/缩放控件/提示药丸):半透明 + 毛玻璃 */
   --surface-float: rgba(255, 255, 255, 0.9);
   --surface-float: oklch(100% 0 0 / 0.9);
@@ -105,10 +108,11 @@ html {
   --surface: oklch(24% 0.032 262);
   --surface-float: rgba(20, 28, 48, 0.92);
   --surface-float: oklch(22% 0.03 262 / 0.92);
-  --surface-glass: rgba(20, 28, 48, 0.86);
-  --surface-glass: oklch(22% 0.03 262 / 0.86);
-  --surface-glass-hover: rgba(28, 37, 60, 0.94);
-  --surface-glass-hover: oklch(27% 0.032 262 / 0.94);
+  --card-glass-base: 20 28 48;
+  --surface-glass: rgba(20, 28, 48, 0.7);
+  --surface-glass: oklch(22% 0.03 262 / 0.7);
+  --surface-glass-hover: rgba(28, 37, 60, 0.85);
+  --surface-glass-hover: oklch(27% 0.032 262 / 0.85);
   --overlay: rgba(5, 9, 18, 0.6);
   --overlay: oklch(10% 0.02 262 / 0.6);
   --surface-2: #232e46;
@@ -516,12 +520,13 @@ main > h1 {
   letter-spacing: -0.01em;
 }
 
-/* 玻璃卡片公共底：半透明表面 + 毛玻璃 + 细边框 + 浅投影，各组件只补充自身差异 */
+/* 玻璃卡片公共底：半透明表面 + 毛玻璃 + 细边框 + 浅投影，各组件只补充自身差异。
+ * 模糊走 --card-blur(画布内由编辑工具栏调节,默认 8px) */
 .match-card,
 .marquee-item {
   background: var(--surface-glass);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(var(--card-blur, 8px));
+  backdrop-filter: blur(var(--card-blur, 8px));
   border: 1px solid var(--border);
   box-shadow: var(--shadow-sm);
 }
@@ -575,10 +580,11 @@ main > h1 {
   background: var(--surface);
 }
 
-/* 对局卡片 */
+/* 对局卡片:玻璃不透明度走 --card-glass(画布内联可调),染色卡走 color-mix 混入 */
 .match-card {
   border-radius: var(--radius);
   padding: 0.75rem;
+  background: rgb(var(--card-glass-base) / var(--card-glass, 0.7));
   transition:
     border-color var(--dur-ui) var(--ease-out),
     box-shadow var(--dur-ui) var(--ease-out),
@@ -586,7 +592,17 @@ main > h1 {
 }
 
 .match-card:hover {
-  background: var(--surface-glass-hover);
+  background: rgb(var(--card-glass-base) / var(--card-glass, 0.7));
+  filter: brightness(1.04);
+}
+
+.match-card[data-tint] {
+  background: color-mix(in srgb, var(--card-tint) 35%, rgb(var(--card-glass-base) / var(--card-glass, 0.7)));
+  border-color: color-mix(in srgb, var(--card-tint) 55%, var(--border));
+}
+
+.match-card[data-tint]:hover {
+  filter: brightness(1.06);
 }
 
 .match-card.played {
@@ -1582,13 +1598,8 @@ dialog::backdrop {
   width: 280px;
   min-height: 176px;
   box-sizing: border-box;
-  background: var(--surface);
   z-index: 2;
   cursor: default;
-}
-
-.canvas-board .match-card {
-  background: var(--surface);
 }
 
 .canvas-board.editing .canvas-card {
@@ -2544,15 +2555,15 @@ body[data-page="home"] {
   stroke: #d64545;
 }
 
-/* ========== Photoshop 式 icon 编辑工具栏 ========== */
+/* ========== Photoshop 式 icon 编辑工具栏(含底部卡片样式面板) ========== */
 
 .edit-toolbar {
-  width: 3.25rem;
+  width: 9.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.5rem 0.2rem;
+  padding: 0.5rem 0.35rem;
   background: var(--surface-float);
   border-left: 1px solid var(--border);
   overflow-y: auto;
@@ -2560,6 +2571,70 @@ body[data-page="home"] {
 
 .edit-toolbar[hidden] {
   display: none;
+}
+
+/* 卡片样式面板:毛玻璃可调 + 染色 */
+.tool-panel {
+  width: 100%;
+  margin-block-start: 0.35rem;
+  padding-block-start: 0.5rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.tool-panel-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.tool-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.tool-field > span {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.tool-field output {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tool-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.tint-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.tint-row input[type="color"] {
+  inline-size: 2.4rem;
+  block-size: 2rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.tint-row .btn {
+  flex: 1;
 }
 
 .tool-btn {
