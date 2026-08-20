@@ -7,7 +7,6 @@
   const META_STORE = 'meta';
   const META_PLAYERS = 'globalPlayers';
   const LS_ACTIVE = 'ts:activeTournamentId';
-  const LS_SIDEBAR = 'ts:rulesSidebarHidden';
   const LS_ADMIN_TOKEN = 'ts:adminToken';
   const LS_THEME = 'ts:theme';
 
@@ -1095,79 +1094,6 @@
     for (const field of fields) field.disabled = !admin;
   }
 
-  function renderPlayerLibrary() {
-    if (!manageDialog) return;
-    const list = manageDialog.querySelector('#player-library-list');
-    if (!list) return;
-    const players = (appInstance && appInstance.players) || [];
-    list.innerHTML = players.map((p) =>
-      '<div class="player-library-item">' +
-      avatarMarkup(p, 'avatar-sm') +
-      '<span>' + escapeHtml(p.name) + '</span>' +
-      '<button type="button" class="btn btn-danger btn-sm" data-delete-player="' + p.id + '">删除</button>' +
-      '</div>'
-    ).join('') || '<p class="hint">暂无选手，先添加一位。</p>';
-    list.querySelectorAll('[data-delete-player]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const id = btn.dataset.deletePlayer;
-        if (!(await uiConfirm('确定从全局选手库删除该选手吗？历史比赛记录不会被删除，但该选手会显示为“待定”。'))) return;
-        try {
-          // 只删除选手库条目，保留所有历史比赛数据
-          await storageDeletePlayer(id);
-          appInstance.players = (appInstance.players || []).filter((p) => p.id !== id);
-          renderPlayerLibrary();
-          renderRosterEditor();
-          renderManageList();
-          document.dispatchEvent(new CustomEvent('ts:changed'));
-        } catch (error) {
-          notify('删除选手失败：' + errMsg(error), 'danger');
-        }
-      });
-    });
-  }
-
-  function renderRosterEditor() {
-    if (!manageDialog) return;
-    const list = manageDialog.querySelector('#roster-editor-list');
-    if (!list) return;
-    const record = appInstance && appInstance.current;
-    if (!record) return;
-    const players = (appInstance && appInstance.players) || [];
-    const rosterSet = new Set(record.roster || []);
-    list.innerHTML = players.map((p) =>
-      '<label class="roster-toggle">' +
-      '<input type="checkbox" data-roster-toggle="' + p.id + '"' + (rosterSet.has(p.id) ? ' checked' : '') + '> ' +
-      escapeHtml(p.name) +
-      '</label>'
-    ).join('') || '<p class="hint">全局选手库为空。</p>';
-    list.querySelectorAll('[data-roster-toggle]').forEach((input) => {
-      input.addEventListener('change', async () => {
-        const record = appInstance.current;
-        if (!record) return;
-        const id = input.dataset.rosterToggle;
-        if (!Array.isArray(record.roster)) record.roster = [];
-        if (input.checked) {
-          if (!record.roster.includes(id)) record.roster.push(id);
-        } else {
-          record.roster = record.roster.filter((x) => x !== id);
-          for (const card of (record.canvas && record.canvas.cards) || []) {
-            for (const slot of card.slots || []) {
-              if (slot && slot.type === 'player' && slot.playerId === id) {
-                slot.type = 'empty';
-                delete slot.playerId;
-              }
-            }
-          }
-        }
-        record.updatedAt = Date.now();
-        await storagePut(record);
-        renderRosterEditor();
-        renderManageList();
-        document.dispatchEvent(new CustomEvent('ts:changed'));
-      });
-    });
-  }
-
   function renderManageList() {
     if (!manageDialog) return;
     const list = manageDialog.querySelector('#manage-list');
@@ -1409,7 +1335,7 @@
     return map;
   }
 
-  /* 赛事状态徽章（upcoming/ongoing/finished），主页 hero 与顶栏共用；
+  /* 赛事状态徽章（upcoming/ongoing/finished），渲染在赛程页顶栏标题旁；
    * ongoing 红色 LIVE，配合 .status-dot 呼吸点（reduced-motion 下静态） */
   function statusBadgeMarkup(status) {
     const map = {
@@ -1455,7 +1381,6 @@
     save,
     formatStartTime,
     medalMap,
-    statusBadgeMarkup,
     avatarMarkup,
     normalizePlayer,
     notify,
@@ -1819,14 +1744,6 @@
     return record;
   }
 
-  function sidebarHidden() {
-    return localStorage.getItem(LS_SIDEBAR) === '1';
-  }
-
-  function setSidebarHidden(hidden) {
-    localStorage.setItem(LS_SIDEBAR, hidden ? '1' : '0');
-  }
-
   /* 初始化失败横幅：IndexedDB 打开失败/云端数据损坏时给出可见提示，替代静默白屏 */
   function showFatalError(error) {
     console.error('[init] 初始化失败:', error);
@@ -1852,30 +1769,19 @@
       players: [],
       mode: 'local',
       adminToken: loadAdminToken(),
-      uid,
       blobUrl,
       compressImage,
       compressAvatar,
       openLightbox,
-      openSettings: openSettingsDialog,
-      openManage: openManageDialog,
       renderHeader,
       renderSidebar,
-      sidebarHidden,
-      setSidebarHidden,
       /* 存储适配器：本地模式走 IndexedDB，云端模式走 Vercel Blob */
       storagePut,
       storageGetAll,
-      storageDelete,
-      storageGetPlayers,
       storagePutPlayers,
       storageDeletePlayer,
-      isAdmin,
       setAdminToken,
-      setActiveId,
       uploadImage: uploadCloudImage,
-      migrateLocalToCloud,
-      migrateCloudToLocal,
       fatalError: showFatalError
     };
     window.TournamentApp = appInstance;

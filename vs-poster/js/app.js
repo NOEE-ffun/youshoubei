@@ -540,7 +540,7 @@
     if (!player) {
       isNew = true;
       player = {
-        id: (window.CanvasModel && window.CanvasModel.uid) ? window.CanvasModel.uid("p") : app.uid("p"),
+        id: window.CanvasModel.uid("p"),
         name: name,
         avatar: null,
         title: "",
