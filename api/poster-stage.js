@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { adminGate } = require('./auth');
+const { sendJson, readBody } = require('./helpers');
 const { readJson, writeJson } = require('./oss');
 
 /* OBS 舞台(浏览器源)一次性生成接口：
@@ -69,23 +70,23 @@ function createHandler(storage, options) {
       try {
         url = new URL(req.url, 'http://localhost');
       } catch {
-        res.status(400).json({ error: '非法请求地址' });
+        sendJson(res, 400, { error: '非法请求地址' });
         return;
       }
       const id = url.searchParams.get('id') || '';
       if (!ID_RE.test(id)) {
-        res.status(400).json({ error: 'id 必须是 32 位十六进制字符串' });
+        sendJson(res, 400, { error: 'id 必须是 32 位十六进制字符串' });
         return;
       }
 
       try {
         const stage = await read(stageKey(id));
         if (!stage || !stage.data) {
-          res.status(404).json({ error: '舞台不存在' });
+          sendJson(res, 404, { error: '舞台不存在' });
           return;
         }
         if (isExpired(stage.createdAt, now(), ttlDays)) {
-          res.status(404).json({ error: '舞台已过期' });
+          sendJson(res, 404, { error: '舞台已过期' });
           return;
         }
         res.cacheControl('public, max-age=300').status(200).json({
@@ -94,7 +95,7 @@ function createHandler(storage, options) {
         });
       } catch (error) {
         console.error('[poster-stage] GET 失败:', error.message);
-        res.status(500).json({ error: '读取舞台失败' });
+        sendJson(res, 500, { error: '读取舞台失败' });
       }
       return;
     }
@@ -102,29 +103,23 @@ function createHandler(storage, options) {
     if (req.method === 'POST') {
       if (!adminGate(req, res)) return;
 
-      /* 逐块收集后一次性解码，避免中文等多字节字符跨 chunk 损坏 */
-      const chunks = [];
-      let size = 0;
-      for await (const chunk of req) {
-        size += chunk.length;
-        if (size > MAX_BODY) {
-          res.status(413).json({ error: '数据过大' });
-          return;
-        }
-        chunks.push(chunk);
+      const body = await readBody(req, MAX_BODY);
+      if (body === null) {
+        sendJson(res, 413, { error: '数据过大' });
+        return;
       }
 
       let payload;
       try {
-        payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        payload = JSON.parse(body.toString('utf8'));
       } catch (error) {
-        res.status(400).json({ error: '请求体不是合法 JSON' });
+        sendJson(res, 400, { error: '请求体不是合法 JSON' });
         return;
       }
 
       const invalid = validatePosterStagePayload(payload);
       if (invalid) {
-        res.status(400).json({ error: invalid });
+        sendJson(res, 400, { error: invalid });
         return;
       }
 
@@ -136,15 +131,15 @@ function createHandler(storage, options) {
       };
       try {
         await write(stageKey(id), stage);
-        res.status(200).json({ id, url: '/poster-stage.html?id=' + id });
+        sendJson(res, 200, { id, url: '/poster-stage.html?id=' + id });
       } catch (error) {
         console.error('[poster-stage] POST 失败:', error.message);
-        res.status(500).json({ error: '保存舞台失败' });
+        sendJson(res, 500, { error: '保存舞台失败' });
       }
       return;
     }
 
-    res.status(405).json({ error: 'Method Not Allowed' });
+    sendJson(res, 405, { error: 'Method Not Allowed' });
   };
 }
 
