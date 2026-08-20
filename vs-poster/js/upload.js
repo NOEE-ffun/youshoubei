@@ -8,7 +8,9 @@
   var MAX_FILE = 10 * 1024 * 1024; // 10MB
   var MAX_EDGE = 1024;             // 压缩到最长边 ≤1024px
 
-  /** URL 白名单(纯函数,可单测):http/https、image data: 与 blob:(本地 Blob 头像/称号) */
+  /** URL 白名单(纯函数,可单测):http/https、image data: 与 blob:(本地 Blob 头像/称号)。
+   * 放行 http: 与主站 safeUrl(仅 https)有意不同:这里是编辑器本机取图转 dataURL,
+   * https 生产页面上 http 图会被浏览器混合内容拦截,放行只对本机 http 调试有意义 */
   function isAllowedURL(raw) {
     var url = String(raw || "").trim();
     if (!url) return false;

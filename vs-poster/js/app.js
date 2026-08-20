@@ -29,25 +29,18 @@
   var SIDES = ["left", "right"];
   function sideEl(side, suffix) { return $(side + "-" + suffix); }
 
+  /* 转义/权限/错误提示统一走主站 TournamentUtils(common.js 恒先于本文件加载);
+   * 成功类提示保留本页 toast(单例短时样式,与主站堆叠式分工) */
   function esc(s) {
-    if (window.TournamentUtils && window.TournamentUtils.escapeHtml) {
-      return window.TournamentUtils.escapeHtml(s);
-    }
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (ch) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
-    });
+    return window.TournamentUtils.escapeHtml(s);
   }
 
   function canEdit() {
-    return !(window.TournamentUtils && window.TournamentUtils.canEdit) || window.TournamentUtils.canEdit();
+    return window.TournamentUtils.canEdit();
   }
 
   function notifyError(msg) {
-    if (window.TournamentUtils && window.TournamentUtils.notify) {
-      window.TournamentUtils.notify(msg, "danger");
-    } else {
-      toast(msg, true);
-    }
+    window.TournamentUtils.notify(msg, "danger");
   }
 
   var state = VSState.load();
@@ -461,7 +454,7 @@
     var av = p.avatar;
     if (av && app && app.blobUrl) {
       var url = app.blobUrl(av);
-      var safe = (window.TournamentUtils && window.TournamentUtils.safeUrl) ? window.TournamentUtils.safeUrl(url) : url;
+      var safe = window.TournamentUtils.safeUrl(url);
       if (safe) return '<img class="roster__avatar" src="' + esc(safe) + '" alt="">';
     }
     var initial = (p.name || "?")[0];

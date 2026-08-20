@@ -107,7 +107,10 @@
   }
 
   /* 图片 URL 白名单：仅放行本地 Blob、HTTPS 与 data:image（云端数据可能被篡改，
-   * 异常协议或带引号的 URL 不得进入属性或 CSS url()） */
+   * 异常协议或带引号的 URL 不得进入属性或 CSS url()）。
+   * 注意不放行 http: —— 主站图片最终要入库 OSS 并被 https 页面引用;
+   * 海报编辑器(vs-poster/js/upload.js 的 isAllowedURL)另需放行 http: 供本机调试,
+   * 两处策略有意不同,统一前先确认场景 */
   function safeUrl(url) {
     const value = String(url || '').trim();
     if (!/^(blob:|https:|data:image\/)/i.test(value)) return '';
