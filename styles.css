@@ -94,6 +94,10 @@
 
 html {
   color-scheme: light;
+  /* 文档本体几乎不滚动(内容=页头+100vh 主区),关掉文档级橡皮筋;
+   * 内层滚动容器另有 overscroll-behavior: contain 切断滚动链,
+   * 双保险避免滚到顶继续上滑时把 sticky 页头带动一小段 */
+  overscroll-behavior-y: none;
 }
 
 /* ---------- 暗色主题 ----------
@@ -1561,6 +1565,7 @@ dialog::backdrop {
 
 .canvas-scroll {
   overflow: auto;
+  overscroll-behavior: contain;
   max-width: 100%;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -2478,6 +2483,7 @@ body[data-page="home"] {
   height: calc(100vh - var(--header-height, 3rem));
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 1rem;
   box-sizing: border-box;
 }
