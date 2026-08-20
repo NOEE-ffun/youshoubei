@@ -1,16 +1,12 @@
 (function () {
   'use strict';
 
-  /* 共享工具统一来自 common.js */
+  /* 共享工具统一来自 common.js;画布几何来自 canvas-model.js(唯一真源) */
   const {
     escapeHtml, canEdit, save, avatarMarkup, notify, uiConfirm,
     formatStartTime, bindZoomDock: bindZoomDockControls, bindZoomFitOnResize
   } = window.TournamentUtils;
-
-  const CARD_WIDTH = 280;
-  const CARD_HEIGHT = 176;
-  const COL_GAP = 320;
-  const ROW_GAP = 210;
+  const { CARD_WIDTH, CARD_HEIGHT, COL_GAP, ROW_GAP, PORT_Y, DEFAULT_CANVAS_COLS, DEFAULT_CANVAS_ROWS } = window.CanvasModel;
 
   let editMode = false;
   let scoreDialog = null;
@@ -263,9 +259,9 @@
         const target = resolvedById.get(card.id);
         if (!source || !target) continue;
         const x1 = cardLeft(source) + CARD_WIDTH;
-        const y1 = cardTop(source) + (slot.outcome === 'winner' ? 70 : 108);
+        const y1 = cardTop(source) + (slot.outcome === 'winner' ? PORT_Y.winner : PORT_Y.loser);
         const x2 = cardLeft(target);
-        const y2 = cardTop(target) + (slotIndex === 0 ? 70 : 108);
+        const y2 = cardTop(target) + (slotIndex === 0 ? PORT_Y.winner : PORT_Y.loser);
         const mid = (x1 + x2) / 2;
         paths.push(
           '<path d="M ' + x1 + ' ' + y1 +
@@ -295,7 +291,7 @@
     const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match)).join('');
     const size = (typeof CanvasModel !== 'undefined' && CanvasModel.getCanvasSize)
       ? CanvasModel.getCanvasSize(canvas)
-      : { cols: 40, rows: 24 };
+      : { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS };
     const cardMaxX = Math.max(0, ...(canvas.cards || []).map((c) => (Number(c.x) || 0) * COL_GAP + CARD_WIDTH + 40));
     const cardMaxY = Math.max(0, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * ROW_GAP + CARD_HEIGHT + 40));
     const maxX = Math.max(cardMaxX, size.cols * COL_GAP + 80);
@@ -402,7 +398,7 @@
     buildCanvasSizeDialog();
     const size = (typeof CanvasModel !== 'undefined' && CanvasModel.getCanvasSize)
       ? CanvasModel.getCanvasSize(record.canvas)
-      : { cols: 40, rows: 24 };
+      : { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS };
     canvasSizeDialog.querySelector('#canvas-size-cols').value = size.cols;
     canvasSizeDialog.querySelector('#canvas-size-rows').value = size.rows;
     canvasSizeDialog.showModal();

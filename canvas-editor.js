@@ -2,9 +2,9 @@
   'use strict';
 
   const { escapeHtml, save, notify, uiConfirm, debounce } = window.TournamentUtils;
+  /* 画布几何唯一真源在 canvas-model.js */
+  const { CARD_WIDTH, COL_GAP, ROW_GAP, PORT_Y } = window.CanvasModel;
 
-  const COL_GAP = 320;
-  const ROW_GAP = 210;
   const MIN_SCALE = 0.05;
   const FIT_MIN_SCALE = 0.28;
   const MAX_SCALE = 3;
@@ -818,8 +818,8 @@
     if (!card) return null;
     const boardRect = b.getBoundingClientRect();
     return {
-      left: boardRect.left + (Number(card.x) || 0) * COL_GAP * scale + (kind === 'output' ? 280 * scale : 0),
-      top: boardRect.top + (Number(card.y) || 0) * ROW_GAP * scale + (slotIndex === 'loser' || Number(slotIndex) === 1 ? 108 * scale : 70 * scale),
+      left: boardRect.left + (Number(card.x) || 0) * COL_GAP * scale + (kind === 'output' ? CARD_WIDTH * scale : 0),
+      top: boardRect.top + (Number(card.y) || 0) * ROW_GAP * scale + (slotIndex === 'loser' || Number(slotIndex) === 1 ? PORT_Y.loser * scale : PORT_Y.winner * scale),
       width: 12,
       height: 12
     };
