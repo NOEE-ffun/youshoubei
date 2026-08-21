@@ -397,12 +397,21 @@
     });
   }
 
-  /* 比赛信息字段:文本防抖 + 下拉即时 */
+  /* 比赛信息字段:输入同步写 state(防"输入后立即保存"读到旧值),
+   * 持久化与重绘走 160ms 防抖;下拉即时 */
   function bindMatchFields() {
-    var inputIds = ["match-name", "venue", "left-name", "left-tag", "right-name", "right-tag"];
+    var fieldMap = {
+      "match-name": function (v) { state.data.matchName = v; },
+      "venue": function (v) { state.data.venue = v; },
+      "left-name": function (v) { state.data.left.name = v; },
+      "left-tag": function (v) { state.data.left.tag = v; },
+      "right-name": function (v) { state.data.right.name = v; },
+      "right-tag": function (v) { state.data.right.tag = v; }
+    };
     var debounce = {};
-    inputIds.forEach(function (id) {
+    Object.keys(fieldMap).forEach(function (id) {
       $(id).addEventListener("input", function () {
+        fieldMap[id](this.value.trim());
         clearTimeout(debounce[id]);
         debounce[id] = setTimeout(function () { saveState(); render(); }, 160);
       });
@@ -544,6 +553,9 @@
     if (!canEdit()) { toast("需要管理员权限才能保存选手", true); return; }
     var app = window.TournamentApp;
     var utils = window.TournamentUtils;
+    /* 先从输入框重建 state:队名等字段是 160ms 防抖写 state,
+     * 快速输入后立即点保存时 state 可能仍是旧值,这里强制对齐 */
+    saveState();
     var d = state.data[side];
     var name = sideEl(side, "name").value.trim();
     if (!name) {
