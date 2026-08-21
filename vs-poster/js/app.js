@@ -46,8 +46,8 @@
   var state = VSState.load();
   var exporting = false;
   var dragDepth = 0;
-  /* 槽位图片是否被本页改动过(用于「存为选手」时决定是否回写头像/称号图) */
-  var slotChanged = { left: { img: false }, right: { img: false } };
+  /* 槽位图片是否被本页改动过(用于「存为选手」时决定是否回写头像/队标图) */
+  var slotChanged = { left: { img: false, tagImg: false }, right: { img: false, tagImg: false } };
 
   function currentData() {
     return {
@@ -311,6 +311,7 @@
           measureImageRatio(dataURL).then(function (ratio) {
             state.data[side].tagImg = dataURL;
             state.data[side].tagImgRatio = ratio;
+            slotChanged[side].tagImg = true;
             saveState();
             render();
             toast("队标图片已应用到 ID 胶囊(优先于文字)");
@@ -323,6 +324,7 @@
       state.data[side].tagImg = null;
       state.data[side].tagImgRatio = null;
       state.data[side].tagImgSize = null;
+      slotChanged[side].tagImg = true;
       saveState();
       render();
       toast("已移除队标图片,恢复文字显示");
@@ -429,6 +431,8 @@
       state.data.right = { name: pair[1], tag: pair[3], img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: "" };
       slotChanged.left.img = true;
       slotChanged.right.img = true;
+      slotChanged.left.tagImg = true;
+      slotChanged.right.tagImg = true;
       els.leftName.value = pair[0];
       els.leftTag.value = pair[2];
       els.rightName.value = pair[1];
@@ -514,29 +518,36 @@
   function applyPlayer(side, player) {
     var d = state.data[side];
     var sameRoster = d.rosterId === player.id;
-    /* 换选手时带出选手库的 ID/队名(tag),同人重应用则保留现场编辑值 */
+    /* 换选手时带出选手库的 ID/队名(tag)与队标图,同人重应用则保留现场编辑值 */
     var tag = sameRoster ? (d.tag || "") : (player.tag || "");
-    var tagImg = sameRoster ? (d.tagImg || null) : null;
-    var tagImgRatio = sameRoster ? (d.tagImgRatio || null) : null;
-    var tagImgSize = sameRoster ? (d.tagImgSize || null) : null;
+    var tagImg = sameRoster ? (d.tagImg || null) : (player.tagImg || null);
+    var tagImgRatio = sameRoster ? (d.tagImgRatio || null) : (player.tagImgRatio || null);
+    var tagImgSize = sameRoster ? (d.tagImgSize || null) : (player.tagImgSize || null);
 
     var app = window.TournamentApp;
     var avatarJob = player.avatar
       ? Promise.resolve(app.blobUrl(player.avatar)).then(function (u) { return VSUpload.handleURL(u); }).catch(function () { return null; })
       : Promise.resolve(null);
     var title = typeof player.title === "string" ? player.title : ((player.title && player.title.text) || "");
+    /* 选手库的队标图可能是 Blob/URL 引用,海报 state 需要 dataURL 才能随画布导出 */
+    var tagImgJob = (!sameRoster && tagImg)
+      ? Promise.resolve(app.blobUrl(tagImg)).then(function (u) { return VSUpload.handleURL(u); }).catch(function () { return null; })
+      : Promise.resolve(null);
 
-    avatarJob.then(function (img) {
+    Promise.all([avatarJob, tagImgJob]).then(function (jobs) {
+      var img = jobs[0];
+      var tagImgData = jobs[1];
       d.name = player.name;
       d.color = player.color || null;
       d.rosterId = player.id;
       d.tag = tag;
-      d.tagImg = tagImg;
-      d.tagImgRatio = tagImgRatio;
-      d.tagImgSize = tagImgSize;
+      d.tagImg = sameRoster ? tagImg : (tagImgData || null);
+      d.tagImgRatio = sameRoster ? tagImgRatio : (tagImgData ? tagImgRatio : null);
+      d.tagImgSize = sameRoster ? tagImgSize : (tagImgData ? tagImgSize : null);
       d.img = img;
       d.title = title;
       slotChanged[side].img = false;
+      slotChanged[side].tagImg = false;
 
       /* currentData() 会从输入框反向读取 name/tag/title 重建 state,
        * 三个输入框必须全部同步,否则旧输入值会覆盖刚应用的选手数据 */
@@ -575,6 +586,9 @@
         avatar: null,
         title: "",
         tag: "",
+        tagImg: null,
+        tagImgRatio: null,
+        tagImgSize: null,
         color: null,
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -586,20 +600,31 @@
 
     var titleText = typeof d.title === "string" ? d.title : ((d.title && d.title.text) || "");
     var needAvatar = slotChanged[side].img || isNew;
+    var needTagImg = slotChanged[side].tagImg || isNew;
 
     var avatarJob = needAvatar ? imageForStorage(d.img, app) : Promise.resolve(null);
+    /* 队标图与头像同管线:本地 Blob / 云端 OSS URL */
+    var tagImgJob = needTagImg ? imageForStorage(d.tagImg, app) : Promise.resolve(null);
 
-    avatarJob.then(function (avatar) {
+    Promise.all([avatarJob, tagImgJob]).then(function (jobs) {
+      var avatar = jobs[0];
+      var tagImg = jobs[1];
       player.name = name;
       player.color = /^#[0-9a-fA-F]{6}$/.test(d.color || "") ? d.color : null;
       player.title = titleText;
       player.tag = String(d.tag || "").trim().slice(0, 16);
+      if (needTagImg) {
+        player.tagImg = tagImg || null;
+        player.tagImgRatio = d.tagImg ? (d.tagImgRatio || null) : null;
+        player.tagImgSize = d.tagImg ? (d.tagImgSize || null) : null;
+      }
       player.updatedAt = Date.now();
       if (needAvatar) player.avatar = avatar;
 
       app.storagePutPlayers(players).then(function () {
         app.players = players;
         slotChanged[side].img = false;
+        slotChanged[side].tagImg = false;
         renderRoster();
         saveState();
         render();

@@ -69,4 +69,12 @@ assert.equal(normalizePlayer({ id: 'p1', tag: 'x'.repeat(20) }).tag.length, 16, 
 assert.equal(normalizePlayer({ id: 'p1', tag: 42 }).tag, '');
 assert.equal(normalizePlayer({ id: 'p1' }).tag, '');
 
+// 8. 队标图字段归一化:字符串(dataURL/URL)保留,空/非字符串→null;ratio/size 正数保留
+assert.equal(normalizePlayer({ id: 'p1', tagImg: 'data:image/png;base64,AAA' }).tagImg, 'data:image/png;base64,AAA');
+assert.equal(normalizePlayer({ id: 'p1', tagImg: '' }).tagImg, null);
+assert.equal(normalizePlayer({ id: 'p1', tagImg: 42 }).tagImg, null);
+assert.equal(normalizePlayer({ id: 'p1', tagImg: 'x', tagImgRatio: 1.5, tagImgSize: 80 }).tagImgRatio, 1.5);
+assert.equal(normalizePlayer({ id: 'p1', tagImg: 'x', tagImgRatio: -1, tagImgSize: 'big' }).tagImgRatio, null);
+assert.equal(normalizePlayer({ id: 'p1', tagImg: 'x', tagImgRatio: -1, tagImgSize: 'big' }).tagImgSize, null);
+
 console.log('player-fields 全部测试通过 ✓');

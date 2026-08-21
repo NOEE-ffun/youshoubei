@@ -129,6 +129,9 @@
       id: uid('p'),
       name: '选手 ' + (i + 1),
       tag: '',
+      tagImg: null,
+      tagImgRatio: null,
+      tagImgSize: null,
       title: '',
       color: null,
       avatar: null,
@@ -138,7 +141,8 @@
   }
 
   /* 选手对象归一化：title(赛前垃圾话)统一为纯文本字符串、color 校验为 #rrggbb 或 null、
-   * tag(ID/队名)为 ≤16 字符纯文本(与海报输入框 maxlength 一致)。
+   * tag(ID/队名)为 ≤16 字符纯文本(与海报输入框 maxlength 一致)、
+   * tagImg(队标图)为字符串(dataURL 或 OSS URL)或 null,ratio/size 为正数或 null。
    * 兼容上一版 {type,text,image} 对象结构,取其中 text 并丢弃 image。
    * 非法选手对象返回 null；字段可修复时返回浅拷贝的新对象（原对象不动）。 */
   function normalizePlayer(p) {
@@ -148,10 +152,16 @@
     else if (p.title && typeof p.title === 'object' && typeof p.title.text === 'string') title = p.title.text;
     const color = /^#[0-9a-fA-F]{6}$/.test(p.color || '') ? p.color : null;
     const tag = typeof p.tag === 'string' ? p.tag.trim().slice(0, 16) : '';
+    const tagImg = typeof p.tagImg === 'string' && p.tagImg ? p.tagImg : null;
+    const tagImgRatio = Number.isFinite(Number(p.tagImgRatio)) && Number(p.tagImgRatio) > 0 ? Number(p.tagImgRatio) : null;
+    const tagImgSize = Number.isFinite(Number(p.tagImgSize)) && Number(p.tagImgSize) > 0 ? Number(p.tagImgSize) : null;
     const out = Object.assign({}, p);
     out.title = title;
     out.color = color;
     out.tag = tag;
+    out.tagImg = tagImg;
+    out.tagImgRatio = tagImgRatio;
+    out.tagImgSize = tagImgSize;
     return out;
   }
 
