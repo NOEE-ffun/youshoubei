@@ -424,6 +424,9 @@
       els.leftTag.value = pair[2];
       els.rightName.value = pair[1];
       els.rightTag.value = pair[3];
+      /* currentData 从输入框读 title,随机对阵同样要清空,否则旧垃圾话复活 */
+      sideEl("left", "title").value = "";
+      sideEl("right", "title").value = "";
       saveState();
       render();
       toast("已生成随机对阵");
@@ -526,8 +529,11 @@
       d.title = title;
       slotChanged[side].img = false;
 
+      /* currentData() 会从输入框反向读取 name/tag/title 重建 state,
+       * 三个输入框必须全部同步,否则旧输入值会覆盖刚应用的选手数据 */
       sideEl(side, "name").value = player.name;
       sideEl(side, "tag").value = tag || "";
+      sideEl(side, "title").value = title || "";
       saveState();
       render();
       toast("已应用「" + player.name + "」到" + (side === "left" ? "左侧" : "右侧"));
