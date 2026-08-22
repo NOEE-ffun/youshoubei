@@ -1670,15 +1670,6 @@ dialog::backdrop {
 }
 
 /* 查找定位:命中卡描边高亮,当前项加强+呼吸;查看态下未命中淡化 */
-
-/* 空手平移手势:查看态空白处抓手,拖动中抓手握紧 */
-.canvas-board:not(.editing) {
-  cursor: grab;
-}
-
-.canvas-board.panning {
-  cursor: grabbing !important;
-}
 .canvas-card.search-hit {
   outline: 2px solid var(--accent);
   box-shadow: 0 0 0 4px var(--accent-soft);
@@ -1890,6 +1881,14 @@ dialog::backdrop {
 .canvas-scroll-full {
   height: 100%;
   box-sizing: border-box;
+  /* Obsidian 白板模式:外壳不滚动,平移/缩放全靠内容层 transform */
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+
+.canvas-scroll-full.panning {
+  cursor: grabbing;
 }
 
 /* 赛程页开赛时间 */

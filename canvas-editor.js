@@ -15,12 +15,10 @@
   let scale = 1;
   let baseWidth = 600;
   let baseHeight = 400;
-  /* 无限画布四向留白(屏幕 px):padL/padT 是内容原点在滚动区里的偏移,
-   * 平移触边时朝对应方向生长,四个方向都拖得动 */
-  let padL = 0;
-  let padT = 0;
-  let padR = 0;
-  let padB = 0;
+  /* 视口相机(Obsidian 白板模式):外壳 overflow:hidden 不用原生滚动,
+   * 平移=内容层 translate(tx,ty),缩放=scale(s),四向天然无限 */
+  let tx = 0;
+  let ty = 0;
   let selectedCardId = null;
   let batchSelected = new Set();
   let dragState = null;
@@ -50,10 +48,6 @@
 
   function scrollEl() {
     return document.getElementById('canvas-scroll');
-  }
-
-  function stageEl() {
-    return document.getElementById('canvas-stage');
   }
 
   function cardElement(id) {
@@ -166,20 +160,17 @@
 
   /* ---------- 缩放 ---------- */
 
+  /* 唯一的视口落点:把相机(tx, ty, scale)写到 board transform 上 */
   function syncZoom() {
     const b = board();
-    const stage = stageEl();
-    if (!b || !stage) return;
+    if (!b) return;
     baseWidth = parseFloat(b.style.width) || 600;
     baseHeight = parseFloat(b.style.height) || 400;
-    stage.style.width = (padL + baseWidth * scale + padR) + 'px';
-    stage.style.height = (padT + baseHeight * scale + padB) + 'px';
-    b.style.transform = 'translate(' + padL + 'px, ' + padT + 'px) scale(' + scale + ')';
+    b.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
     b.style.transformOrigin = '0 0';
-    /* 网格随缩放自适应:视觉间距 <28px 时倍增间距(40→80→160…),
-     * 2 的幂次保证网格线仍落在卡片吸附格点(320=40×8)上 */
-    let grid = 40;
-    while (grid * scale < 28 && grid < 640) grid *= 2;
+    /* 网格画在被缩放的 board 上,反向除以 scale 保持视觉 40px 恒定,
+     * 且网格线始终落在内容坐标格点(320=40×8)上 */
+    const grid = 40 / scale;
     b.style.backgroundSize = grid + 'px ' + grid + 'px';
     /* 右下角常驻缩放控件的百分比读数（仅赛程页存在该元素） */
     const label = document.getElementById('zoom-level');
@@ -192,18 +183,26 @@
     refreshToolbarUI();
   }
 
-  /* 视口中心的"内容坐标"(不受 pad 影响),缩放前后保持同一内容点居中 */
+  /* 以屏幕坐标 (cx, cy) 为锚点缩放:锚下的内容点缩放前后不动 */
+  function zoomAtPoint(cx, cy, factor) {
+    const sc = scrollEl();
+    const b = board();
+    if (!sc || !b) return;
+    const rect = sc.getBoundingClientRect();
+    const px = (cx - rect.left - tx) / scale;
+    const py = (cy - rect.top - ty) / scale;
+    scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
+    tx = cx - rect.left - px * scale;
+    ty = cy - rect.top - py * scale;
+    syncZoom();
+    refreshToolbarUI();
+  }
+
   function zoomAtCenter(factor) {
     const sc = scrollEl();
     if (!sc) return;
     const rect = sc.getBoundingClientRect();
-    const cx = (sc.scrollLeft + rect.width / 2 - padL) / scale;
-    const cy = (sc.scrollTop + rect.height / 2 - padT) / scale;
-    scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
-    syncZoom();
-    sc.scrollLeft = padL + cx * scale - rect.width / 2;
-    sc.scrollTop = padT + cy * scale - rect.height / 2;
-    refreshToolbarUI();
+    zoomAtPoint(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
   }
 
   function zoomIn() { zoomAtCenter(1.15); }
@@ -228,18 +227,18 @@
     if (!sc) return;
     const extent = contentExtent() || { width: baseWidth, height: baseHeight };
     const rect = sc.getBoundingClientRect();
-    const next = Math.max(FIT_MIN_SCALE, Math.min(1, Math.min(
+    scale = Math.max(FIT_MIN_SCALE, Math.min(1, Math.min(
       (rect.width - 24) / extent.width,
       (rect.height - 24) / extent.height
     )));
-    scale = next;
+    /* 内容从(0,0)起,整体居中到视口 */
+    tx = (rect.width - extent.width * scale) / 2;
+    ty = (rect.height - extent.height * scale) / 2;
     syncZoom();
-    /* 内容从(0,0)起,适配后滚到内容原点留 12px 边距 */
-    sc.scrollTo({ left: Math.max(0, padL - 12), top: Math.max(0, padT - 12) });
     refreshToolbarUI();
   }
 
-  /* 查找定位:缩放适配到给定卡片集合并滚动居中(内容坐标 + pad 换算) */
+  /* 查找定位:缩放适配到给定卡片集合并把包围盒居中 */
   function focusCards(ids) {
     const sc = scrollEl();
     const b = board();
@@ -258,35 +257,42 @@
     }
     if (!Number.isFinite(minX)) return;
     const pad = 80;
-    const next = Math.max(FIT_MIN_SCALE, Math.min(1, Math.min(
+    scale = Math.max(FIT_MIN_SCALE, Math.min(1, Math.min(
       (sc.clientWidth - pad) / (maxX - minX + pad),
       (sc.clientHeight - pad) / (maxY - minY + pad)
     )));
-    setZoom(next);
-    const cx = padL + ((minX + maxX) / 2) * scale;
-    const cy = padT + ((minY + maxY) / 2) * scale;
-    sc.scrollTo({ left: cx - sc.clientWidth / 2, top: cy - sc.clientHeight / 2, behavior: 'smooth' });
+    const rect = sc.getBoundingClientRect();
+    tx = rect.width / 2 - ((minX + maxX) / 2) * scale;
+    ty = rect.height / 2 - ((minY + maxY) / 2) * scale;
+    syncZoom();
     refreshToolbarUI();
   }
 
-  /* 查找跳转:不动缩放,仅滚动居中单卡 */
+  /* 查找跳转:不动缩放,仅把单卡居中 */
   function centerCard(id) {
     const sc = scrollEl();
     const b = board();
     const el = b && b.querySelector('.canvas-card[data-match="' + id + '"]');
     if (!sc || !el) return;
-    const cx = padL + (el.offsetLeft + el.offsetWidth / 2) * scale;
-    const cy = padT + (el.offsetTop + el.offsetHeight / 2) * scale;
-    sc.scrollTo({ left: cx - sc.clientWidth / 2, top: cy - sc.clientHeight / 2, behavior: 'smooth' });
+    const rect = sc.getBoundingClientRect();
+    tx = rect.width / 2 - (el.offsetLeft + el.offsetWidth / 2) * scale;
+    ty = rect.height / 2 - (el.offsetTop + el.offsetHeight / 2) * scale;
+    syncZoom();
   }
 
   function onWheel(event) {
-    // CAD 式：Ctrl/Cmd + 滚轮缩放（Mac 捏合手势会转换为 ctrl+wheel）；缩放模式下普通滚轮也缩放
-    if (!event.ctrlKey && !event.metaKey && !zoomMode) return;
+    // Obsidian 白板语义:Ctrl/Cmd+滚轮(含 Mac 捏合)以光标为锚缩放;普通滚轮平移(Shift 转横向)
     event.preventDefault();
-    const lineDelta = event.deltaY / (event.deltaMode === 1 ? 33.3 : event.deltaMode === 2 ? 100 : 1);
-    const factor = Math.exp(-lineDelta * 0.0018);
-    zoomAtCenter(factor);
+    if (event.ctrlKey || event.metaKey || zoomMode) {
+      const lineDelta = event.deltaY / (event.deltaMode === 1 ? 33.3 : event.deltaMode === 2 ? 100 : 1);
+      zoomAtPoint(event.clientX, event.clientY, Math.exp(-lineDelta * 0.0018));
+      return;
+    }
+    if (event.shiftKey) {
+      panBy(-(event.deltaX || event.deltaY), 0);
+    } else {
+      panBy(-event.deltaX, -event.deltaY);
+    }
   }
 
   /* ---------- 空手平移(无限画布) ---------- */
@@ -316,37 +322,11 @@
     return true;
   }
 
-  /* 平移到期望滚动位置;越出边界的方向用留白生长承接,四向都拖得动。
-   * 左/上生长会把内容整体右/下移,滚动位置同步补偿 grow 保持视觉连续 */
-  function panTo(wantL, wantT) {
-    const sc = scrollEl();
-    if (!sc) return;
-    const grow = 200;
-    let setL = wantL;
-    let setT = wantT;
-    if (wantL < 0) {
-      const n = -wantL + grow;
-      padL += n;
-      setL = grow;
-    } else {
-      const maxL = sc.scrollWidth - sc.clientWidth;
-      if (wantL > maxL) {
-        padR += wantL - maxL + grow;
-      }
-    }
-    if (wantT < 0) {
-      const n = -wantT + grow;
-      padT += n;
-      setT = grow;
-    } else {
-      const maxT = sc.scrollHeight - sc.clientHeight;
-      if (wantT > maxT) {
-        padB += wantT - maxT + grow;
-      }
-    }
+  /* 平移:直接改相机偏移,无边界、无滚动,天然四向无限 */
+  function panBy(dx, dy) {
+    tx += dx;
+    ty += dy;
     syncZoom();
-    sc.scrollLeft = setL;
-    sc.scrollTop = setT;
   }
 
   function bindWheel() {
@@ -382,14 +362,8 @@
       event.preventDefault();
       const sc = scrollEl();
       if (!sc) return;
-      panState = {
-        startX: event.clientX,
-        startY: event.clientY,
-        scrollLeft: sc.scrollLeft,
-        scrollTop: sc.scrollTop
-      };
-      const b = board();
-      if (b) b.classList.add('panning');
+      panState = { lastX: event.clientX, lastY: event.clientY };
+      sc.classList.add('panning');
       /* 捕获指针:快速拖出画布边界也不丢 move/up 事件 */
       try { sc.setPointerCapture(event.pointerId); } catch (error) { /* 忽略 */ }
       return;
@@ -457,10 +431,9 @@
 
   function onPointerMove(event) {
     if (panState) {
-      panTo(
-        panState.scrollLeft - (event.clientX - panState.startX),
-        panState.scrollTop - (event.clientY - panState.startY)
-      );
+      panBy(event.clientX - panState.lastX, event.clientY - panState.lastY);
+      panState.lastX = event.clientX;
+      panState.lastY = event.clientY;
       return;
     }
     if (connectState) {
@@ -501,8 +474,8 @@
   function onPointerUp(event) {
     if (panState) {
       panState = null;
-      const b = board();
-      if (b) b.classList.remove('panning');
+      const sc = scrollEl();
+      if (sc) sc.classList.remove('panning');
       return;
     }
     if (connectState) {
