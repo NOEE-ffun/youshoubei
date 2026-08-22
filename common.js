@@ -1458,7 +1458,7 @@
       { page: 'match', href: 'schedule.html', icon: 'emoji_events', label: '比赛' },
       { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' },
       { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' },
-      { page: 'stats', href: 'stats.html', icon: 'dashboard', label: '数据统计' }
+      { page: 'stats', href: 'stats.html', icon: 'bar_chart', label: '数据统计' }
     ];
     const isActive = (page) => {
       if (page === 'match') return active === 'schedule' || active === 'match';
