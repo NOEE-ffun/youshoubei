@@ -1637,17 +1637,71 @@
       const themeLabel = toDark ? '切换为深色模式' : '切换为浅色模式';
       themeBtn.title = themeLabel;
       themeBtn.setAttribute('aria-label', themeLabel);
-      themeBtn.innerHTML = iconMarkup(toDark ? 'dark_mode' : 'light_mode', themeLabel);
+      /* 图标重写时带上文字标签,展开模式不丢 */
+      themeBtn.innerHTML = iconMarkup(toDark ? 'dark_mode' : 'light_mode', themeLabel) +
+        '<span class="side-label">主题</span>';
     }
   }
 
-  /* 左侧栏底部的功能按钮组(主题/管理/设置),独立于页头存在——主页无页头也能用 */
+  /* 左侧栏底部的功能按钮组(主题/管理/设置),独立于页头存在——主页无页头也能用。
+   * 侧栏顶部的展开/收起按钮与文字标签也在此注入,四个页面共用一套逻辑 */
+  const LS_SIDEBAR_EXPANDED = 'ts:sidebarExpanded';
   let sideActionsBuilt = false;
+
+  function sidebarExpanded() {
+    return document.body.classList.contains('side-expanded');
+  }
+
+  function setSidebarExpanded(expanded) {
+    document.body.classList.toggle('side-expanded', expanded);
+    try {
+      localStorage.setItem(LS_SIDEBAR_EXPANDED, expanded ? '1' : '0');
+    } catch (error) { /* 存储不可用:仅本次会话生效 */ }
+    syncSideToggle();
+  }
+
+  function syncSideToggle() {
+    const btn = document.getElementById('side-toggle');
+    if (!btn) return;
+    const expanded = sidebarExpanded();
+    const label = expanded ? '收起侧栏' : '展开侧栏';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-expanded', String(expanded));
+    btn.innerHTML = iconMarkup(expanded ? 'chevron_left' : 'chevron_right', label);
+  }
+
+  function appendSideLabel(el, text) {
+    const label = document.createElement('span');
+    label.className = 'side-label';
+    label.textContent = text;
+    el.appendChild(label);
+  }
 
   function buildSideActions() {
     if (sideActionsBuilt) return;
     const sidebar = document.getElementById('app-sidebar');
     if (!sidebar) return;
+    try {
+      if (localStorage.getItem(LS_SIDEBAR_EXPANDED) === '1') {
+        document.body.classList.add('side-expanded');
+      }
+    } catch (error) { /* 忽略 */ }
+
+    /* 展开切换按钮置顶 */
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.id = 'side-toggle';
+    toggle.className = 'side-action side-toggle';
+    sidebar.insertBefore(toggle, sidebar.firstChild);
+    toggle.addEventListener('click', () => setSidebarExpanded(!sidebarExpanded()));
+
+    /* 导航链接注入文字标签(取自 aria-label) */
+    sidebar.querySelectorAll('.side-nav .side-link').forEach((link) => {
+      const text = link.getAttribute('aria-label') || link.title || '';
+      if (text) appendSideLabel(link, text);
+    });
+
     const group = document.createElement('div');
     group.className = 'side-actions';
     group.innerHTML =
@@ -1655,9 +1709,12 @@
       '<button type="button" id="manage-btn" class="side-action" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
       '<button type="button" id="settings-btn" class="side-action" title="设置" aria-label="设置">' + iconMarkup('settings', '设置') + '</button>';
     sidebar.appendChild(group);
+    appendSideLabel(group.querySelector('#manage-btn'), '管理');
+    appendSideLabel(group.querySelector('#settings-btn'), '设置');
     group.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
     group.querySelector('#manage-btn').addEventListener('click', openManageDialog);
     group.querySelector('#settings-btn').addEventListener('click', () => openSettingsDialog(false));
+    syncSideToggle();
     sideActionsBuilt = true;
   }
 

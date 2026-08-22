@@ -86,6 +86,12 @@
   --dur-breathe: 1.6s;
   --dur-slideshow: 900ms;
   --header-height: 3rem;
+  /* 侧栏宽度:展开模式由 body.side-expanded 覆盖,页头/主区引用同一变量随动 */
+  --sidebar-w: 3.25rem;
+}
+
+body.side-expanded {
+  --sidebar-w: 10.5rem;
 }
 
 * {
@@ -2239,7 +2245,8 @@ body[data-page="players"] #bg-layer {
 /* ========== 紧凑顶栏与 icon 侧边栏 ========== */
 
 #app-header {
-  padding-left: 3.25rem;
+  padding-left: var(--sidebar-w);
+  transition: padding-left 0.18s var(--ease-out);
 }
 
 #app-header .header-inner {
@@ -2387,8 +2394,10 @@ body[data-page="players"] #bg-layer {
 }
 
 .app-sidebar {
-  width: 3.25rem;
+  width: var(--sidebar-w);
   padding-block: 0.5rem;
+  transition: width 0.18s var(--ease-out);
+  overflow: hidden;
 }
 
 .side-nav {
@@ -2425,6 +2434,50 @@ body[data-page="players"] #bg-layer {
   gap: 0.25rem;
   align-items: center;
   width: 100%;
+}
+
+/* 展开模式的文字标签:默认隐藏,展开后随按钮横排显示 */
+.side-label {
+  display: none;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.side-toggle {
+  margin-block-end: 0.35rem;
+}
+
+.side-toggle .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+body.side-expanded .side-nav {
+  align-items: stretch;
+  padding-inline: 0.4rem;
+}
+
+body.side-expanded .side-actions {
+  align-items: stretch;
+  padding-inline: 0.4rem;
+}
+
+body.side-expanded .side-link,
+body.side-expanded .side-action {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+}
+
+body.side-expanded .side-link .side-label,
+body.side-expanded .side-action .side-label {
+  display: block;
 }
 
 .side-action {
@@ -2472,9 +2525,10 @@ body[data-page="home"] {
 /* ========== 全屏内容区 ========== */
 
 .layout-body {
-  margin-left: 3.25rem;
+  margin-left: var(--sidebar-w);
   min-height: calc(100vh - var(--header-height, 3rem));
   padding: 0;
+  transition: margin-left 0.18s var(--ease-out);
 }
 
 .layout-body > main {
