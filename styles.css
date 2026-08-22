@@ -2543,17 +2543,24 @@ body[data-page="stats"] #bg-layer {
 }
 
 /* 展开/收起共用同一行高与图标横向位置:图标始终左对齐固定 x,
- * 展开只是右侧文字标签出现,间距与位置在两种状态下完全一致 */
+ * 展开只是右侧文字标签出现,间距与位置在两种状态下完全一致。
+ * 链接负外边距吃掉侧栏左右 0.4rem 内边距,背景铺满整个侧栏宽度 */
 .side-nav {
   gap: 0.25rem;
 }
 
 .side-link {
-  width: 100%;
-  padding: 0.45rem 0.7rem;
+  width: calc(100% + 0.8rem);
+  margin-inline: -0.4rem;
+  padding: 0.45rem 1.1rem;
   flex-direction: row;
   justify-content: flex-start;
   gap: 0.65rem;
+}
+
+/* 当前页面高亮:圆角缩到 2px */
+.side-link.is-active {
+  border-radius: 2px;
 }
 
 .side-icon {
