@@ -15,6 +15,12 @@
   let scale = 1;
   let baseWidth = 600;
   let baseHeight = 400;
+  /* 无限画布四向留白(屏幕 px):padL/padT 是内容原点在滚动区里的偏移,
+   * 平移触边时朝对应方向生长,四个方向都拖得动 */
+  let padL = 0;
+  let padT = 0;
+  let padR = 0;
+  let padB = 0;
   let selectedCardId = null;
   let batchSelected = new Set();
   let dragState = null;
@@ -166,9 +172,9 @@
     if (!b || !stage) return;
     baseWidth = parseFloat(b.style.width) || 600;
     baseHeight = parseFloat(b.style.height) || 400;
-    stage.style.width = (baseWidth * scale) + 'px';
-    stage.style.height = (baseHeight * scale) + 'px';
-    b.style.transform = 'scale(' + scale + ')';
+    stage.style.width = (padL + baseWidth * scale + padR) + 'px';
+    stage.style.height = (padT + baseHeight * scale + padB) + 'px';
+    b.style.transform = 'translate(' + padL + 'px, ' + padT + 'px) scale(' + scale + ')';
     b.style.transformOrigin = '0 0';
     /* 网格随缩放自适应:视觉间距 <28px 时倍增间距(40→80→160…),
      * 2 的幂次保证网格线仍落在卡片吸附格点(320=40×8)上 */
@@ -186,18 +192,17 @@
     refreshToolbarUI();
   }
 
+  /* 视口中心的"内容坐标"(不受 pad 影响),缩放前后保持同一内容点居中 */
   function zoomAtCenter(factor) {
     const sc = scrollEl();
     if (!sc) return;
     const rect = sc.getBoundingClientRect();
-    const cx = sc.scrollLeft + rect.width / 2;
-    const cy = sc.scrollTop + rect.height / 2;
-    const next = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
-    const ratio = next / scale;
-    scale = next;
+    const cx = (sc.scrollLeft + rect.width / 2 - padL) / scale;
+    const cy = (sc.scrollTop + rect.height / 2 - padT) / scale;
+    scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * factor));
     syncZoom();
-    sc.scrollLeft = cx * ratio - rect.width / 2;
-    sc.scrollTop = cy * ratio - rect.height / 2;
+    sc.scrollLeft = padL + cx * scale - rect.width / 2;
+    sc.scrollTop = padT + cy * scale - rect.height / 2;
     refreshToolbarUI();
   }
 
@@ -229,10 +234,12 @@
     )));
     scale = next;
     syncZoom();
+    /* 内容从(0,0)起,适配后滚到内容原点留 12px 边距 */
+    sc.scrollTo({ left: Math.max(0, padL - 12), top: Math.max(0, padT - 12) });
     refreshToolbarUI();
   }
 
-  /* 查找定位:缩放适配到给定卡片集合并滚动居中 */
+  /* 查找定位:缩放适配到给定卡片集合并滚动居中(内容坐标 + pad 换算) */
   function focusCards(ids) {
     const sc = scrollEl();
     const b = board();
@@ -256,8 +263,8 @@
       (sc.clientHeight - pad) / (maxY - minY + pad)
     )));
     setZoom(next);
-    const cx = ((minX + maxX) / 2) * scale;
-    const cy = ((minY + maxY) / 2) * scale;
+    const cx = padL + ((minX + maxX) / 2) * scale;
+    const cy = padT + ((minY + maxY) / 2) * scale;
     sc.scrollTo({ left: cx - sc.clientWidth / 2, top: cy - sc.clientHeight / 2, behavior: 'smooth' });
     refreshToolbarUI();
   }
@@ -268,8 +275,8 @@
     const b = board();
     const el = b && b.querySelector('.canvas-card[data-match="' + id + '"]');
     if (!sc || !el) return;
-    const cx = (el.offsetLeft + el.offsetWidth / 2) * scale;
-    const cy = (el.offsetTop + el.offsetHeight / 2) * scale;
+    const cx = padL + (el.offsetLeft + el.offsetWidth / 2) * scale;
+    const cy = padT + (el.offsetTop + el.offsetHeight / 2) * scale;
     sc.scrollTo({ left: cx - sc.clientWidth / 2, top: cy - sc.clientHeight / 2, behavior: 'smooth' });
   }
 
@@ -309,19 +316,37 @@
     return true;
   }
 
-  /* 平移接近边缘时扩展可滚动区域,右下方向永远拖得动 */
-  function ensureViewportMargin() {
+  /* 平移到期望滚动位置;越出边界的方向用留白生长承接,四向都拖得动。
+   * 左/上生长会把内容整体右/下移,滚动位置同步补偿 grow 保持视觉连续 */
+  function panTo(wantL, wantT) {
     const sc = scrollEl();
-    const b = board();
-    if (!sc || !b) return;
-    const pad = 800;
-    const needW = (sc.scrollLeft + sc.clientWidth) / scale + pad;
-    const needH = (sc.scrollTop + sc.clientHeight) / scale + pad;
-    const w = parseFloat(b.style.width) || 600;
-    const h = parseFloat(b.style.height) || 400;
-    if (needW > w) b.style.width = needW + 'px';
-    if (needH > h) b.style.height = needH + 'px';
+    if (!sc) return;
+    const grow = 200;
+    let setL = wantL;
+    let setT = wantT;
+    if (wantL < 0) {
+      const n = -wantL + grow;
+      padL += n;
+      setL = grow;
+    } else {
+      const maxL = sc.scrollWidth - sc.clientWidth;
+      if (wantL > maxL) {
+        padR += wantL - maxL + grow;
+      }
+    }
+    if (wantT < 0) {
+      const n = -wantT + grow;
+      padT += n;
+      setT = grow;
+    } else {
+      const maxT = sc.scrollHeight - sc.clientHeight;
+      if (wantT > maxT) {
+        padB += wantT - maxT + grow;
+      }
+    }
     syncZoom();
+    sc.scrollLeft = setL;
+    sc.scrollTop = setT;
   }
 
   function bindWheel() {
@@ -367,7 +392,6 @@
       if (b) b.classList.add('panning');
       /* 捕获指针:快速拖出画布边界也不丢 move/up 事件 */
       try { sc.setPointerCapture(event.pointerId); } catch (error) { /* 忽略 */ }
-      ensureViewportMargin();
       return;
     }
     if (!active) return;
@@ -433,12 +457,10 @@
 
   function onPointerMove(event) {
     if (panState) {
-      const sc = scrollEl();
-      if (sc) {
-        sc.scrollLeft = panState.scrollLeft - (event.clientX - panState.startX);
-        sc.scrollTop = panState.scrollTop - (event.clientY - panState.startY);
-        ensureViewportMargin();
-      }
+      panTo(
+        panState.scrollLeft - (event.clientX - panState.startX),
+        panState.scrollTop - (event.clientY - panState.startY)
+      );
       return;
     }
     if (connectState) {
