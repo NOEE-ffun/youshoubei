@@ -170,6 +170,11 @@
     stage.style.height = (baseHeight * scale) + 'px';
     b.style.transform = 'scale(' + scale + ')';
     b.style.transformOrigin = '0 0';
+    /* 网格随缩放自适应:视觉间距 <28px 时倍增间距(40→80→160…),
+     * 2 的幂次保证网格线仍落在卡片吸附格点(320=40×8)上 */
+    let grid = 40;
+    while (grid * scale < 28 && grid < 640) grid *= 2;
+    b.style.backgroundSize = grid + 'px ' + grid + 'px';
     /* 右下角常驻缩放控件的百分比读数（仅赛程页存在该元素） */
     const label = document.getElementById('zoom-level');
     if (label) label.textContent = Math.round(scale * 100) + '%';
@@ -277,6 +282,48 @@
     zoomAtCenter(factor);
   }
 
+  /* ---------- 空手平移(无限画布) ---------- */
+
+  let panState = null;
+  let spaceHeld = false;
+
+  function onSpaceDown(event) {
+    if (event.code !== 'Space') return;
+    if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
+    spaceHeld = true;
+  }
+
+  function onSpaceUp(event) {
+    if (event.code !== 'Space') return;
+    spaceHeld = false;
+  }
+
+  /* 查看态:左键拖动即平移(卡片查看态不可拖,从卡片上也允许);
+   * 编辑态:空白处空格+左键或中键平移(Figma 语义) */
+  function isPanGesture(event) {
+    if (panState) return true;
+    if (event.target.closest && event.target.closest('button, input, select, a, .port')) return false;
+    if (event.button === 1) return true;
+    if (event.button !== 0) return false;
+    if (active) return spaceHeld && !event.target.closest('.canvas-card');
+    return true;
+  }
+
+  /* 平移接近边缘时扩展可滚动区域,右下方向永远拖得动 */
+  function ensureViewportMargin() {
+    const sc = scrollEl();
+    const b = board();
+    if (!sc || !b) return;
+    const pad = 800;
+    const needW = (sc.scrollLeft + sc.clientWidth) / scale + pad;
+    const needH = (sc.scrollTop + sc.clientHeight) / scale + pad;
+    const w = parseFloat(b.style.width) || 600;
+    const h = parseFloat(b.style.height) || 400;
+    if (needW > w) b.style.width = needW + 'px';
+    if (needH > h) b.style.height = needH + 'px';
+    syncZoom();
+  }
+
   function bindWheel() {
     if (wheelBound) return;
     wheelBound = true;
@@ -291,16 +338,38 @@
   function bindBoardEvents() {
     if (bound) return;
     bound = true;
-    const b = board();
-    if (!b) return;
-    b.addEventListener('pointerdown', onPointerDown);
-    b.addEventListener('pointermove', onPointerMove);
-    b.addEventListener('pointerup', onPointerUp);
-    b.addEventListener('dblclick', onDblClick);
+    /* 绑在滚动容器上(含 board 外空白):查看态画布常小于视口,
+     * 平移要从任意空白处发起;board 的事件会冒泡到此处,不会漏 */
+    const sc = scrollEl();
+    if (!sc) return;
+    sc.addEventListener('pointerdown', onPointerDown);
+    sc.addEventListener('pointermove', onPointerMove);
+    sc.addEventListener('pointerup', onPointerUp);
+    sc.addEventListener('dblclick', onDblClick);
     document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keydown', onSpaceDown);
+    document.addEventListener('keyup', onSpaceUp);
+    window.addEventListener('blur', onSpaceUp);
   }
 
   function onPointerDown(event) {
+    if (isPanGesture(event)) {
+      event.preventDefault();
+      const sc = scrollEl();
+      if (!sc) return;
+      panState = {
+        startX: event.clientX,
+        startY: event.clientY,
+        scrollLeft: sc.scrollLeft,
+        scrollTop: sc.scrollTop
+      };
+      const b = board();
+      if (b) b.classList.add('panning');
+      /* 捕获指针:快速拖出画布边界也不丢 move/up 事件 */
+      try { sc.setPointerCapture(event.pointerId); } catch (error) { /* 忽略 */ }
+      ensureViewportMargin();
+      return;
+    }
     if (!active) return;
     const output = event.target.closest('.port-output');
     if (output && tool !== 'delete') {
@@ -363,6 +432,15 @@
   }
 
   function onPointerMove(event) {
+    if (panState) {
+      const sc = scrollEl();
+      if (sc) {
+        sc.scrollLeft = panState.scrollLeft - (event.clientX - panState.startX);
+        sc.scrollTop = panState.scrollTop - (event.clientY - panState.startY);
+        ensureViewportMargin();
+      }
+      return;
+    }
     if (connectState) {
       updateTempLine(event.clientX, event.clientY);
       return;
@@ -399,6 +477,12 @@
   }
 
   function onPointerUp(event) {
+    if (panState) {
+      panState = null;
+      const b = board();
+      if (b) b.classList.remove('panning');
+      return;
+    }
     if (connectState) {
       const input = event.target.closest('.port-input');
       if (input && input.dataset.card && input.dataset.slot !== undefined) {
@@ -901,6 +985,8 @@
     if (line) line.remove();
   }
 
+  /* 平移手势查看态也要用,事件绑定放在模块初始化而非仅进入编辑时 */
+  bindBoardEvents();
   bindWheel();
 
   /* ---------- 暴露接口 ---------- */
