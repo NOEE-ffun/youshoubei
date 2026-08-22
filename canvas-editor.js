@@ -92,6 +92,8 @@
       b.classList.add('editing');
       syncToolClasses();
     }
+    const sc = scrollEl();
+    if (sc) sc.classList.add('grid-on');
     bindBoardEvents();
     bindWheel();
     syncZoom();
@@ -114,6 +116,8 @@
       b.classList.remove('editing');
       b.classList.remove('tool-link', 'tool-delete', 'tool-select', 'zoom-mode');
     }
+    const scOff = scrollEl();
+    if (scOff) scOff.classList.remove('grid-on');
     if (cardDialog && cardDialog.open) cardDialog.close();
     refreshToolbarUI();
   }
@@ -160,21 +164,33 @@
 
   /* ---------- 缩放 ---------- */
 
-  /* 唯一的视口落点:把相机(tx, ty, scale)写到 board transform 上 */
+  /* 相机落点(轻量):平移/缩放高频调用,只写样式不读布局 */
+  function applyCamera() {
+    const b = board();
+    const sc = scrollEl();
+    if (!b) return;
+    b.style.transformOrigin = '0 0';
+    b.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
+    if (sc) {
+      /* 视口层无限网格:格距锁内容坐标(40 的 2^n 倍,对齐吸附格点 320),
+       * 缩得太密时倍增;背景位置由相机偏移取模,平移到任何空白都有网格 */
+      let g = 40;
+      while (g * scale < 28 && g < 640) g *= 2;
+      const s = g * scale;
+      sc.style.backgroundSize = s + 'px ' + s + 'px';
+      sc.style.backgroundPosition = ((((tx % s) + s) % s)) + 'px ' + ((((ty % s) + s) % s)) + 'px';
+    }
+    /* 右下角常驻缩放控件的百分比读数（仅赛程页存在该元素） */
+    const label = document.getElementById('zoom-level');
+    if (label) label.textContent = Math.round(scale * 100) + '%';
+  }
+
   function syncZoom() {
     const b = board();
     if (!b) return;
     baseWidth = parseFloat(b.style.width) || 600;
     baseHeight = parseFloat(b.style.height) || 400;
-    b.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
-    b.style.transformOrigin = '0 0';
-    /* 网格画在被缩放的 board 上,反向除以 scale 保持视觉 40px 恒定,
-     * 且网格线始终落在内容坐标格点(320=40×8)上 */
-    const grid = 40 / scale;
-    b.style.backgroundSize = grid + 'px ' + grid + 'px';
-    /* 右下角常驻缩放控件的百分比读数（仅赛程页存在该元素） */
-    const label = document.getElementById('zoom-level');
-    if (label) label.textContent = Math.round(scale * 100) + '%';
+    applyCamera();
   }
 
   function setZoom(next) {

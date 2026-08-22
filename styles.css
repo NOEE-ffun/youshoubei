@@ -1632,22 +1632,10 @@ dialog::backdrop {
   position: relative;
   min-width: 600px;
   min-height: 400px;
-  /* 编辑态网格线:比 --border-soft 明显一档,便于对齐 */
-  background-image:
-    linear-gradient(rgba(100, 116, 139, 0.38) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(100, 116, 139, 0.38) 1px, transparent 1px);
-  background-size: 40px 40px;
+  /* 平移/缩放只改 transform:提升为合成层,拖动不重绘内容 */
+  will-change: transform;
+  contain: layout style;
   transition: background-color 0.2s ease;
-}
-
-[data-theme='dark'] .canvas-board {
-  background-image:
-    linear-gradient(rgba(148, 163, 184, 0.32) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.32) 1px, transparent 1px);
-}
-
-.canvas-board:not(.editing) {
-  background-image: none;
 }
 
 .canvas-board.editing {
@@ -1889,6 +1877,19 @@ dialog::backdrop {
 
 .canvas-scroll-full.panning {
   cursor: grabbing;
+}
+
+/* 无限网格:画在视口层(不随内容层缩放尺寸),位置由相机反算,
+ * 平移到任何空白处都有网格;仅在编辑态开启 */
+.canvas-scroll-full.grid-on {
+  --grid-line: rgba(100, 116, 139, 0.38);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+}
+
+[data-theme='dark'] .canvas-scroll-full.grid-on {
+  --grid-line: rgba(148, 163, 184, 0.32);
 }
 
 /* 赛程页开赛时间 */
