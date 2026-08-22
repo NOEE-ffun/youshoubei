@@ -386,6 +386,55 @@ body {
   cursor: pointer;
 }
 
+/* 页头查找框(赛程页):与 header-select 同风格,右侧结果计数 */
+.header-search {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding-inline: 0.7rem;
+  min-block-size: 2.5rem;
+  color: var(--text-muted);
+}
+
+.header-search input {
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  outline: none;
+  min-inline-size: 10rem;
+  max-inline-size: 14rem;
+}
+
+.header-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.header-search input:focus-visible {
+  outline: none;
+}
+
+.header-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.header-search .search-count {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius-pill);
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+}
+
 /* 按钮：按压必须即时反馈（scale 0.97），交互过渡用强 ease-out */
 .btn {
   display: inline-flex;
@@ -1620,6 +1669,28 @@ dialog::backdrop {
   cursor: default;
 }
 
+/* 查找定位:命中卡描边高亮,当前项加强+呼吸;查看态下未命中淡化 */
+.canvas-card.search-hit {
+  outline: 2px solid var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.canvas-card.search-current {
+  outline: 3px solid var(--accent);
+  box-shadow: 0 0 0 6px var(--accent-soft);
+  z-index: 3;
+  animation: search-current-pulse 1.2s var(--ease-in-out) infinite;
+}
+
+@keyframes search-current-pulse {
+  0%, 100% { box-shadow: 0 0 0 6px var(--accent-soft); }
+  50% { box-shadow: 0 0 0 9px var(--accent-soft); }
+}
+
+.canvas-board.searching:not(.editing) .canvas-card:not(.search-hit) {
+  opacity: 0.28;
+}
+
 .canvas-board.editing .canvas-card {
   cursor: move;
   box-shadow: 0 4px 18px rgba(0,0,0,0.08);
@@ -2584,15 +2655,6 @@ body[data-page="home"] {
 .canvas-board {
   min-width: 600px;
   min-height: 400px;
-}
-
-.canvas-boundary {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
-  border: 1px dashed var(--border);
-  pointer-events: none;
-  z-index: 0;
 }
 
 /* ========== 连线颜色 ========== */

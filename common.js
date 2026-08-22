@@ -1505,8 +1505,16 @@
       ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
         '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛"></select>'
       : '';
+    const searchBox = isSchedule
+      ? '<div class="header-search" id="header-search">' +
+        iconMarkup('search', '查找') +
+        '<input type="search" id="match-search" placeholder="查找比赛 / 选手 / 阶段" autocomplete="off" aria-label="查找比赛">' +
+        '<span class="search-count" id="match-search-count" hidden></span>' +
+        '</div>'
+      : '';
     const scheduleActions = isSchedule
-      ? '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
+      ? searchBox +
+        '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
         '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单" aria-label="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
         '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>' +
         '<button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="赛事设置" aria-label="赛事设置">' + iconMarkup('settings', '赛事设置') + '</button>'

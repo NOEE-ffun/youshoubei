@@ -227,6 +227,47 @@
     refreshToolbarUI();
   }
 
+  /* 查找定位:缩放适配到给定卡片集合并滚动居中 */
+  function focusCards(ids) {
+    const sc = scrollEl();
+    const b = board();
+    if (!sc || !b || !ids || !ids.length) return;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const id of ids) {
+      const el = b.querySelector('.canvas-card[data-match="' + id + '"]');
+      if (!el) continue;
+      minX = Math.min(minX, el.offsetLeft);
+      minY = Math.min(minY, el.offsetTop);
+      maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
+      maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
+    }
+    if (!Number.isFinite(minX)) return;
+    const pad = 80;
+    const next = Math.max(FIT_MIN_SCALE, Math.min(1, Math.min(
+      (sc.clientWidth - pad) / (maxX - minX + pad),
+      (sc.clientHeight - pad) / (maxY - minY + pad)
+    )));
+    setZoom(next);
+    const cx = ((minX + maxX) / 2) * scale;
+    const cy = ((minY + maxY) / 2) * scale;
+    sc.scrollTo({ left: cx - sc.clientWidth / 2, top: cy - sc.clientHeight / 2, behavior: 'smooth' });
+    refreshToolbarUI();
+  }
+
+  /* 查找跳转:不动缩放,仅滚动居中单卡 */
+  function centerCard(id) {
+    const sc = scrollEl();
+    const b = board();
+    const el = b && b.querySelector('.canvas-card[data-match="' + id + '"]');
+    if (!sc || !el) return;
+    const cx = (el.offsetLeft + el.offsetWidth / 2) * scale;
+    const cy = (el.offsetTop + el.offsetHeight / 2) * scale;
+    sc.scrollTo({ left: cx - sc.clientWidth / 2, top: cy - sc.clientHeight / 2, behavior: 'smooth' });
+  }
+
   function onWheel(event) {
     // CAD 式：Ctrl/Cmd + 滚轮缩放（Mac 捏合手势会转换为 ctrl+wheel）；缩放模式下普通滚轮也缩放
     if (!event.ctrlKey && !event.metaKey && !zoomMode) return;
@@ -341,8 +382,9 @@
     for (const entry of dragState.cards) {
       const card = findCard(entry.id);
       if (!card) continue;
-      const nextX = entry.originX + stepX;
-      const nextY = entry.originY + stepY;
+      /* 无限画布:正方向不设上限,但坐标不为负 */
+      const nextX = Math.max(0, entry.originX + stepX);
+      const nextY = Math.max(0, entry.originY + stepY);
       if (nextX !== card.x || nextY !== card.y) {
         card.x = nextX;
         card.y = nextY;
@@ -884,6 +926,8 @@
     zoomOut,
     setZoom,
     fitCanvas,
+    focusCards,
+    centerCard,
     syncZoom,
     getSelectedCount
   };

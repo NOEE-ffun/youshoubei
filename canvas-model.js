@@ -80,8 +80,8 @@
       label: c.label || '第 ' + ((index || 0) + 1) + ' 场',
       phase: c.phase || '',
       format: c.format || 'BO3',
-      x: Number.isFinite(Number(c.x)) ? Number(c.x) : 0,
-      y: Number.isFinite(Number(c.y)) ? Number(c.y) : 0,
+      x: Math.max(0, Number.isFinite(Number(c.x)) ? Number(c.x) : 0),
+      y: Math.max(0, Number.isFinite(Number(c.y)) ? Number(c.y) : 0),
       slots: Array.isArray(c.slots) && c.slots.length >= 2
         ? c.slots.slice(0, 2).map((s) => normalizeSlot(s))
         : [{ type: 'empty' }, { type: 'empty' }],

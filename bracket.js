@@ -137,6 +137,103 @@
     renderScheduleMeta();
     renderCanvas();
     renderEditToolbar();
+    /* 重绘会清掉查找高亮,搜索激活时重挂(不重新聚焦,避免滚动跳动) */
+    if (searchQuery.trim()) applySearch();
+  }
+
+  /* ---------- 查找定位(场次 / 选手 / 阶段) ---------- */
+
+  let searchQuery = '';
+  let searchHitIds = [];
+  let searchCurrentIndex = -1;
+  let searchDebounce = null;
+
+  function computeSearchHits(query) {
+    const q = String(query || '').trim().toLowerCase();
+    if (!q) return [];
+    const record = currentRecord();
+    if (!record || !record.canvas) return [];
+    const resolved = CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {});
+    const names = new Map((window.TournamentApp.players || []).map((p) => [p.id, String(p.name || '').toLowerCase()]));
+    const ids = [];
+    for (const m of resolved.cards) {
+      const label = String(m.label || m.id).toLowerCase();
+      const phase = String(m.phase || '').toLowerCase();
+      const aName = m.a ? (names.get(m.a) || '') : '';
+      const bName = m.b ? (names.get(m.b) || '') : '';
+      if (label.includes(q) || phase.includes(q) || aName.includes(q) || bName.includes(q)) ids.push(m.id);
+    }
+    return ids;
+  }
+
+  function applySearch(options) {
+    const board = document.getElementById('canvas-board');
+    const countEl = document.getElementById('match-search-count');
+    if (!board) return;
+    searchHitIds = computeSearchHits(searchQuery);
+    searchCurrentIndex = -1;
+    board.querySelectorAll('.search-hit').forEach((el) => el.classList.remove('search-hit'));
+    board.querySelectorAll('.search-current').forEach((el) => el.classList.remove('search-current'));
+    if (!searchQuery.trim()) {
+      board.classList.remove('searching');
+      if (countEl) countEl.hidden = true;
+      return;
+    }
+    board.classList.add('searching');
+    for (const id of searchHitIds) {
+      const el = board.querySelector('.canvas-card[data-match="' + id + '"]');
+      if (el) el.classList.add('search-hit');
+    }
+    if (countEl) {
+      const total = (currentRecord().canvas && currentRecord().canvas.cards || []).length;
+      countEl.textContent = searchHitIds.length + ' / ' + total;
+      countEl.hidden = false;
+    }
+    if (options && options.focus && searchHitIds.length) {
+      /* 用户显式查找后接管缩放,防止 autoFit 把视口抢回去 */
+      userZoomed = true;
+      CanvasEditor.focusCards(searchHitIds);
+    }
+  }
+
+  /* Enter 在命中间循环跳转(环绕),当前项加强高亮 */
+  function searchStep() {
+    if (!searchHitIds.length) return;
+    searchCurrentIndex = (searchCurrentIndex + 1) % searchHitIds.length;
+    const board = document.getElementById('canvas-board');
+    board.querySelectorAll('.search-current').forEach((el) => el.classList.remove('search-current'));
+    const id = searchHitIds[searchCurrentIndex];
+    const el = board.querySelector('.canvas-card[data-match="' + id + '"]');
+    if (el) el.classList.add('search-current');
+    CanvasEditor.centerCard(id);
+    const countEl = document.getElementById('match-search-count');
+    if (countEl) countEl.textContent = (searchCurrentIndex + 1) + ' / ' + searchHitIds.length;
+  }
+
+  function clearSearch() {
+    const input = document.getElementById('match-search');
+    if (input) input.value = '';
+    searchQuery = '';
+    applySearch();
+  }
+
+  function bindMatchSearch() {
+    const input = document.getElementById('match-search');
+    if (!input) return;
+    input.addEventListener('input', () => {
+      searchQuery = input.value;
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => applySearch({ focus: true }), 250);
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (!searchHitIds.length) applySearch({ focus: true });
+        else searchStep();
+      } else if (event.key === 'Escape') {
+        clearSearch();
+      }
+    });
   }
 
   /* ---------- 开赛时间（赛程页浮层） ---------- */
@@ -287,24 +384,17 @@
     const resolved = CanvasModel.resolveCanvas(canvas, record.roster || [], record.scores || {});
     const names = new Map((window.TournamentApp.players || []).map((p) => [p.id, p.name]));
     const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match)).join('');
-    const size = CanvasModel.getCanvasSize(canvas);
-    const cardMaxX = Math.max(0, ...(canvas.cards || []).map((c) => (Number(c.x) || 0) * COL_GAP + CARD_WIDTH + 40));
-    const cardMaxY = Math.max(0, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * ROW_GAP + CARD_HEIGHT + 40));
-    const maxX = Math.max(cardMaxX, size.cols * COL_GAP + 80);
-    const maxY = Math.max(cardMaxY, size.rows * ROW_GAP + 80);
-    board.style.width = maxX + 'px';
-    board.style.height = maxY + 'px';
+    /* 无限画布:board 尺寸纯由卡片范围决定,无边界框;无卡时保留最小底 */
+    const cardMaxX = Math.max(600, ...(canvas.cards || []).map((c) => (Number(c.x) || 0) * COL_GAP + CARD_WIDTH + 40));
+    const cardMaxY = Math.max(400, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * ROW_GAP + CARD_HEIGHT + 40));
+    board.style.width = cardMaxX + 'px';
+    board.style.height = cardMaxY + 'px';
     /* 玻璃样式:写在内联变量上,卡片 CSS 消费 */
     const cardStyle = cardStyleOf(canvas);
     board.style.setProperty('--card-glass', cardStyle.opacity);
     board.style.setProperty('--card-blur', cardStyle.blur + 'px');
     /* editing class 由 CanvasEditor.enter/exit 维护(编辑器自身状态) */
     board.innerHTML = '';
-    const boundary = document.createElement('div');
-    boundary.className = 'canvas-boundary';
-    boundary.style.width = (size.cols * COL_GAP) + 'px';
-    boundary.style.height = (size.rows * ROW_GAP) + 'px';
-    board.appendChild(boundary);
     const resolvedById = new Map(resolved.cards.map((c) => [c.id, c]));
     renderEdges(canvas, resolvedById, board);
     const wrap = document.createElement('div');
@@ -474,65 +564,6 @@
       const count = CanvasEditor.getSelectedCount();
       tintTarget.textContent = count > 0 ? count + ' 张' : '未选中';
     }
-  }
-
-  /* ---------- 画布大小弹窗 ---------- */
-
-  let canvasSizeDialog = null;
-
-  function buildCanvasSizeDialog() {
-    if (canvasSizeDialog) return;
-    canvasSizeDialog = document.createElement('dialog');
-    canvasSizeDialog.id = 'canvas-size-dialog';
-    canvasSizeDialog.setAttribute('aria-labelledby', 'canvas-size-title');
-    canvasSizeDialog.innerHTML =
-      '<div class="dialog-head">' +
-      '  <h2 id="canvas-size-title">画布大小</h2>' +
-      '  <button type="button" class="btn btn-ghost btn-sm" data-size-close>关闭</button>' +
-      '</div>' +
-      '<div class="dialog-body">' +
-      '  <div class="score-form">' +
-      '    <label>宽（比赛卡片）<input type="number" id="canvas-size-cols" min="1" max="200" step="1"></label>' +
-      '    <span class="score-colon">×</span>' +
-      '    <label>高（比赛卡片）<input type="number" id="canvas-size-rows" min="1" max="200" step="1"></label>' +
-      '  </div>' +
-      '  <p class="hint">默认 40 × 24，最大 200 × 200。缩小画布不会删除卡片，只会缩小可编辑区域。</p>' +
-      '  <div class="dialog-actions">' +
-      '    <button type="button" class="btn btn-secondary" data-size-close>取消</button>' +
-      '    <button type="button" class="btn btn-primary" data-size-save>保存</button>' +
-      '  </div>' +
-      '</div>';
-    document.body.appendChild(canvasSizeDialog);
-    canvasSizeDialog.querySelectorAll('[data-size-close]').forEach((btn) => btn.addEventListener('click', () => canvasSizeDialog.close()));
-    canvasSizeDialog.querySelector('[data-size-save]').addEventListener('click', saveCanvasSizeDialog);
-  }
-
-  function openCanvasSizeDialog() {
-    const record = currentRecord();
-    if (!record || !record.canvas) return;
-    buildCanvasSizeDialog();
-    const size = CanvasModel.getCanvasSize(record.canvas);
-    canvasSizeDialog.querySelector('#canvas-size-cols').value = size.cols;
-    canvasSizeDialog.querySelector('#canvas-size-rows').value = size.rows;
-    canvasSizeDialog.showModal();
-  }
-
-  function saveCanvasSizeDialog() {
-    const record = currentRecord();
-    if (!record || !record.canvas) return;
-    const cols = Number(canvasSizeDialog.querySelector('#canvas-size-cols').value);
-    const rows = Number(canvasSizeDialog.querySelector('#canvas-size-rows').value);
-    if (!Number.isFinite(cols) || !Number.isFinite(rows)) {
-      notify('请输入有效的画布大小', 'danger');
-      return;
-    }
-    const size = CanvasModel.clampCanvasSize(cols, rows);
-    record.canvas.size = size;
-    canvasSizeDialog.close();
-    save().then(() => {
-      renderAll();
-      notify('画布大小已保存');
-    });
   }
 
   /* ---------- 比分弹窗 ---------- */
@@ -838,7 +869,6 @@
       else if (kind === 'zoom-in') editor.zoomIn();
       else if (kind === 'zoom-out') editor.zoomOut();
       else if (kind === 'fit') editor.fitCanvas();
-      else if (kind === 'format-size') openCanvasSizeDialog();
       else if (kind === 'style') toggleStyleDrawer();
       else if (kind === 'delete') editor.setTool('delete');
       else if (kind === 'save') {
@@ -885,6 +915,7 @@
     bindCanvasLock();
     bindEditToolbar();
     bindCardStylePanel();
+    bindMatchSearch();
     bindZoomDock();
   });
   document.addEventListener('ts:changed', () => {
