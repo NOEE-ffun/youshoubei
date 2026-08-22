@@ -2540,13 +2540,20 @@ body[data-page="stats"] #bg-layer {
   overflow: hidden;
 }
 
+/* 展开/收起共用同一行高与图标横向位置:图标始终左对齐固定 x,
+ * 展开只是右侧文字标签出现,间距与位置在两种状态下完全一致 */
 .side-nav {
   gap: 0.25rem;
+  align-items: stretch;
+  padding-inline: 0.4rem;
 }
 
 .side-link {
-  width: 2.5rem;
-  padding: 0.45rem 0.15rem;
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 0.65rem;
 }
 
 .side-icon {
@@ -2572,7 +2579,8 @@ body[data-page="stats"] #bg-layer {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  align-items: center;
+  align-items: stretch;
+  padding-inline: 0.4rem;
   width: 100%;
 }
 
@@ -2588,31 +2596,12 @@ body[data-page="stats"] #bg-layer {
 }
 
 .side-toggle {
-  margin-block-end: 0.35rem;
+  margin-block-end: 0.25rem;
 }
 
 .side-toggle .icon {
   width: 1rem;
   height: 1rem;
-}
-
-body.side-expanded .side-nav {
-  align-items: stretch;
-  padding-inline: 0.4rem;
-}
-
-body.side-expanded .side-actions {
-  align-items: stretch;
-  padding-inline: 0.4rem;
-}
-
-body.side-expanded .side-link,
-body.side-expanded .side-action {
-  flex-direction: row;
-  justify-content: flex-start;
-  gap: 0.65rem;
-  width: 100%;
-  padding: 0.55rem 0.7rem;
 }
 
 body.side-expanded .side-link .side-label,
@@ -2623,10 +2612,10 @@ body.side-expanded .side-action .side-label {
 .side-action {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  min-block-size: 2.5rem;
-  padding: 0;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.45rem 0.7rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
