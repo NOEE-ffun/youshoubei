@@ -1495,7 +1495,7 @@
     if (!placeholder) return false;
     const isSchedule = app.activePage === 'schedule';
     const isPoster = app.activePage === 'poster';
-    const showTournamentSwitch = isSchedule || app.activePage === 'stats';
+    const showTournamentSwitch = app.activePage === 'schedule';
     /* 赛程页 main 无 h1,顶栏标题承担 h1;其余页面 main 自带 h1,顶栏用 span 避免双 h1 */
     const titleTag = isSchedule ? 'h1' : 'span';
     const titleGroup = app.activePage === 'home'

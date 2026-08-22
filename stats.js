@@ -7,8 +7,7 @@
 
   const { escapeHtml, avatarMarkup } = window.TournamentUtils;
 
-  const SCOPE_ALL = '__all__';
-  let currentScope = SCOPE_ALL;
+  let selectedIds = new Set();  // 选中的届;空集 = 不统计任何数据
   let selectedPlayerId = null;
 
   function playerNameMap(players) {
@@ -86,18 +85,20 @@
 
   /* ---------- 渲染 ---------- */
 
-  function renderScopeSelect(app) {
-    const select = document.getElementById('stats-scope-select');
-    if (!select) return;
-    const options = ['<option value="' + SCOPE_ALL + '"' + (currentScope === SCOPE_ALL ? ' selected' : '') + '>全部届汇总</option>']
-      .concat((app.list || []).map((t) =>
-        '<option value="' + t.id + '"' + (t.id === currentScope ? ' selected' : '') + '>' + escapeHtml(t.name) + '</option>'
-      ));
-    const next = options.join('');
-    if (select.dataset.sig !== next) {
-      select.dataset.sig = next;
-      select.innerHTML = next;
+  /* 复选框列表:全选框 + 各届;空集=不统计,全选=汇总全部 */
+  function renderScopeChecks(app) {
+    const list = document.getElementById('stats-check-list');
+    const all = document.getElementById('stats-check-all');
+    if (!list || !all) return;
+    const items = (app.list || []).map((t) =>
+      '<label class="stats-check"><input type="checkbox" data-scope-id="' + t.id + '"' +
+      (selectedIds.has(t.id) ? ' checked' : '') + '> ' + escapeHtml(t.name) + '</label>'
+    ).join('');
+    if (list.dataset.sig !== items) {
+      list.dataset.sig = items;
+      list.innerHTML = items;
     }
+    all.checked = selectedIds.size >= (app.list || []).length && (app.list || []).length > 0;
   }
 
   function renderPodium(podiums) {
@@ -177,9 +178,8 @@
   }
 
   async function recordsForScope(app) {
-    if (currentScope === SCOPE_ALL) return app.storageGetAll();
     const all = await app.storageGetAll();
-    return all.filter((r) => r.id === currentScope);
+    return all.filter((r) => selectedIds.has(r.id));
   }
 
   let lastStats = null;
@@ -188,16 +188,16 @@
   async function render() {
     const app = window.TournamentApp;
     if (!app) return;
-    renderScopeSelect(app);
+    renderScopeChecks(app);
     let records = [];
     try {
       records = await recordsForScope(app);
     } catch (error) {
-      records = app.current ? [app.current] : [];
+      records = [];
     }
     lastStats = computeStats(records, app.players);
     lastPlayers = app.players;
-    /* 切届后选中选手可能不在数据里,清掉 */
+    /* 范围变化后选中选手可能不在数据里,清掉 */
     if (selectedPlayerId && !lastStats.players.has(selectedPlayerId)) selectedPlayerId = null;
     renderPodium(lastStats.podiums);
     renderClasses(lastStats, lastPlayers);
@@ -213,10 +213,23 @@
   }
 
   function bind() {
-    const select = document.getElementById('stats-scope-select');
-    if (select) {
-      select.addEventListener('change', () => {
-        currentScope = select.value;
+    const list = document.getElementById('stats-check-list');
+    const all = document.getElementById('stats-check-all');
+    if (list) {
+      list.addEventListener('change', (event) => {
+        const id = event.target.dataset.scopeId;
+        if (!id) return;
+        if (event.target.checked) selectedIds.add(id);
+        else selectedIds.delete(id);
+        selectedPlayerId = null;
+        render();
+      });
+    }
+    if (all) {
+      all.addEventListener('change', () => {
+        const app = window.TournamentApp;
+        if (all.checked) selectedIds = new Set((app.list || []).map((t) => t.id));
+        else selectedIds = new Set();
         selectedPlayerId = null;
         render();
       });
@@ -240,6 +253,9 @@
 
   document.addEventListener('ts:ready', () => {
     bind();
+    /* 默认全选(等价于原先的"全部届汇总") */
+    const app = window.TournamentApp;
+    selectedIds = new Set((app && app.list || []).map((t) => t.id));
     render();
     document.addEventListener('ts:changed', render);
   });

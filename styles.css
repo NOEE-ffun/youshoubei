@@ -3100,3 +3100,41 @@ body[data-page="home"] {
 .stats-player-row.selected td {
   border-block-end-color: transparent;
 }
+
+/* 统计范围多选框 */
+.stats-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+  margin-block-end: 1rem;
+}
+
+.stats-scope-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.stats-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.stats-check input {
+  accent-color: var(--accent);
+  inline-size: 0.95rem;
+  block-size: 0.95rem;
+  cursor: pointer;
+}
+
+.stats-check-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+}
