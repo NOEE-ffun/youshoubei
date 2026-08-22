@@ -1879,19 +1879,6 @@ dialog::backdrop {
   cursor: grabbing;
 }
 
-/* 无限网格:画在视口层(不随内容层缩放尺寸),位置由相机反算,
- * 平移到任何空白处都有网格;仅在编辑态开启 */
-.canvas-scroll-full.grid-on {
-  --grid-line: rgba(100, 116, 139, 0.38);
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-}
-
-[data-theme='dark'] .canvas-scroll-full.grid-on {
-  --grid-line: rgba(148, 163, 184, 0.32);
-}
-
 /* 赛程页开赛时间 */
 .canvas-meta {
   position: absolute;
