@@ -175,6 +175,12 @@ html {
   filter: invert(1);
 }
 
+/* 职业 svg 是彩色图标,任何主题下保持原色,不参与暗色反白 */
+.class-slot .icon,
+.class-bar .icon {
+  filter: none;
+}
+
 /* 顶栏按钮图标:浅色规则里有 filter:none 豁免(ID 选择器),暗色需显式反转压过它 */
 [data-theme='dark'] #app-header .btn .icon {
   filter: invert(1);

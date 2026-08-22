@@ -137,9 +137,9 @@
         ? (player ? player.name : '?') + ' · 职业使用率'
         : '职业登场(全部选手)';
     }
+    /* 固定顺序:精灵/皇家/法师/龙族/梦魇/主教/复仇者,不按次数排序 */
     const entries = CanvasModel.CLASS_LIST
-      .map((cls) => ({ cls, count: source.get(cls) || 0 }))
-      .sort((x, y) => y.count - x.count);
+      .map((cls) => ({ cls, count: source.get(cls) || 0 }));
     const total = entries.reduce((sum, e) => sum + e.count, 0);
     list.innerHTML = entries.map((e) => {
       const pct = total ? Math.round(e.count / total * 100) : 0;
