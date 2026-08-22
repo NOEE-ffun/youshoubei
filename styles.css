@@ -3038,6 +3038,11 @@ body[data-page="home"] {
   white-space: nowrap;
 }
 
+/* 数字列的表头与数据同右对齐,首列(选手)保持左对齐 */
+.stats-table th:not(:first-child) {
+  text-align: right;
+}
+
 .stats-table td {
   padding: 0.5rem 0.6rem;
   border-block-end: 1px solid var(--border);
