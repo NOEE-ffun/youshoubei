@@ -73,6 +73,19 @@
 
   const CARD_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
+  /* 职业 svg 名单(icons/classes/<名>.svg),卡片职业槽引用 */
+  const CLASS_LIST = ['精灵', '皇家', '法师', '龙族', '梦魇', '主教', '复仇者'];
+
+  /* 单条职业卡组链接:cls 在名单内、url/text 截断字符串;无效项返回 null */
+  function normalizeClassLink(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+    if (!CLASS_LIST.includes(entry.cls)) return null;
+    const url = typeof entry.url === 'string' ? entry.url.trim().slice(0, 500) : '';
+    const text = typeof entry.text === 'string' ? entry.text.trim().slice(0, 60) : '';
+    if (!url && !text) return null;
+    return { cls: entry.cls, url, text };
+  }
+
   function normalizeCard(card, index) {
     const c = card || {};
     return {
@@ -90,7 +103,11 @@
         : {},
       deckCount: c.deckCount && Number.isFinite(Number(c.deckCount)) ? Number(c.deckCount) : null,
       /* 单卡染色(null = 不染色,跟随玻璃默认) */
-      color: CARD_COLOR_RE.test(c.color || '') ? c.color : null
+      color: CARD_COLOR_RE.test(c.color || '') ? c.color : null,
+      /* 职业卡组链接(无上限数组,合理性截到 12 条) */
+      classLinks: Array.isArray(c.classLinks)
+        ? c.classLinks.slice(0, 12).map(normalizeClassLink).filter(Boolean)
+        : []
     };
   }
 
@@ -544,6 +561,7 @@
 
   return {
     AVATAR_COLORS,
+    CLASS_LIST,
     avatarColor,
     uid,
     DEFAULT_CANVAS_COLS,

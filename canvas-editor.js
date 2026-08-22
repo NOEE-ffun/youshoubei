@@ -785,6 +785,10 @@
       '  <div class="form-field"><label for="card-slot-b">B 位选手</label><select id="card-slot-b"></select></div>' +
       '  <div class="form-field"><label for="card-rank-winner">胜者出口名次</label><input type="number" id="card-rank-winner" placeholder="如 1"></div>' +
       '  <div class="form-field"><label for="card-rank-loser">败者出口名次</label><input type="number" id="card-rank-loser" placeholder="如 2"></div>' +
+      '  <div class="form-field">' +
+      '    <label>职业卡组(查看模式点击图标跳转链接)</label>' +
+      '    <div class="cl-list" id="card-cl-list"></div>' +
+      '  </div>' +
       '  <p class="hint">连线请用卡片右侧输出口拖到目标卡片左侧输入口；这里只设置直接参赛选手。</p>' +
       '  <div class="dialog-actions">' +
       '    <button type="button" class="btn btn-secondary" data-card-close>取消</button>' +
@@ -794,6 +798,55 @@
     document.body.appendChild(cardDialog);
     cardDialog.querySelectorAll('[data-card-close]').forEach((btn) => btn.addEventListener('click', () => cardDialog.close()));
     cardDialog.querySelector('[data-card-save]').addEventListener('click', saveCardDialog);
+    /* 行删除走事件委托:renderClassLinkRows 重建行不需要重复绑定 */
+    cardDialog.querySelector('#card-cl-list').addEventListener('click', (event) => {
+      const del = event.target.closest('[data-cl-del]');
+      if (del) del.closest('.cl-row').remove();
+    });
+  }
+
+  /* ---------- 职业卡组链接列表编辑 ---------- */
+
+  function classOptions(selected) {
+    let html = '<option value="">未选择</option>';
+    for (const cls of CanvasModel.CLASS_LIST) {
+      html += '<option value="' + escapeHtml(cls) + '"' + (cls === selected ? ' selected' : '') + '>' +
+        escapeHtml(cls) + '</option>';
+    }
+    return html;
+  }
+
+  function clRowHtml(entry) {
+    const e = entry || {};
+    return (
+      '<div class="cl-row">' +
+      '<select class="cl-cls" aria-label="职业">' + classOptions(e.cls) + '</select>' +
+      '<input type="url" class="cl-url" placeholder="卡组链接 https://" value="' + escapeHtml(e.url || '') + '">' +
+      '<input type="text" class="cl-text" placeholder="悬停文字" value="' + escapeHtml(e.text || '') + '">' +
+      '<button type="button" class="btn btn-ghost btn-sm cl-del" data-cl-del title="删除此行" aria-label="删除此行">×</button>' +
+      '</div>'
+    );
+  }
+
+  /* 末尾永远有一行空行供新增,保存时丢弃未选职业的行 */
+  function renderClassLinkRows(card) {
+    const list = cardDialog.querySelector('#card-cl-list');
+    const rows = (card && card.classLinks) || [];
+    list.innerHTML = rows.map(clRowHtml).join('') + clRowHtml(null);
+  }
+
+  function readClassLinkRows() {
+    const out = [];
+    cardDialog.querySelectorAll('#card-cl-list .cl-row').forEach((row) => {
+      const cls = row.querySelector('.cl-cls').value;
+      if (!cls) return;
+      out.push({
+        cls,
+        url: row.querySelector('.cl-url').value.trim().slice(0, 500),
+        text: row.querySelector('.cl-text').value.trim().slice(0, 60)
+      });
+    });
+    return out;
   }
 
   function playerOptions(selectedId) {
@@ -835,6 +888,7 @@
     }
     cardDialog.querySelector('#card-rank-winner').value = card.exitRanks && card.exitRanks.winner != null ? card.exitRanks.winner : '';
     cardDialog.querySelector('#card-rank-loser').value = card.exitRanks && card.exitRanks.loser != null ? card.exitRanks.loser : '';
+    renderClassLinkRows(card);
     cardDialog.showModal();
   }
 
@@ -863,6 +917,7 @@
     const rl = Number(cardDialog.querySelector('#card-rank-loser').value);
     card.exitRanks.winner = Number.isFinite(rw) ? rw : null;
     card.exitRanks.loser = Number.isFinite(rl) ? rl : null;
+    card.classLinks = readClassLinkRows();
     cardDialog.close();
     saveCanvas().then(() => {
       requestRender();
@@ -1001,6 +1056,7 @@
     addCard,
     deleteSelected,
     getSelectedIds: selectedIds,
+    editCard: openCardDialog,
     setTool,
     getTool,
     isZoomMode,

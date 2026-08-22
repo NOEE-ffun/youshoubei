@@ -141,4 +141,25 @@ const model = require('../canvas-model.js');
   assert.deepEqual(defaults.style, { opacity: 0.7, blur: 8 }, '缺省样式应回默认');
 }
 
-console.log('canvas-model 全部 10 组测试通过 ✓');
+// 11. 职业卡组链接(classLinks)归一化
+{
+  const linked = model.normalizeCanvas({
+    cards: [{
+      id: 'c1',
+      classLinks: [
+        { cls: '法师', url: 'https://sv.example/deck', text: '提速法师' },
+        { cls: '不存在', url: 'x' },
+        { cls: '精灵' },
+        '垃圾'
+      ]
+    }]
+  });
+  assert.equal(model.CLASS_LIST.length, 7, '应有 7 个职业');
+  assert.deepEqual(linked.cards[0].classLinks, [{ cls: '法师', url: 'https://sv.example/deck', text: '提速法师' }],
+    '非法职业/无内容项应被丢弃');
+
+  const empty = model.normalizeCanvas({ cards: [{ id: 'c1' }] });
+  assert.deepEqual(empty.cards[0].classLinks, [], '缺省 classLinks 应为空数组');
+}
+
+console.log('canvas-model 全部 11 组测试通过 ✓');

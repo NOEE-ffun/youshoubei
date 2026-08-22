@@ -305,10 +305,33 @@
     );
   }
 
+  /* 职业卡组槽:已填的依次排列,槽间"对"分隔;编辑模式行末永远有"+"空槽 */
+  function classSlotHtml(card, entry, idx) {
+    const title = entry.text || entry.cls;
+    return (
+      '<button type="button" class="class-slot" data-cl-card="' + card.id + '" data-cl-idx="' + idx + '"' +
+      ' data-url="' + escapeHtml(entry.url) + '"' +
+      ' title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '">' +
+      '<img class="icon" src="icons/classes/' + escapeHtml(entry.cls) + '.svg" alt="' + escapeHtml(entry.cls) + '">' +
+      '</button>'
+    );
+  }
+
+  function classRowHtml(card) {
+    const links = card.classLinks || [];
+    let html = links.map((entry, idx) => classSlotHtml(card, entry, idx)).join('<span class="vs-sep">对</span>');
+    if (editMode) {
+      /* 行末空槽不参与"对"分隔 */
+      html += '<button type="button" class="class-slot empty" data-cl-card="' + card.id + '" data-cl-idx="new"' +
+        ' title="添加职业卡组" aria-label="添加职业卡组">+</button>';
+    }
+    if (!html) return '';
+    return '<div class="deck-class-row">' + html + '</div>';
+  }
+
   function cardHtml(match, card) {
     const played = match.played;
     const ready = Boolean(match.a && match.b);
-    const editable = canEdit();
     const current = (currentRecord().scores || {})[match.id];
     const cycle = Boolean(match.cycle);
     const live = !played && ready && !match.invalid && !cycle && currentRecord().status === 'ongoing';
@@ -317,6 +340,13 @@
 
     const styleAttr = 'left:' + cardLeft(card) + 'px;top:' + cardTop(card) + 'px' +
       (card.color ? ';--card-tint:' + card.color : '');
+    /* 填写比分按钮仅编辑模式渲染;查看卡组按钮已删除,原位置换职业卡组行 */
+    const scoreBtn = editMode
+      ? '<button type="button" class="btn btn-secondary btn-sm score-open"' +
+        (ready ? '' : ' disabled') + ' data-score-open="' + match.id + '">' +
+        (current ? '比分 ' + formatScore(current.a) + ':' + formatScore(current.b) : '填写比分') +
+        '</button>'
+      : '';
     return (
       '<article class="match-card canvas-card' + (played ? ' played' : '') + (cycle ? ' cycle' : '') + (live ? ' match-live' : '') + '"' +
       ' data-match="' + match.id + '"' + (card.color ? ' data-tint' : '') +
@@ -330,11 +360,8 @@
       playerRow(match, 0) +
       playerRow(match, 1) +
       '<div class="score-actions">' +
-      '<button type="button" class="btn btn-secondary btn-sm score-open"' +
-      (editable && ready ? '' : ' disabled') + ' data-score-open="' + match.id + '">' +
-      (current ? '比分 ' + formatScore(current.a) + ':' + formatScore(current.b) : '填写比分') +
-      '</button>' +
-      '<button type="button" class="btn btn-secondary btn-sm" data-view-decks="' + match.id + '">查看卡组</button>' +
+      scoreBtn +
+      classRowHtml(card) +
       '</div>' +
       '</article>'
     );
@@ -734,10 +761,14 @@
         openScoreDialog(scoreBtn.dataset.scoreOpen);
         return;
       }
-      const deckBtn = event.target.closest('[data-view-decks]');
-      if (deckBtn) {
-        if (window.DeckModal && window.DeckModal.open) window.DeckModal.open(deckBtn.dataset.viewDecks);
-        return;
+      const classSlot = event.target.closest('[data-cl-card]');
+      if (classSlot) {
+        if (editMode) {
+          CanvasEditor.editCard(classSlot.dataset.clCard);
+        } else {
+          const url = classSlot.dataset.url || '';
+          if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener');
+        }
       }
     });
   }
