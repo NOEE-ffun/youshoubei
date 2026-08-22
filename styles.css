@@ -2047,7 +2047,10 @@ dialog::backdrop {
   width: 4.5rem;
   background: var(--surface-float);
   backdrop-filter: blur(14px);
-  border-right: 1px solid var(--border);
+  /* 右分隔线用内阴影而非 border:border 画在内容盒之外,
+   * 链接背景永远盖不住它(亮色下可见 1px 空档);内阴影在内容之下,
+   * 激活/悬停背景可铺到真正的右边缘 */
+  box-shadow: inset -1px 0 var(--border);
   z-index: 60;
   display: flex;
   flex-direction: column;
