@@ -285,7 +285,7 @@
     event.preventDefault();
     if (event.ctrlKey || event.metaKey || zoomMode) {
       const lineDelta = event.deltaY / (event.deltaMode === 1 ? 33.3 : event.deltaMode === 2 ? 100 : 1);
-      zoomAtPoint(event.clientX, event.clientY, Math.exp(-lineDelta * 0.0018));
+      zoomAtPoint(event.clientX, event.clientY, Math.exp(-lineDelta * 0.0036));
       return;
     }
     if (event.shiftKey) {
