@@ -1508,7 +1508,8 @@
     const scheduleActions = isSchedule
       ? '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
         '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单" aria-label="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
-        '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>'
+        '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>' +
+        '<button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="赛事设置" aria-label="赛事设置">' + iconMarkup('settings', '赛事设置') + '</button>'
       : '';
     /* 海报页页头专属控制（主题选择/分辨率/导出/OBS），仅海报页渲染 */
     const posterControls = isPoster
@@ -1566,6 +1567,11 @@
       editBtn.addEventListener('click', () => {
         if (window.BracketActions && window.BracketActions.requestEdit) window.BracketActions.requestEdit();
       });
+    }
+    /* 赛事设置是单场比赛的设置,只挂在赛程页页头 */
+    const settingsBtn = placeholder.querySelector('#settings-btn');
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', () => openSettingsDialog(false));
     }
     if (!headerHeightBound) {
       headerHeightBound = true;
@@ -1706,14 +1712,11 @@
     group.className = 'side-actions';
     group.innerHTML =
       '<button type="button" id="header-theme-btn" class="side-action" aria-label="切换主题"></button>' +
-      '<button type="button" id="manage-btn" class="side-action" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
-      '<button type="button" id="settings-btn" class="side-action" title="设置" aria-label="设置">' + iconMarkup('settings', '设置') + '</button>';
+      '<button type="button" id="manage-btn" class="side-action" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>';
     sidebar.appendChild(group);
     appendSideLabel(group.querySelector('#manage-btn'), '管理');
-    appendSideLabel(group.querySelector('#settings-btn'), '设置');
     group.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
     group.querySelector('#manage-btn').addEventListener('click', openManageDialog);
-    group.querySelector('#settings-btn').addEventListener('click', () => openSettingsDialog(false));
     syncSideToggle();
     sideActionsBuilt = true;
   }
