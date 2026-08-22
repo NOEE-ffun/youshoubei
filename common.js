@@ -1684,7 +1684,7 @@
     btn.title = label;
     btn.setAttribute('aria-label', label);
     btn.setAttribute('aria-expanded', String(expanded));
-    btn.innerHTML = iconMarkup(expanded ? 'chevron_left' : 'chevron_right', label);
+    btn.innerHTML = iconMarkup(expanded ? 'chevron_left' : 'menu', label);
   }
 
   function appendSideLabel(el, text) {
