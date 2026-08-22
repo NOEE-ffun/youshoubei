@@ -2536,22 +2536,20 @@ body[data-page="stats"] #bg-layer {
 .app-sidebar {
   width: var(--sidebar-w);
   padding-block: 0.5rem;
-  padding-inline: 0.4rem;
+  padding-inline: 0;
   align-items: stretch;
   transition: width 0.18s var(--ease-out);
   overflow: hidden;
 }
 
-/* 展开/收起共用同一行高与图标横向位置:图标始终左对齐固定 x,
- * 展开只是右侧文字标签出现,间距与位置在两种状态下完全一致。
- * 链接负外边距吃掉侧栏左右 0.4rem 内边距,背景铺满整个侧栏宽度 */
+/* 展开/收起共用同一行高与图标横向位置:图标始终左对齐固定 x(1.1rem),
+ * 展开只是右侧文字标签出现;背景(悬停/激活)铺满侧栏全宽 */
 .side-nav {
   gap: 0.25rem;
 }
 
 .side-link {
-  width: calc(100% + 0.8rem);
-  margin-inline: -0.4rem;
+  width: 100%;
   padding: 0.45rem 1.1rem;
   flex-direction: row;
   justify-content: flex-start;
@@ -2622,7 +2620,7 @@ body.side-expanded .side-action .side-label {
   justify-content: flex-start;
   gap: 0.65rem;
   width: 100%;
-  padding: 0.45rem 0.7rem;
+  padding: 0.45rem 1.1rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
