@@ -2582,10 +2582,12 @@ body[data-page="stats"] #bg-layer {
   width: 100%;
 }
 
-/* 展开模式的文字标签:默认隐藏,展开后随按钮横排显示 */
+/* 展开模式的文字标签:默认隐藏,展开后随按钮横排显示。
+ * 行高锁定为小于图标的固定值,保证展开不撑高行(与收起态行高一致) */
 .side-label {
   display: none;
   font-size: 0.78rem;
+  line-height: 1.15rem;
   font-weight: 600;
   color: inherit;
   white-space: nowrap;
