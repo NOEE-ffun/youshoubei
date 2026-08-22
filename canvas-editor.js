@@ -786,8 +786,12 @@
       '  <div class="form-field"><label for="card-rank-winner">胜者出口名次</label><input type="number" id="card-rank-winner" placeholder="如 1"></div>' +
       '  <div class="form-field"><label for="card-rank-loser">败者出口名次</label><input type="number" id="card-rank-loser" placeholder="如 2"></div>' +
       '  <div class="form-field">' +
-      '    <label>职业卡组(查看模式点击图标跳转链接)</label>' +
-      '    <div class="cl-list" id="card-cl-list"></div>' +
+      '    <label>职业卡组 · A 位选手(查看模式点击图标跳转)</label>' +
+      '    <div class="cl-list" id="card-cl-a"></div>' +
+      '  </div>' +
+      '  <div class="form-field">' +
+      '    <label>职业卡组 · B 位选手</label>' +
+      '    <div class="cl-list" id="card-cl-b"></div>' +
       '  </div>' +
       '  <p class="hint">连线请用卡片右侧输出口拖到目标卡片左侧输入口；这里只设置直接参赛选手。</p>' +
       '  <div class="dialog-actions">' +
@@ -799,13 +803,15 @@
     cardDialog.querySelectorAll('[data-card-close]').forEach((btn) => btn.addEventListener('click', () => cardDialog.close()));
     cardDialog.querySelector('[data-card-save]').addEventListener('click', saveCardDialog);
     /* 行删除走事件委托:renderClassLinkRows 重建行不需要重复绑定 */
-    cardDialog.querySelector('#card-cl-list').addEventListener('click', (event) => {
-      const del = event.target.closest('[data-cl-del]');
-      if (del) del.closest('.cl-row').remove();
-    });
+    for (const listId of ['#card-cl-a', '#card-cl-b']) {
+      cardDialog.querySelector(listId).addEventListener('click', (event) => {
+        const del = event.target.closest('[data-cl-del]');
+        if (del) del.closest('.cl-row').remove();
+      });
+    }
   }
 
-  /* ---------- 职业卡组链接列表编辑 ---------- */
+  /* ---------- 职业卡组链接列表编辑(A/B 两组) ---------- */
 
   function classOptions(selected) {
     let html = '<option value="">未选择</option>';
@@ -828,16 +834,18 @@
     );
   }
 
-  /* 末尾永远有一行空行供新增,保存时丢弃未选职业的行 */
+  /* 每组末尾永远有一行空行供新增,保存时丢弃未选职业的行 */
   function renderClassLinkRows(card) {
-    const list = cardDialog.querySelector('#card-cl-list');
-    const rows = (card && card.classLinks) || [];
-    list.innerHTML = rows.map(clRowHtml).join('') + clRowHtml(null);
+    const groups = (card && card.classLinks) || {};
+    for (const [groupId, listId] of [['a', '#card-cl-a'], ['b', '#card-cl-b']]) {
+      const rows = groups[groupId] || [];
+      cardDialog.querySelector(listId).innerHTML = rows.map(clRowHtml).join('') + clRowHtml(null);
+    }
   }
 
-  function readClassLinkRows() {
+  function readClassLinkGroup(listId) {
     const out = [];
-    cardDialog.querySelectorAll('#card-cl-list .cl-row').forEach((row) => {
+    cardDialog.querySelectorAll(listId + ' .cl-row').forEach((row) => {
       const cls = row.querySelector('.cl-cls').value;
       if (!cls) return;
       out.push({
@@ -917,7 +925,7 @@
     const rl = Number(cardDialog.querySelector('#card-rank-loser').value);
     card.exitRanks.winner = Number.isFinite(rw) ? rw : null;
     card.exitRanks.loser = Number.isFinite(rl) ? rl : null;
-    card.classLinks = readClassLinkRows();
+    card.classLinks = { a: readClassLinkGroup('#card-cl-a'), b: readClassLinkGroup('#card-cl-b') };
     cardDialog.close();
     saveCanvas().then(() => {
       requestRender();

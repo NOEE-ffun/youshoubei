@@ -141,25 +141,34 @@ const model = require('../canvas-model.js');
   assert.deepEqual(defaults.style, { opacity: 0.7, blur: 8 }, '缺省样式应回默认');
 }
 
-// 11. 职业卡组链接(classLinks)归一化
+// 11. 职业卡组链接(classLinks)归一化:A/B 两组
 {
   const linked = model.normalizeCanvas({
     cards: [{
       id: 'c1',
-      classLinks: [
-        { cls: '法师', url: 'https://sv.example/deck', text: '提速法师' },
-        { cls: '不存在', url: 'x' },
-        { cls: '精灵' },
-        '垃圾'
-      ]
+      classLinks: {
+        a: [
+          { cls: '法师', url: 'https://sv.example/deck', text: '提速法师' },
+          { cls: '不存在', url: 'x' },
+          { cls: '精灵' },
+          '垃圾'
+        ],
+        b: [{ cls: '皇家', url: 'https://sv.example/d2', text: '皇家' }]
+      }
     }]
   });
   assert.equal(model.CLASS_LIST.length, 7, '应有 7 个职业');
-  assert.deepEqual(linked.cards[0].classLinks, [{ cls: '法师', url: 'https://sv.example/deck', text: '提速法师' }],
+  assert.deepEqual(linked.cards[0].classLinks.a, [{ cls: '法师', url: 'https://sv.example/deck', text: '提速法师' }],
     '非法职业/无内容项应被丢弃');
+  assert.deepEqual(linked.cards[0].classLinks.b, [{ cls: '皇家', url: 'https://sv.example/d2', text: '皇家' }]);
 
-  const empty = model.normalizeCanvas({ cards: [{ id: 'c1' }] });
-  assert.deepEqual(empty.cards[0].classLinks, [], '缺省 classLinks 应为空数组');
+  // 旧扁平数组整体迁入 a 组
+  const legacy = model.normalizeCanvas({ cards: [{ id: 'c2', classLinks: [{ cls: '龙族', url: 'https://x', text: 't' }] }] });
+  assert.equal(legacy.cards[0].classLinks.a.length, 1, '旧扁平数组应迁入 a 组');
+  assert.equal(legacy.cards[0].classLinks.b.length, 0);
+
+  const empty = model.normalizeCanvas({ cards: [{ id: 'c3' }] });
+  assert.deepEqual(empty.cards[0].classLinks, { a: [], b: [] }, '缺省应为空双组');
 }
 
 console.log('canvas-model 全部 11 组测试通过 ✓');

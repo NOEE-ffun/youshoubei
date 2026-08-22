@@ -78,12 +78,27 @@
 
   /* 单条职业卡组链接:cls 在名单内、url/text 截断字符串;无效项返回 null */
   function normalizeClassLink(entry) {
+    if (!entry && entry !== null) entry = null;
     if (!entry || typeof entry !== 'object') return null;
     if (!CLASS_LIST.includes(entry.cls)) return null;
     const url = typeof entry.url === 'string' ? entry.url.trim().slice(0, 500) : '';
     const text = typeof entry.text === 'string' ? entry.text.trim().slice(0, 60) : '';
     if (!url && !text) return null;
     return { cls: entry.cls, url, text };
+  }
+
+  function normalizeClassLinkGroup(list) {
+    if (!Array.isArray(list)) return [];
+    return list.slice(0, 12).map(normalizeClassLink).filter(Boolean);
+  }
+
+  /* 职业卡组按选手位分组:a = A 位(上行/左侧),b = B 位(下行/右侧)。
+   * 为之后的数据统计页预留:统计直接遍历 cards 的 classLinks.a/b 即可。
+   * 兼容旧扁平数组:整体迁入 a 组。 */
+  function normalizeClassLinks(raw) {
+    if (Array.isArray(raw)) return { a: normalizeClassLinkGroup(raw), b: [] };
+    const g = raw && typeof raw === 'object' ? raw : {};
+    return { a: normalizeClassLinkGroup(g.a), b: normalizeClassLinkGroup(g.b) };
   }
 
   function normalizeCard(card, index) {
@@ -104,10 +119,8 @@
       deckCount: c.deckCount && Number.isFinite(Number(c.deckCount)) ? Number(c.deckCount) : null,
       /* 单卡染色(null = 不染色,跟随玻璃默认) */
       color: CARD_COLOR_RE.test(c.color || '') ? c.color : null,
-      /* 职业卡组链接(无上限数组,合理性截到 12 条) */
-      classLinks: Array.isArray(c.classLinks)
-        ? c.classLinks.slice(0, 12).map(normalizeClassLink).filter(Boolean)
-        : []
+      /* 职业卡组链接(按 A/B 选手位分组,各无上限,合理性截到 12 条) */
+      classLinks: normalizeClassLinks(c.classLinks)
     };
   }
 

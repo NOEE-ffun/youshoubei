@@ -3,7 +3,7 @@
 
   /* 共享工具统一来自 common.js;画布几何来自 canvas-model.js(唯一真源) */
   const {
-    escapeHtml, canEdit, save, avatarMarkup, notify, uiConfirm,
+    escapeHtml, canEdit, save, avatarMarkup, notify, uiConfirm, iconMarkup,
     formatStartTime, bindZoomDock: bindZoomDockControls, bindZoomFitOnResize
   } = window.TournamentUtils;
   const { CARD_WIDTH, CARD_HEIGHT, COL_GAP, ROW_GAP, PORT_Y, DEFAULT_CANVAS_COLS, DEFAULT_CANVAS_ROWS } = window.CanvasModel;
@@ -305,11 +305,12 @@
     );
   }
 
-  /* 职业卡组槽:已填的依次排列,槽间"对"分隔;编辑模式行末永远有"+"空槽 */
-  function classSlotHtml(card, entry, idx) {
+  /* 职业卡组槽:A/B 两组,组内槽并排,两组之间"对"分隔;
+   * 编辑模式每组末尾永远有"+"空槽 */
+  function classSlotHtml(card, group, entry, idx) {
     const title = entry.text || entry.cls;
     return (
-      '<button type="button" class="class-slot" data-cl-card="' + card.id + '" data-cl-idx="' + idx + '"' +
+      '<button type="button" class="class-slot" data-cl-card="' + card.id + '" data-cl-group="' + group + '" data-cl-idx="' + idx + '"' +
       ' data-url="' + escapeHtml(entry.url) + '"' +
       ' title="' + escapeHtml(title) + '" aria-label="' + escapeHtml(title) + '">' +
       '<img class="icon" src="icons/classes/' + escapeHtml(entry.cls) + '.svg" alt="' + escapeHtml(entry.cls) + '">' +
@@ -317,15 +318,23 @@
     );
   }
 
-  function classRowHtml(card) {
-    const links = card.classLinks || [];
-    let html = links.map((entry, idx) => classSlotHtml(card, entry, idx)).join('<span class="vs-sep">对</span>');
+  function classGroupHtml(card, group) {
+    const links = ((card.classLinks || {})[group]) || [];
+    let html = links.map((entry, idx) => classSlotHtml(card, group, entry, idx)).join('');
     if (editMode) {
-      /* 行末空槽不参与"对"分隔 */
-      html += '<button type="button" class="class-slot empty" data-cl-card="' + card.id + '" data-cl-idx="new"' +
+      html += '<button type="button" class="class-slot empty" data-cl-card="' + card.id + '" data-cl-group="' + group + '" data-cl-idx="new"' +
         ' title="添加职业卡组" aria-label="添加职业卡组">+</button>';
     }
-    if (!html) return '';
+    return html;
+  }
+
+  function classRowHtml(card) {
+    const a = classGroupHtml(card, 'a');
+    const b = classGroupHtml(card, 'b');
+    if (!a && !b) return '';
+    let html = a;
+    if (a && b) html += '<span class="vs-sep">对</span>';
+    html += b;
     return '<div class="deck-class-row">' + html + '</div>';
   }
 
@@ -340,11 +349,13 @@
 
     const styleAttr = 'left:' + cardLeft(card) + 'px;top:' + cardTop(card) + 'px' +
       (card.color ? ';--card-tint:' + card.color : '');
-    /* 填写比分按钮仅编辑模式渲染;查看卡组按钮已删除,原位置换职业卡组行 */
+    /* 填写比分按钮仅编辑模式渲染,图标化省空间;查看卡组按钮已删除 */
     const scoreBtn = editMode
-      ? '<button type="button" class="btn btn-secondary btn-sm score-open"' +
-        (ready ? '' : ' disabled') + ' data-score-open="' + match.id + '">' +
-        (current ? '比分 ' + formatScore(current.a) + ':' + formatScore(current.b) : '填写比分') +
+      ? '<button type="button" class="btn btn-secondary btn-sm icon-btn score-open"' +
+        (ready ? '' : ' disabled') + ' data-score-open="' + match.id + '"' +
+        ' title="' + (current ? '比分 ' + formatScore(current.a) + ':' + formatScore(current.b) : '填写比分') + '"' +
+        ' aria-label="填写比分">' +
+        iconMarkup('edit', current ? '比分 ' + formatScore(current.a) + ':' + formatScore(current.b) : '填写比分') +
         '</button>'
       : '';
     return (
