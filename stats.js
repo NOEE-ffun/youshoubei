@@ -2,32 +2,37 @@
   'use strict';
 
   /* 数据统计页:单届 + 全部届汇总。
-   * 数据源全部现算:resolveCanvas(比赛/胜场/小局)、deriveStandings(名次)、
-   * canvas.cards 的 classLinks.a/b(职业登场,按选手位归属)。 */
+   * 数据源全部现算:resolveCanvas(胜场/小局)、deriveStandings(名次)、
+   * canvas.cards 的 classLinks.a/b(职业登场,按选手位归属,支持按选手筛选)。 */
 
   const { escapeHtml, avatarMarkup } = window.TournamentUtils;
 
   const SCOPE_ALL = '__all__';
   let currentScope = SCOPE_ALL;
+  let selectedPlayerId = null;
 
   function playerNameMap(players) {
     return new Map((players || []).map((p) => [p.id, p.name || p.id]));
   }
 
-  /* 统计引擎:records 为完整记录数组(单届传 [record],汇总传 storageGetAll()) */
+  /* 统计引擎:records 为完整记录数组;classesByPlayer 记录每位选手的职业登场 */
   function computeStats(records, players) {
     const names = playerNameMap(players);
     const stats = {
-      players: new Map(),   // pid -> { wins, losses, gameWins, gameLosses, ranks: [] }
-      classes: new Map(),   // cls -> count
-      matches: [],          // { label, phase, aName, bName, scoreText, winnerName, played }
-      podiums: []           // 每届 { name, champion, runnerUp, thirdPlace }
+      players: new Map(),        // pid -> { wins, losses, gameWins, gameLosses, ranks }
+      classes: new Map(),        // cls -> count(全部选手合计)
+      classesByPlayer: new Map(), // pid -> Map(cls -> count)
+      podiums: []
     };
     const ensure = (pid) => {
       if (!stats.players.has(pid)) {
         stats.players.set(pid, { wins: 0, losses: 0, gameWins: 0, gameLosses: 0, ranks: [] });
       }
       return stats.players.get(pid);
+    };
+    const ensurePlayerClasses = (pid) => {
+      if (!stats.classesByPlayer.has(pid)) stats.classesByPlayer.set(pid, new Map());
+      return stats.classesByPlayer.get(pid);
     };
 
     for (const record of records || []) {
@@ -36,21 +41,6 @@
       const cardById = new Map((record.canvas.cards || []).map((c) => [c.id, c]));
 
       for (const m of resolved.cards) {
-        const aName = m.a ? (names.get(m.a) || '?') : null;
-        const bName = m.b ? (names.get(m.b) || '?') : null;
-        const scoreText = m.played || m.draw
-          ? (m.scoreA == null ? '?' : m.scoreA) + ':' + (m.scoreB == null ? '?' : m.scoreB)
-          : '';
-        stats.matches.push({
-          phase: m.phase || '',
-          label: m.label || m.id,
-          aName,
-          bName,
-          scoreText,
-          winnerName: m.winner ? (names.get(m.winner) || '?') : null,
-          played: Boolean(m.played)
-        });
-
         if (m.played && m.winner && m.loser) {
           ensure(m.winner).wins += 1;
           ensure(m.loser).losses += 1;
@@ -61,14 +51,16 @@
           if (Number.isFinite(Number(loserGames))) ensure(m.loser).gameLosses += Math.max(0, Number(loserGames));
         }
 
-        /* 职业登场:该场该选手位填了职业即计一次 */
+        /* 职业登场:该场该选手位填了职业即计一次(合计 + 按选手) */
         const card = cardById.get(m.id);
         const cl = (card && card.classLinks) || {};
         for (const [group, pid] of [['a', m.a], ['b', m.b]]) {
           if (!pid || !Array.isArray(cl[group])) continue;
+          const pc = ensurePlayerClasses(pid);
           for (const entry of cl[group]) {
             if (!entry || !entry.cls) continue;
             stats.classes.set(entry.cls, (stats.classes.get(entry.cls) || 0) + 1);
+            pc.set(entry.cls, (pc.get(entry.cls) || 0) + 1);
           }
         }
       }
@@ -129,20 +121,36 @@
     banner.hidden = false;
   }
 
-  function renderClasses(classes) {
+  /* 职业登场条:按百分比显示;selectedPlayerId 非空时只统计该选手 */
+  function renderClasses(stats, players) {
     const list = document.getElementById('stats-class-list');
+    const title = document.querySelector('.stats-section[aria-label="职业统计"] .stats-section-title');
     if (!list) return;
+    const source = selectedPlayerId
+      ? (stats.classesByPlayer.get(selectedPlayerId) || new Map())
+      : stats.classes;
+    const player = selectedPlayerId
+      ? (players || []).find((p) => p.id === selectedPlayerId)
+      : null;
+    if (title) {
+      title.textContent = selectedPlayerId
+        ? (player ? player.name : '?') + ' · 职业使用率'
+        : '职业登场(全部选手)';
+    }
     const entries = CanvasModel.CLASS_LIST
-      .map((cls) => ({ cls, count: classes.get(cls) || 0 }))
+      .map((cls) => ({ cls, count: source.get(cls) || 0 }))
       .sort((x, y) => y.count - x.count);
-    const max = Math.max(1, ...entries.map((e) => e.count));
-    list.innerHTML = entries.map((e) => (
-      '<div class="class-bar' + (e.count ? '' : ' empty') + '" title="' + escapeHtml(e.cls) + ' ' + e.count + ' 次">' +
-      '<img class="icon" src="icons/classes/' + escapeHtml(e.cls) + '.svg" alt="' + escapeHtml(e.cls) + '">' +
-      '<div class="class-bar-track"><div class="class-bar-fill" style="width:' + Math.round(e.count / max * 100) + '%"></div></div>' +
-      '<span class="class-bar-count">' + e.count + '</span>' +
-      '</div>'
-    )).join('');
+    const total = entries.reduce((sum, e) => sum + e.count, 0);
+    list.innerHTML = entries.map((e) => {
+      const pct = total ? Math.round(e.count / total * 100) : 0;
+      return (
+        '<div class="class-bar' + (e.count ? '' : ' empty') + '" title="' + escapeHtml(e.cls) + ' ' + pct + '%">' +
+        '<img class="icon" src="icons/classes/' + escapeHtml(e.cls) + '.svg" alt="' + escapeHtml(e.cls) + '">' +
+        '<div class="class-bar-track"><div class="class-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<span class="class-bar-count">' + pct + '%</span>' +
+        '</div>'
+      );
+    }).join('');
   }
 
   function renderPlayerTable(stats, players) {
@@ -157,7 +165,8 @@
       })
       .sort((x, y) => y.s.wins - x.s.wins || (x.best ?? 99) - (y.best ?? 99));
     tbody.innerHTML = byPlayer.map((row) => (
-      '<tr>' +
+      '<tr class="stats-player-row' + (selectedPlayerId === row.player.id ? ' selected' : '') + '"' +
+      ' data-player="' + row.player.id + '" tabindex="0" role="button" aria-label="查看 ' + escapeHtml(row.player.name) + ' 的职业使用率">' +
       '<td class="stats-player-cell">' + avatarMarkup(row.player, 'avatar-sm') + '<span>' + escapeHtml(row.player.name) + '</span></td>' +
       '<td class="num">' + row.s.wins + '</td>' +
       '<td class="num">' + row.s.losses + '</td>' +
@@ -168,25 +177,14 @@
     )).join('') || '<tr><td colspan="6" class="stats-empty">暂无对战数据</td></tr>';
   }
 
-  function renderMatchTable(matches) {
-    const tbody = document.querySelector('#stats-match-table tbody');
-    if (!tbody) return;
-    const rows = [...matches].reverse(); // 最近的场次在前
-    tbody.innerHTML = rows.map((m) => (
-      '<tr' + (m.played ? '' : ' class="pending"') + '>' +
-      '<td>' + (m.phase ? '<span class="stats-phase">' + escapeHtml(m.phase) + '</span>' : '') + escapeHtml(m.label) + '</td>' +
-      '<td>' + escapeHtml(m.aName || '待定') + ' vs ' + escapeHtml(m.bName || '待定') + '</td>' +
-      '<td class="num">' + (m.scoreText || '—') + '</td>' +
-      '<td>' + (m.winnerName ? escapeHtml(m.winnerName) : '—') + '</td>' +
-      '</tr>'
-    )).join('') || '<tr><td colspan="4" class="stats-empty">暂无比赛</td></tr>';
-  }
-
   async function recordsForScope(app) {
     if (currentScope === SCOPE_ALL) return app.storageGetAll();
     const all = await app.storageGetAll();
     return all.filter((r) => r.id === currentScope);
   }
+
+  let lastStats = null;
+  let lastPlayers = null;
 
   async function render() {
     const app = window.TournamentApp;
@@ -198,11 +196,21 @@
     } catch (error) {
       records = app.current ? [app.current] : [];
     }
-    const stats = computeStats(records, app.players);
-    renderPodium(stats.podiums);
-    renderClasses(stats.classes);
-    renderPlayerTable(stats, app.players);
-    renderMatchTable(stats.matches);
+    lastStats = computeStats(records, app.players);
+    lastPlayers = app.players;
+    /* 切届后选中选手可能不在数据里,清掉 */
+    if (selectedPlayerId && !lastStats.players.has(selectedPlayerId)) selectedPlayerId = null;
+    renderPodium(lastStats.podiums);
+    renderClasses(lastStats, lastPlayers);
+    renderPlayerTable(lastStats, lastPlayers);
+  }
+
+  function selectPlayer(pid) {
+    selectedPlayerId = selectedPlayerId === pid ? null : pid;
+    if (lastStats) {
+      renderClasses(lastStats, lastPlayers);
+      renderPlayerTable(lastStats, lastPlayers);
+    }
   }
 
   function bind() {
@@ -210,7 +218,23 @@
     if (select) {
       select.addEventListener('change', () => {
         currentScope = select.value;
+        selectedPlayerId = null;
         render();
+      });
+    }
+    const table = document.getElementById('stats-player-table');
+    if (table) {
+      table.addEventListener('click', (event) => {
+        const row = event.target.closest('.stats-player-row');
+        if (row) selectPlayer(row.dataset.player);
+      });
+      table.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const row = event.target.closest('.stats-player-row');
+        if (row) {
+          event.preventDefault();
+          selectPlayer(row.dataset.player);
+        }
       });
     }
   }

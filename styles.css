@@ -2238,7 +2238,8 @@ dialog::backdrop {
 /* ========== 主页幻灯片 ========== */
 
 body[data-page="home"] #bg-layer,
-body[data-page="players"] #bg-layer {
+body[data-page="players"] #bg-layer,
+body[data-page="stats"] #bg-layer {
   display: none;
 }
 
@@ -3077,4 +3078,17 @@ body[data-page="home"] {
   text-align: center;
   color: var(--text-muted);
   padding-block: 1.25rem !important;
+}
+
+/* 选手行选中态(查看职业使用率) */
+.stats-player-row {
+  cursor: pointer;
+}
+
+.stats-player-row.selected {
+  background: var(--accent-soft);
+}
+
+.stats-player-row.selected td {
+  border-block-end-color: transparent;
 }
