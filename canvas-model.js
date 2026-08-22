@@ -323,6 +323,48 @@
     return resolved.cards.find((c) => c.id === cardId) || null;
   }
 
+  /* ========== 卡组继承(读取时派生) ==========
+   * 卡片某侧自己填了 classLinks 用自己的;没填且该侧是连线槽,则沿连线
+   * 继承来源卡中该选手所在一侧的卡组(递归多跳)。
+   * 与未来的选手端"提交/更新卡组"互补:写自己、读时派生,互不冲突。 */
+  function resolveEffectiveClassLinks(canvas, scores) {
+    const norm = normalizeCanvas(canvas);
+    const byId = new Map(norm.cards.map((c) => [c.id, c]));
+    const resolved = resolveCanvas(canvas, [], scores);
+    const resolvedById = new Map(resolved.cards.map((c) => [c.id, c]));
+    const memo = new Map(); // cardId:sideIdx -> 链接数组(环守卫:先置空)
+
+    function sideLinks(cardId, sideIdx) {
+      const key = cardId + ':' + sideIdx;
+      if (memo.has(key)) return memo.get(key);
+      memo.set(key, []);
+      const card = byId.get(cardId);
+      if (!card) return [];
+      const own = ((card.classLinks || {})[sideIdx === 0 ? 'a' : 'b']) || [];
+      if (own.length) {
+        memo.set(key, own);
+        return own;
+      }
+      const slot = card.slots && card.slots[sideIdx];
+      if (!slot || slot.type !== 'flow' || !byId.has(slot.cardId)) return [];
+      const src = resolvedById.get(slot.cardId);
+      if (!src) return [];
+      const player = slot.outcome === 'winner' ? src.winner : slot.loser;
+      if (!player) return [];
+      const srcSide = src.a === player ? 0 : src.b === player ? 1 : -1;
+      if (srcSide < 0) return [];
+      const links = sideLinks(slot.cardId, srcSide);
+      memo.set(key, links);
+      return links;
+    }
+
+    const out = new Map();
+    for (const card of norm.cards) {
+      out.set(card.id, { a: sideLinks(card.id, 0), b: sideLinks(card.id, 1) });
+    }
+    return out;
+  }
+
   /* ========== 自动排名 ========== */
 
   function usedExits(canvas) {
@@ -575,6 +617,7 @@
   return {
     AVATAR_COLORS,
     CLASS_LIST,
+    resolveEffectiveClassLinks,
     avatarColor,
     uid,
     DEFAULT_CANVAS_COLS,

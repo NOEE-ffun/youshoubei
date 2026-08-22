@@ -38,7 +38,7 @@
     for (const record of records || []) {
       if (!record || !record.canvas) continue;
       const resolved = CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {});
-      const cardById = new Map((record.canvas.cards || []).map((c) => [c.id, c]));
+      const effLinksMap = CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {});
 
       for (const m of resolved.cards) {
         if (m.played && m.winner && m.loser) {
@@ -51,13 +51,12 @@
           if (Number.isFinite(Number(loserGames))) ensure(m.loser).gameLosses += Math.max(0, Number(loserGames));
         }
 
-        /* 职业登场:该场该选手位填了职业即计一次(合计 + 按选手) */
-        const card = cardById.get(m.id);
-        const cl = (card && card.classLinks) || {};
+        /* 职业登场:该场该选手位的有效卡组(自己填的或连线继承)计一次 */
+        const eff = effLinksMap.get(m.id) || {};
         for (const [group, pid] of [['a', m.a], ['b', m.b]]) {
-          if (!pid || !Array.isArray(cl[group])) continue;
+          if (!pid || !Array.isArray(eff[group])) continue;
           const pc = ensurePlayerClasses(pid);
-          for (const entry of cl[group]) {
+          for (const entry of eff[group]) {
             if (!entry || !entry.cls) continue;
             stats.classes.set(entry.cls, (stats.classes.get(entry.cls) || 0) + 1);
             pc.set(entry.cls, (pc.get(entry.cls) || 0) + 1);

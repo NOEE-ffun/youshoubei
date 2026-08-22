@@ -171,4 +171,30 @@ const model = require('../canvas-model.js');
   assert.deepEqual(empty.cards[0].classLinks, { a: [], b: [] }, '缺省应为空双组');
 }
 
-console.log('canvas-model 全部 11 组测试通过 ✓');
+// 12. 卡组继承(有效链接 = 自己填的,否则沿连线继承来源卡中该选手一侧)
+{
+  const P = i => 'P' + i;
+  const deck = (cls, text) => [{ cls, url: 'https://sv/' + cls, text }];
+  // c1: P1(a) vs P2(b),P1 胜 → c2 的 a 槽(flow winner)应继承 c1.a 的卡组
+  // c3: a 槽也是 flow(winner of c2),未开赛 → 继承不到;连线成环 → 空
+  const canvas = {
+    cards: [
+      { id: 'c1', slots: [{ type: 'player', playerId: P(1) }, { type: 'player', playerId: P(2) }], classLinks: { a: deck('法师', '提速'), b: [] } },
+      { id: 'c2', slots: [{ type: 'flow', cardId: 'c1', outcome: 'winner' }, { type: 'player', playerId: P(3) }] },
+      { id: 'c3', slots: [{ type: 'flow', cardId: 'c2', outcome: 'winner' }, { type: 'player', playerId: P(4) }] },
+      { id: 'c4', slots: [{ type: 'flow', cardId: 'c1', outcome: 'winner' }, { type: 'player', playerId: P(5) }], classLinks: { a: deck('龙族', '自填'), b: [] } },
+      { id: 'cx', slots: [{ type: 'flow', cardId: 'cy', outcome: 'winner' }, { type: 'player', playerId: P(6) }] },
+      { id: 'cy', slots: [{ type: 'flow', cardId: 'cx', outcome: 'winner' }, { type: 'player', playerId: P(7) }] }
+    ]
+  };
+  const scores = { c1: { a: 2, b: 0 } }; // P1 胜 c1;c2 未赛
+  const eff = model.resolveEffectiveClassLinks(canvas, scores);
+  assert.deepEqual(eff.get('c1').a, deck('法师', '提速'), '自己填的用自己的');
+  assert.deepEqual(eff.get('c2').a, deck('法师', '提速'), 'c2.a 应继承 c1.a(P1 胜)');
+  assert.deepEqual(eff.get('c3').a, [], 'c2 未开赛,c3 继承不到');
+  assert.deepEqual(eff.get('c4').a, deck('龙族', '自填'), '自己填写覆盖继承');
+  assert.deepEqual(eff.get('cx').a, [], '连线成环安全返回空');
+  assert.deepEqual(eff.get('cy').a, [], '环另一侧同样为空');
+}
+
+console.log('canvas-model 全部 12 组测试通过 ✓');

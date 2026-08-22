@@ -318,8 +318,9 @@
     );
   }
 
-  function classGroupHtml(card, group) {
-    const links = ((card.classLinks || {})[group]) || [];
+  function classGroupHtml(card, group, effLinks) {
+    /* 有效链接 = 自己填的,否则沿连线继承来源卡中该选手一侧的卡组 */
+    const links = ((effLinks || card.classLinks || {})[group]) || [];
     let html = links.map((entry, idx) => classSlotHtml(card, group, entry, idx)).join('');
     if (editMode) {
       html += '<button type="button" class="class-slot empty" data-cl-card="' + card.id + '" data-cl-group="' + group + '" data-cl-idx="new"' +
@@ -328,9 +329,9 @@
     return html;
   }
 
-  function classRowHtml(card) {
-    const a = classGroupHtml(card, 'a');
-    const b = classGroupHtml(card, 'b');
+  function classRowHtml(card, effLinks) {
+    const a = classGroupHtml(card, 'a', effLinks);
+    const b = classGroupHtml(card, 'b', effLinks);
     if (!a && !b) return '';
     let html = a;
     if (a && b) html += '<span class="vs-sep">对</span>';
@@ -338,7 +339,7 @@
     return '<div class="deck-class-row">' + html + '</div>';
   }
 
-  function cardHtml(match, card) {
+  function cardHtml(match, card, effLinksMap) {
     const played = match.played;
     const ready = Boolean(match.a && match.b);
     const current = (currentRecord().scores || {})[match.id];
@@ -372,7 +373,7 @@
       playerRow(match, 1) +
       '<div class="score-actions">' +
       scoreBtn +
-      classRowHtml(card) +
+      classRowHtml(card, effLinksMap && effLinksMap.get(card.id)) +
       '</div>' +
       '</article>'
     );
@@ -421,7 +422,8 @@
     const canvas = record.canvas || { cards: [] };
     const resolved = CanvasModel.resolveCanvas(canvas, record.roster || [], record.scores || {});
     const names = new Map((window.TournamentApp.players || []).map((p) => [p.id, p.name]));
-    const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match)).join('');
+    const effLinksMap = CanvasModel.resolveEffectiveClassLinks(canvas, record.scores || {});
+    const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match, effLinksMap)).join('');
     /* 无限画布:board 尺寸纯由卡片范围决定,无边界框;无卡时保留最小底 */
     const cardMaxX = Math.max(600, ...(canvas.cards || []).map((c) => (Number(c.x) || 0) * COL_GAP + CARD_WIDTH + 40));
     const cardMaxY = Math.max(400, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * ROW_GAP + CARD_HEIGHT + 40));

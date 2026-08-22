@@ -834,9 +834,16 @@
     );
   }
 
-  /* 每组末尾永远有一行空行供新增,保存时丢弃未选职业的行 */
+  /* 每组末尾永远有一行空行供新增,保存时丢弃未选职业的行。
+   * 预填有效链接(自己填的,否则沿连线继承)——在继承卡上打开弹窗即见
+   * 继承值,保存即固化为自己的(即"更新继承的卡组") */
   function renderClassLinkRows(card) {
-    const groups = (card && card.classLinks) || {};
+    const record = currentRecord();
+    const eff = (record && CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {}).get(card.id)) || {};
+    const groups = {
+      a: (card.classLinks && card.classLinks.a && card.classLinks.a.length ? card.classLinks.a : (eff.a || [])),
+      b: (card.classLinks && card.classLinks.b && card.classLinks.b.length ? card.classLinks.b : (eff.b || []))
+    };
     for (const [groupId, listId] of [['a', '#card-cl-a'], ['b', '#card-cl-b']]) {
       const rows = groups[groupId] || [];
       cardDialog.querySelector(listId).innerHTML = rows.map(clRowHtml).join('') + clRowHtml(null);
