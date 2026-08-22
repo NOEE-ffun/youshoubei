@@ -1457,7 +1457,8 @@
       { page: 'home', href: 'index.html', icon: 'home', label: '主页' },
       { page: 'match', href: 'schedule.html', icon: 'emoji_events', label: '比赛' },
       { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' },
-      { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' }
+      { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' },
+      { page: 'stats', href: 'stats.html', icon: 'dashboard', label: '数据统计' }
     ];
     const isActive = (page) => {
       if (page === 'match') return active === 'schedule' || active === 'match';
@@ -1494,6 +1495,7 @@
     if (!placeholder) return false;
     const isSchedule = app.activePage === 'schedule';
     const isPoster = app.activePage === 'poster';
+    const showTournamentSwitch = isSchedule || app.activePage === 'stats';
     /* 赛程页 main 无 h1,顶栏标题承担 h1;其余页面 main 自带 h1,顶栏用 span 避免双 h1 */
     const titleTag = isSchedule ? 'h1' : 'span';
     const titleGroup = app.activePage === 'home'
@@ -1501,7 +1503,7 @@
       : '  <div class="header-title-group">' +
         '    <' + titleTag + ' class="header-title"></' + titleTag + '>' +
         '  </div>';
-    const tournamentSwitch = isSchedule
+    const tournamentSwitch = showTournamentSwitch
       ? '<label class="visually-hidden" for="tournament-switch">切换比赛</label>' +
         '<select id="tournament-switch" class="header-select" title="切换比赛" aria-label="切换比赛"></select>'
       : '';
@@ -1594,7 +1596,7 @@
     const header = document.getElementById('app-header');
     if (header && app.current) {
       const active = app.current;
-      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器' };
+      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计' };
       const headerTitle = pageTitles[app.activePage] || active.name;
 
       const titleEl = header.querySelector('.header-title');

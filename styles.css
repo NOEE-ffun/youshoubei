@@ -2950,3 +2950,131 @@ body[data-page="home"] {
   min-height: 0;
   border-radius: 0;
 }
+
+/* ========== 数据统计页 ========== */
+
+.stats-scope {
+  margin-block-end: 1rem;
+}
+
+.stats-section {
+  margin-block-start: 1.75rem;
+}
+
+.stats-section-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* 职业登场条形 */
+.stats-class-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-inline-size: 30rem;
+}
+
+.class-bar {
+  display: grid;
+  grid-template-columns: 1.65rem 1fr 2.5rem;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.class-bar .icon {
+  inline-size: 1.42rem;
+  block-size: 1.42rem;
+}
+
+.class-bar-track {
+  block-size: 0.7rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.class-bar-fill {
+  block-size: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  min-inline-size: 2px;
+  transition: inline-size 0.3s var(--ease-out);
+}
+
+.class-bar.empty .class-bar-fill {
+  min-inline-size: 0;
+  background: transparent;
+}
+
+.class-bar-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* 通用统计表 */
+.stats-table-wrap {
+  overflow-x: auto;
+}
+
+.stats-table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.stats-table th {
+  text-align: left;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  padding: 0.45rem 0.6rem;
+  border-block-end: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.stats-table td {
+  padding: 0.5rem 0.6rem;
+  border-block-end: 1px solid var(--border);
+}
+
+.stats-table tbody tr:hover {
+  background: var(--surface-2);
+}
+
+.stats-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stats-table tr.pending td {
+  color: var(--text-muted);
+}
+
+.stats-player-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.stats-phase {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius-pill);
+  padding: 0.1rem 0.45rem;
+  margin-inline-end: 0.35rem;
+}
+
+.stats-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding-block: 1.25rem !important;
+}
