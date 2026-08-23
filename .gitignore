@@ -13,3 +13,6 @@ test-results/
 playwright-report/
 # Obsidian 工作区配置(知识库正文 kb/*.md 入库,界面状态不入)
 kb/.obsidian/
+# 开源准备:内部知识库与开发过程文档不入公开仓库(本地保留)
+kb/
+docs/
