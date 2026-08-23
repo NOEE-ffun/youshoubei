@@ -8,7 +8,6 @@ const {
   getDeckCount,
   resolveCanvas,
   deriveStandings,
-  ensureCanvasDecks,
   migrateLegacyTournament
 } = require('../canvas-model.js');
 
@@ -84,19 +83,7 @@ const cycleResolved = resolveCanvas(cycleCanvas, seeds, {});
 assert.ok(cycleResolved.cycleIds.length > 0, '应检测到环');
 assert.ok(cycleResolved.cards.some((c) => c.cycle), '环上的卡片应标记 cycle');
 
-// 7. 卡组补齐：默认画布为每场参赛者生成卡组
-const record = {
-  canvas,
-  roster: seeds,
-  scores: full,
-  matchDecks: {}
-};
-ensureCanvasDecks(record);
-assert.ok(record.matchDecks.wb_r1_1.P1.length === 2);
-assert.ok(record.matchDecks.grand_final.P1.length === 3);
-assert.equal(record.matchDecks.grand_final.P1[0], record.matchDecks.wb_r1_1.P1[0], '选手卡组应在卡片间自动继承');
-
-// 8. 旧数据迁移：内嵌 players 转为 roster + canvas + 全局选手
+// 7. 旧数据迁移：内嵌 players 转为 roster + canvas + 全局选手
 const globalPlayers = new Map();
 const legacy = {
   id: 't_old',
@@ -197,4 +184,4 @@ const model = require('../canvas-model.js');
   assert.deepEqual(eff.get('cy').a, [], '环另一侧同样为空');
 }
 
-console.log('canvas-model 全部 12 组测试通过 ✓');
+console.log('canvas-model 全部 11 组测试通过 ✓');

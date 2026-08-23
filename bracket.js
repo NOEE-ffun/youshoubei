@@ -124,9 +124,6 @@
     closeRosterDropdown();
     closeRulesDropdown();
     const record = app.current;
-    if (CanvasModel.ensureCanvasDecks) {
-      CanvasModel.ensureCanvasDecks(record);
-    }
     if (!record.scores) record.scores = {};
     if (!record.canvas) record.canvas = { cards: [] };
     if (CanvasModel.deriveRoster && record.canvas) {

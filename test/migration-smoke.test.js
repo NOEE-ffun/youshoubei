@@ -36,7 +36,7 @@ model.migrateLegacyTournament(intermediate, globalPlayers);
 assert.deepEqual(intermediate.canvas.size, { cols: 40, rows: 24 }, '中间版本应补齐画布大小');
 assert.deepEqual(model.deriveRoster(intermediate.canvas), ['p1'], 'roster 应从画布推导');
 
-// 3. 新版数据：参赛名单自动继承
+// 3. 新版数据：resolveCanvas 全赛程跑通
 const canvas = model.createDefaultCanvas(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']);
 const full = Object.fromEntries([
   ['wb_r1_1', 2, 0], ['wb_r1_2', 2, 0], ['wb_r1_3', 2, 0], ['wb_r1_4', 2, 0],
@@ -47,10 +47,10 @@ const full = Object.fromEntries([
 const record = {
   canvas,
   roster: ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'],
-  scores: full,
-  matchDecks: {}
+  scores: full
 };
-model.ensureCanvasDecks(record);
-assert.equal(record.matchDecks.wb_r1_1.p1[0], record.matchDecks.grand_final.p1[0], '选手卡组应在卡片间继承');
+const resolved = model.resolveCanvas(record.canvas, record.roster, record.scores);
+assert.equal(resolved.cards.length, 14, '全赛程应解析');
+assert.ok(resolved.cards.every((c) => !c.cycle), '全比分后无环');
 
 console.log('migration-smoke 全部 3 组测试通过 ✓');

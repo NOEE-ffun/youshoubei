@@ -504,9 +504,6 @@
       if (CanvasModel.migrateLegacyTournament) {
         CanvasModel.migrateLegacyTournament(copy, playerMap);
       }
-      if (CanvasModel.ensureCanvasDecks) {
-        CanvasModel.ensureCanvasDecks(copy);
-      }
       for (const matchId of Object.keys(copy.matchDecks || {})) {
         for (const playerId of Object.keys(copy.matchDecks[matchId])) {
           for (const deck of copy.matchDecks[matchId][playerId]) {
@@ -1823,9 +1820,6 @@
       if (needsMigration) {
         if (CanvasModel.migrateLegacyTournament) {
           CanvasModel.migrateLegacyTournament(record, playerMap);
-        }
-        if (CanvasModel.ensureCanvasDecks) {
-          CanvasModel.ensureCanvasDecks(record);
         }
         record.schemaVersion = SCHEMA_VERSION;
       }

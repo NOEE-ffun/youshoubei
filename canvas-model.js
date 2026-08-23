@@ -430,48 +430,6 @@
     return 'd_' + Math.random().toString(36).slice(2, 10);
   }
 
-  function ensureCanvasDecks(record) {
-    if (!record || !record.canvas) return record;
-    if (!record.matchDecks || typeof record.matchDecks !== 'object') record.matchDecks = {};
-    const scores = record.scores || {};
-    const roster = record.roster || [];
-    const resolved = resolveCanvas(record.canvas, roster, scores);
-    const canonicalByPlayer = new Map();
-    const seenDeckObjects = new WeakSet();
-    const usedIds = new Set();
-
-    for (const card of resolved.cards) {
-      const cardDef = (record.canvas.cards || []).find((c) => c.id === card.id) || {};
-      const count = getDeckCount(cardDef);
-      if (!record.matchDecks[card.id]) record.matchDecks[card.id] = {};
-      for (const playerId of [card.a, card.b]) {
-        if (!playerId) continue;
-        let canonical = canonicalByPlayer.get(playerId) || [];
-        const existing = record.matchDecks[card.id][playerId];
-        const decks = [];
-        for (let i = 0; i < count; i += 1) {
-          let candidate = (Array.isArray(existing) && existing[i] && typeof existing[i] === 'object') ? existing[i] : null;
-          if (!canonical[i] && candidate) canonical[i] = candidate;
-          if (!canonical[i]) {
-            canonical[i] = { id: deckId(), name: '卡组 ' + (i + 1), images: [] };
-          }
-          const deck = canonical[i];
-          if (!seenDeckObjects.has(deck)) {
-            if (!deck.id || usedIds.has(deck.id)) deck.id = deckId();
-            usedIds.add(deck.id);
-            seenDeckObjects.add(deck);
-          }
-          if (!deck.name) deck.name = '卡组 ' + (i + 1);
-          if (!Array.isArray(deck.images)) deck.images = [];
-          decks.push(deck);
-        }
-        canonicalByPlayer.set(playerId, canonical);
-        record.matchDecks[card.id][playerId] = decks;
-      }
-    }
-    return record;
-  }
-
   /* ========== 迁移 ========== */
 
   /* 将旧版 tournament（内嵌 players、固定 scores/matchDecks）转换为新画布模型。
@@ -648,7 +606,6 @@
     resolveCanvas,
     resolveCardById,
     deriveStandings,
-    ensureCanvasDecks,
     migrateLegacyTournament
   };
 });
