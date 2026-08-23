@@ -11,3 +11,5 @@ npm-debug.log*
 # Playwright 产物
 test-results/
 playwright-report/
+# Obsidian 工作区配置(知识库正文 kb/*.md 入库,界面状态不入)
+kb/.obsidian/
