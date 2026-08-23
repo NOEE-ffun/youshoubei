@@ -88,6 +88,8 @@
   }
 
   function normalizeClassLinkGroup(list) {
+    /* null = 显式清空(阻断继承);undefined/非数组 = 未填(可继承) */
+    if (list === null) return null;
     if (!Array.isArray(list)) return [];
     return list.slice(0, 12).map(normalizeClassLink).filter(Boolean);
   }
@@ -340,8 +342,10 @@
       memo.set(key, []);
       const card = byId.get(cardId);
       if (!card) return [];
-      const own = ((card.classLinks || {})[sideIdx === 0 ? 'a' : 'b']) || [];
-      if (own.length) {
+      const own = (card.classLinks || {})[sideIdx === 0 ? 'a' : 'b'];
+      /* null = 显式清空,阻断继承 */
+      if (own === null) return [];
+      if (Array.isArray(own) && own.length) {
         memo.set(key, own);
         return own;
       }

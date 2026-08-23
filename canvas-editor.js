@@ -400,11 +400,14 @@
       return;
     }
     if (tool === 'delete') {
+      /* 职业槽/比分按钮归 bracket 委托管(开弹窗),不进删除选择 */
+      if (event.target.closest('button.class-slot, button.score-open')) return;
       event.preventDefault();
       toggleBatchSelected(cardEl.dataset.match);
       return;
     }
     if (tool === 'link') {
+      if (event.target.closest('button.class-slot, button.score-open')) return;
       setSelection([cardEl.dataset.match]);
       return;
     }
@@ -834,34 +837,48 @@
     );
   }
 
-  /* 每组末尾永远有一行空行供新增,保存时丢弃未选职业的行。
-   * 预填有效链接(自己填的,否则沿连线继承)——在继承卡上打开弹窗即见
-   * 继承值,保存即固化为自己的(即"更新继承的卡组") */
+  /* 每组末尾永远有一行空行供新增。
+   * 预填:own 模式(该侧已填过,含显式清空 null)回显自己的;
+   * 未填过的侧回显继承值。保存时:
+   * - own 模式:行内容原样写入;清空到零行写 null(显式阻断继承)
+   * - inherited 模式:未改动则不动原值(继续继承),有改动写入固化 */
   function renderClassLinkRows(card) {
     const record = currentRecord();
     const eff = (record && CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {}).get(card.id)) || {};
-    const groups = {
-      a: (card.classLinks && card.classLinks.a && card.classLinks.a.length ? card.classLinks.a : (eff.a || [])),
-      b: (card.classLinks && card.classLinks.b && card.classLinks.b.length ? card.classLinks.b : (eff.b || []))
-    };
+    const cl = card.classLinks || {};
     for (const [groupId, listId] of [['a', '#card-cl-a'], ['b', '#card-cl-b']]) {
-      const rows = groups[groupId] || [];
-      cardDialog.querySelector(listId).innerHTML = rows.map(clRowHtml).join('') + clRowHtml(null);
+      const own = cl[groupId];
+      const list = cardDialog.querySelector(listId);
+      if (own === null || (Array.isArray(own) && own.length)) {
+        list.dataset.fill = 'own';
+        list.innerHTML = (own || []).map(clRowHtml).join('') + clRowHtml(null);
+      } else {
+        list.dataset.fill = 'inherited';
+        const effRows = (eff[groupId] || []);
+        list.dataset.effSig = JSON.stringify(effRows);
+        list.innerHTML = effRows.map(clRowHtml).join('') + clRowHtml(null);
+      }
     }
   }
 
   function readClassLinkGroup(listId) {
+    const list = cardDialog.querySelector(listId);
     const out = [];
-    cardDialog.querySelectorAll(listId + ' .cl-row').forEach((row) => {
+    let invalid = 0;
+    list.querySelectorAll('.cl-row').forEach((row) => {
       const cls = row.querySelector('.cl-cls').value;
-      if (!cls) return;
-      out.push({
-        cls,
-        url: row.querySelector('.cl-url').value.trim().slice(0, 500),
-        text: row.querySelector('.cl-text').value.trim().slice(0, 60)
-      });
+      const url = row.querySelector('.cl-url').value.trim().slice(0, 500);
+      const text = row.querySelector('.cl-text').value.trim().slice(0, 60);
+      if (cls && (url || text)) {
+        out.push({ cls, url, text });
+      } else if (cls || url || text) {
+        /* 选了职业没内容,或填了内容没选职业:不完整行 */
+        invalid += 1;
+      }
     });
-    return out;
+    const unchangedInherited = list.dataset.fill === 'inherited' &&
+      JSON.stringify(out) === list.dataset.effSig;
+    return { links: out, invalid, fill: list.dataset.fill, unchangedInherited };
   }
 
   function playerOptions(selectedId) {
@@ -907,6 +924,18 @@
     cardDialog.showModal();
   }
 
+  /* 保存时一侧的最终值:own 模式清空到零行 → null(显式阻断继承);
+   * inherited 模式未改动 → 不动原值(继续继承);其余写入行内容 */
+  function resolveGroup(currentLinks, groupId, result) {
+    if (result.fill === 'own') {
+      return result.links.length ? result.links : null;
+    }
+    if (result.unchangedInherited) {
+      return (currentLinks && currentLinks[groupId] !== undefined) ? currentLinks[groupId] : [];
+    }
+    return result.links;
+  }
+
   function saveCardDialog() {
     const card = findCard(editingCardId);
     if (!card) return;
@@ -932,7 +961,18 @@
     const rl = Number(cardDialog.querySelector('#card-rank-loser').value);
     card.exitRanks.winner = Number.isFinite(rw) ? rw : null;
     card.exitRanks.loser = Number.isFinite(rl) ? rl : null;
-    card.classLinks = { a: readClassLinkGroup('#card-cl-a'), b: readClassLinkGroup('#card-cl-b') };
+    /* 职业链接:不完整行(选职业没内容/填内容没选职业)提示且不关弹窗 */
+    const ga = readClassLinkGroup('#card-cl-a');
+    const gb = readClassLinkGroup('#card-cl-b');
+    const invalid = ga.invalid + gb.invalid;
+    if (invalid > 0) {
+      window.TournamentUtils.notify('有 ' + invalid + ' 行职业链接不完整(职业与链接/悬停文字需成对填写),请补全或清空该行', 'danger');
+      return;
+    }
+    card.classLinks = {
+      a: resolveGroup(card.classLinks, 'a', ga),
+      b: resolveGroup(card.classLinks, 'b', gb)
+    };
     cardDialog.close();
     saveCanvas().then(() => {
       requestRender();
