@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { adminGate } = require('./auth');
 const { sendJson, readBody } = require('./helpers');
-const { readJson, writeJson } = require('./oss');
+const { readJson, writeJson, appendAudit } = require('./oss');
 
 /* OBS 舞台(浏览器源)一次性生成接口：
  *   POST → 管理员创建新舞台，返回自包含 URL(/poster-stage.html?id=…)
@@ -131,6 +131,7 @@ function createHandler(storage, options) {
       };
       try {
         await write(stageKey(id), stage);
+        appendAudit('poster-stage.post', (payload.data && payload.data.matchName || '未命名') + ' → ' + id);
         sendJson(res, 200, { id, url: '/poster-stage.html?id=' + id });
       } catch (error) {
         console.error('[poster-stage] POST 失败:', error.message);

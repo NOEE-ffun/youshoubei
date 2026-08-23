@@ -126,6 +126,55 @@ async function backupData() {
   }
 }
 
+/* ========== 审计日志 ==========
+ * 每次 admin 写操作(data PUT / upload / poster-stage POST)追加一行 JSON
+ * 到 OSS audit/log-<yyyy-mm>.json(按月分文件,单文件内数组 append)。
+ * best-effort:失败只记服务器日志,绝不阻塞业务写入。
+ * 查看方式:控制台下载该文件,或用 scripts/read-audit.js。 */
+
+const AUDIT_PREFIX = 'audit/';
+const AUDIT_KEEP_PER_FILE = 2000; // 单文件条数上限,超出裁最旧
+
+function auditKeyNow(now) {
+  const d = new Date(now);
+  return AUDIT_PREFIX + 'log-' + d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.json';
+}
+
+/** 纯函数:构造审计条目(时间可注入,可单测) */
+function buildAuditEntry(action, detail, now) {
+  return {
+    t: new Date(now).toISOString(),
+    action: String(action || '').slice(0, 40),
+    detail: String(detail || '').slice(0, 200)
+  };
+}
+
+/** 追加审计条目;失败静默(只 console.error) */
+async function appendAudit(action, detail) {
+  if (!isOssConfigured()) return;
+  try {
+    const client = getClient();
+    const key = auditKeyNow(Date.now());
+    let list = [];
+    try {
+      const result = await client.get(key);
+      if (result.content) {
+        const parsed = JSON.parse(result.content.toString('utf8'));
+        if (Array.isArray(parsed)) list = parsed;
+      }
+    } catch (error) {
+      if (!(error.code === 'NoSuchKey' || error.status === 404)) throw error;
+    }
+    list.push(buildAuditEntry(action, detail, Date.now()));
+    if (list.length > AUDIT_KEEP_PER_FILE) list = list.slice(list.length - AUDIT_KEEP_PER_FILE);
+    await client.put(key, Buffer.from(JSON.stringify(list), 'utf8'), {
+      headers: { 'Content-Type': 'application/json; charset=utf-8' }
+    });
+  } catch (error) {
+    console.error('[audit] 审计写入失败(不影响业务):', error.message);
+  }
+}
+
 /** 列出现有备份名(时间序),恢复 CLI 用 */
 async function listBackups() {
   const client = getClient();
@@ -167,5 +216,8 @@ module.exports = {
   backupData,
   backupKeyNow,
   pruneBackupKeys,
-  listBackups
+  listBackups,
+  appendAudit,
+  auditKeyNow,
+  buildAuditEntry
 };

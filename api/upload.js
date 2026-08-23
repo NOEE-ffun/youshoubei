@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { adminGate } = require('./auth');
 const { sendJson, readBody } = require('./helpers');
-const { uploadImageBuffer, publicUrl } = require('./oss');
+const { uploadImageBuffer, publicUrl, appendAudit } = require('./oss');
 
 const MAX_SIZE = 5 * 1024 * 1024;
 
@@ -57,6 +57,7 @@ module.exports = async function handler(req, res) {
 
   try {
     await uploadImageBuffer(key, buffer, imageType);
+    appendAudit('upload', imageType.replace('image/', '') + ' ' + (buffer.length >> 10) + 'KB → ' + key);
     sendJson(res, 200, { url: publicUrl(key) });
   } catch (error) {
     console.error('[upload] 失败:', error.message);
