@@ -7,6 +7,7 @@
 
   var POLL_MS = 10 * 1000;
   var NEXT_COUNT = 3;
+  var inFlight = false;
 
   function el(id) { return document.getElementById(id); }
 
@@ -16,34 +17,31 @@
     });
   }
 
+  /* 当前对阵:进行中赛事取第一场 ready 未赛;否则也取第一场(画布顺序即赛程顺序) */
   function pickCurrent(record, cards) {
-    var ongoing = record.status === 'ongoing';
     var ready = cards.filter(function (m) { return m.a && m.b && !m.played && !m.invalid && !m.draw && !m.cycle; });
-    if (!ready.length) return null;
-    if (ongoing) {
-      /* 进行中赛事:状态文案"进行中"的优先,否则第一场 ready */
-      return ready[0];
-    }
-    return ready[0];
+    return ready.length ? ready[0] : null;
   }
 
   function pickNext(cards, currentId) {
     return cards.filter(function (m) {
-      return m.id !== currentId && m.a && m.b && !m.played && !m.invalid && !m.cycle;
+      return m.id !== currentId && m.a && m.b && !m.played && !m.invalid && !m.draw && !m.cycle;
     }).slice(0, NEXT_COUNT);
   }
 
-  function render(record) {
+  function render(record, workspace) {
+    /* players 在 workspace 顶层,不在赛事记录内 */
+    var names = {};
+    ((workspace && workspace.players) || []).forEach(function (p) { names[p.id] = p.name || p.id; });
     if (!record || !record.canvas) {
       el('ss-empty').hidden = false;
+      el('ss-empty').textContent = '暂无赛程数据';
       el('ss-now').hidden = true;
       el('ss-next').hidden = true;
       return;
     }
     var resolved = CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {});
     var cards = resolved.cards;
-    var names = {};
-    (record.players || []).forEach(function (p) { names[p.id] = p.name || p.id; });
 
     el('ss-title').textContent = record.name || '右手杯';
     el('ss-state').textContent = record.status === 'ongoing' ? 'LIVE' : record.status === 'finished' ? '已结束' : '';
@@ -59,6 +57,7 @@
       el('ss-bo').textContent = cur.format || 'BO3';
     } else {
       el('ss-empty').hidden = false;
+      el('ss-empty').textContent = '暂无赛程数据';
       el('ss-now').hidden = true;
     }
 
@@ -73,6 +72,9 @@
   var failCount = 0;
 
   function load() {
+    /* 重入保护:上一次请求未完成时跳过本轮,防慢响应旧帧覆盖新帧 */
+    if (inFlight) return;
+    inFlight = true;
     fetch('/api/data', { cache: 'no-store' })
       .then(function (resp) {
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -83,7 +85,7 @@
         var list = (workspace && workspace.tournaments) || [];
         var activeId = workspace.activeId || (list[0] && list[0].id);
         var record = list.filter(function (t) { return t.id === activeId; })[0] || list[0];
-        render(record);
+        render(record, workspace);
       })
       .catch(function () {
         /* 网络抖动保持上一帧;持续失败(服务不可达)给出可见提示 */
@@ -94,7 +96,8 @@
           el('ss-now').hidden = true;
           el('ss-next').hidden = true;
         }
-      });
+      })
+      .then(function () { inFlight = false; });
   }
 
   load();

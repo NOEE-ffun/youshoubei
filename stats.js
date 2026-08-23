@@ -188,6 +188,11 @@
   async function render() {
     const app = window.TournamentApp;
     if (!app) return;
+    /* 清理已删除届的悬空 id,防全选框状态错乱 */
+    const validIds = new Set((app.list || []).map((t) => t.id));
+    for (const id of [...selectedIds]) {
+      if (!validIds.has(id)) selectedIds.delete(id);
+    }
     renderScopeChecks(app);
     let records = [];
     try {

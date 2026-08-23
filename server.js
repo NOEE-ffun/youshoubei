@@ -47,8 +47,8 @@ const API_ROUTES = {
 };
 
 /* 不对外下发的内部目录与根级文件;比对前统一转小写,顺带堵住 /API/ 这类大小写变体 */
-const BLOCKED_SEGMENTS = new Set(['api', 'node_modules', 'test', 'scripts', 'deploy', 'docs', 'design-system']);
-const BLOCKED_ROOT_FILES = new Set(['server.js', 'package.json', 'package-lock.json']);
+const BLOCKED_SEGMENTS = new Set(['api', 'node_modules', 'test', 'scripts', 'deploy', 'docs', 'design-system', 'kb']);
+const BLOCKED_ROOT_FILES = new Set(['server.js', 'package.json', 'package-lock.json', 'playwright.config.mjs', 'vercel.json']);
 
 /* 点击劫持/引用裁剪/权限收敛。frame-ancestors 无法写进 meta CSP,只能走响应头 */
 const SECURITY_HEADERS = {

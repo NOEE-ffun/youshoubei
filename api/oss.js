@@ -107,8 +107,17 @@ async function backupData() {
     const existing = await client.get(DATA_PATH);
     if (!existing.content) return;
     await client.copy(backupKeyNow(Date.now()), DATA_PATH);
-    const listed = await client.list({ prefix: BACKUP_PREFIX, 'max-keys': 1000 });
-    const names = (listed.objects || []).map((o) => o.name);
+    /* 分页列全量(>1000 份时单轮也只删第一页最旧的,多轮收敛) */
+    let marker;
+    const names = [];
+    for (;;) {
+      const query = { prefix: BACKUP_PREFIX, 'max-keys': 1000 };
+      if (marker) query.marker = marker;
+      const listed = await client.list(query);
+      for (const obj of listed.objects || []) names.push(obj.name);
+      if (!listed.isTruncated || !listed.nextMarker) break;
+      marker = listed.nextMarker;
+    }
     for (const stale of pruneBackupKeys(names, BACKUP_KEEP)) {
       await client.delete(stale);
     }

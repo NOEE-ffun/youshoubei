@@ -17,13 +17,17 @@
 
   function classGroupHtml(eff, group) {
     const links = (eff && eff[group]) || [];
-    return links.map((entry) => (
-      '<a class="list-class" href="' + escapeHtml(entry.url || '#') + '"' +
-      (entry.url ? ' target="_blank" rel="noopener"' : '') +
+    return links.map((entry) => {
+      /* 协议白名单:仅 http(s) 可成为可点链接,阻断 javascript: 等注入 */
+      const url = /^https?:\/\//i.test(entry.url || '') ? entry.url : null;
+      return (
+      '<a class="list-class" href="' + escapeHtml(url || '#') + '"' +
+      (url ? ' target="_blank" rel="noopener"' : '') +
       ' title="' + escapeHtml(entry.text || entry.cls) + '">' +
       '<img class="icon" src="icons/classes/' + escapeHtml(entry.cls) + '.svg" alt="' + escapeHtml(entry.cls) + '">' +
       '</a>'
-    )).join('');
+      );
+    }).join('');
   }
 
   function rowHtml(m, eff) {
@@ -105,8 +109,13 @@
     const select = document.getElementById('list-tournament-select');
     if (select) {
       select.addEventListener('change', async () => {
-        await window.TournamentApp.setActiveId(select.value);
-        document.dispatchEvent(new CustomEvent('ts:changed'));
+        try {
+          await window.TournamentApp.setActiveId(select.value);
+          document.dispatchEvent(new CustomEvent('ts:changed'));
+        } catch (error) {
+          window.TournamentUtils.notify('切换比赛失败：' + window.TournamentUtils.errMsg(error), 'danger');
+          renderSelect();
+        }
       });
     }
     renderSelect();
