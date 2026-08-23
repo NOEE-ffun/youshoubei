@@ -2,7 +2,7 @@
 
 const { adminGate } = require('./auth');
 const { sendJson, readBody } = require('./helpers');
-const { DATA_PATH, readJson, writeJson } = require('./oss');
+const { DATA_PATH, readJson, writeJson, backupData } = require('./oss');
 
 /* data.json 只含文本数据（图片存 OSS 为 URL），1MB 上限绰绰有余，防内存被打爆 */
 const MAX_BODY = 1024 * 1024;
@@ -41,6 +41,8 @@ module.exports = async function handler(req, res) {
     }
 
     try {
+      /* 覆盖前备份当前版本(best-effort,失败不阻塞) */
+      await backupData();
       await writeJson(DATA_PATH, workspace);
       sendJson(res, 200, { ok: true });
     } catch (error) {

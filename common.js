@@ -1596,7 +1596,7 @@
     const header = document.getElementById('app-header');
     if (header && app.current) {
       const active = app.current;
-      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计' };
+      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', list: '赛程列表' };
       const headerTitle = pageTitles[app.activePage] || active.name;
 
       const titleEl = header.querySelector('.header-title');
@@ -1918,6 +1918,7 @@
       storagePutPlayers,
       storageDeletePlayer,
       setAdminToken,
+      setActiveId,
       uploadImage: uploadCloudImage,
       fatalError: showFatalError
     };

@@ -8,3 +8,6 @@ npm-debug.log*
 .impeccable/
 .zcode/
 .superpowers/
+# Playwright 产物
+test-results/
+playwright-report/

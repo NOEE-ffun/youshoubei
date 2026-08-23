@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https:; connect-src 'self'; object-src 'none'; base-uri 'self'">
+  <title>比分舞台 - 右手杯</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
+  <script src="canvas-model.js?v=2026082134" defer></script>
+  <script src="score-stage.js?v=2026082134" defer></script>
+</head>
+<body>
+  <main class="score-stage">
+    <header class="ss-head">
+      <h1 id="ss-title">右手杯</h1>
+      <span id="ss-state" class="ss-state"></span>
+    </header>
+    <section class="ss-now" id="ss-now" hidden>
+      <div class="ss-player" id="ss-a"><span class="ss-name"></span></div>
+      <div class="ss-mid">
+        <span class="ss-score" id="ss-score"></span>
+        <span class="ss-bo" id="ss-bo"></span>
+      </div>
+      <div class="ss-player" id="ss-b"><span class="ss-name"></span></div>
+    </section>
+    <section class="ss-next" id="ss-next" hidden>
+      <h2>接下来</h2>
+      <ul id="ss-next-list"></ul>
+    </section>
+    <p class="ss-empty" id="ss-empty" hidden>暂无赛程数据</p>
+  </main>
+</body>
+</html>

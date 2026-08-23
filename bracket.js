@@ -640,7 +640,7 @@
     return { ok: true, value: n };
   }
 
-  function saveScoreFromDialog() {
+  async function saveScoreFromDialog() {
     if (!currentScoreCardId || !scoreDialog) return;
     const a = validateScoreInput(scoreDialog.querySelector('#score-a').value);
     const b = validateScoreInput(scoreDialog.querySelector('#score-b').value);
@@ -652,6 +652,11 @@
       return;
     }
     showScoreError('');
+    /* 修改已有比分会连锁重算下游对阵,确认防误触 */
+    const existing = currentRecord().scores[currentScoreCardId];
+    if (existing && (existing.a !== a.value || existing.b !== b.value)) {
+      if (!(await uiConfirm('修改已有比分会连锁重算后续对阵，确定保存吗？'))) return;
+    }
     currentRecord().scores[currentScoreCardId] = { a: a.value, b: b.value };
     save().then(() => {
       scoreDialog.close();

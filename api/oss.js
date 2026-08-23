@@ -71,6 +71,61 @@ async function writeJson(key, value) {
   }));
 }
 
+/* ========== data.json 版本化备份 ==========
+ * 写入前把当前版本 copy 到 backups/ 前缀,保留最近 N 份。
+ * best-effort:备份失败只记日志,绝不阻塞主写入——不因备份让办赛保存失败。 */
+
+const BACKUP_PREFIX = 'backups/';
+const BACKUP_KEEP = 20;
+
+function isOssConfigured() {
+  return Boolean(process.env.OSS_REGION && process.env.OSS_BUCKET && process.env.OSS_ACCESS_KEY_ID && process.env.OSS_ACCESS_KEY_SECRET);
+}
+
+/** 纯函数:当前备份对象名(时间戳可注入,可单测) */
+function backupKeyNow(now) {
+  const ts = new Date(now).toISOString().replace(/[:.]/g, '-');
+  return BACKUP_PREFIX + 'data-' + ts + '.json';
+}
+
+/** 纯函数:给定现有备份名列表,返回应删除的(超出保留数的最旧者)。
+ * 名字即时间戳,字典序=时间序;非本命名规则的条目不动。 */
+function pruneBackupKeys(names, keep) {
+  const n = Number.isFinite(keep) ? keep : BACKUP_KEEP;
+  const ours = (names || [])
+    .filter((name) => /^backups\/data-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.json$/.test(name))
+    .sort();
+  if (ours.length <= n) return [];
+  return ours.slice(0, ours.length - n);
+}
+
+/** 把当前 data.json 备份一份并清理过期备份;失败只记日志 */
+async function backupData() {
+  if (!isOssConfigured()) return; // 本地/无配置环境跳过
+  try {
+    const client = getClient();
+    const existing = await client.get(DATA_PATH);
+    if (!existing.content) return;
+    await client.copy(backupKeyNow(Date.now()), DATA_PATH);
+    const listed = await client.list({ prefix: BACKUP_PREFIX, 'max-keys': 1000 });
+    const names = (listed.objects || []).map((o) => o.name);
+    for (const stale of pruneBackupKeys(names, BACKUP_KEEP)) {
+      await client.delete(stale);
+    }
+  } catch (error) {
+    console.error('[backup] data.json 备份失败(不影响本次写入):', error.message);
+  }
+}
+
+/** 列出现有备份名(时间序),恢复 CLI 用 */
+async function listBackups() {
+  const client = getClient();
+  const listed = await client.list({ prefix: BACKUP_PREFIX, 'max-keys': 1000 });
+  return (listed.objects || []).map((o) => o.name)
+    .filter((name) => name.includes('data-'))
+    .sort();
+}
+
 async function uploadImageBuffer(key, buffer, contentType) {
   await withRetry(async () => {
     const client = getClient();
@@ -99,5 +154,9 @@ module.exports = {
   uploadImageBuffer,
   publicUrl,
   withRetry,
-  isRetriable
+  isRetriable,
+  backupData,
+  backupKeyNow,
+  pruneBackupKeys,
+  listBackups
 };

@@ -5,18 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="view-transition" content="same-origin">
-  <meta name="description" content="右手杯数据统计：比赛、选手、职业、胜场与名次。">
+  <meta name="description" content="右手杯手机版赛程列表。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-  <title>数据统计 - 右手杯</title>
+  <title>赛程列表 - 右手杯</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
-  <link rel="prefetch" href="index.html?v=2026082134">
-  <link rel="prefetch" href="schedule.html?v=2026082134">
-  <link rel="prefetch" href="players.html?v=2026082134">
-  <link rel="prefetch" href="poster.html?v=2026082134">
   <script src="theme-init.js?v=2026082134"></script>
   <link rel="stylesheet" href="styles.css?v=2026082134">
 </head>
-<body data-page="stats">
+<body data-page="list">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
   <div id="bg-layer" aria-hidden="true"></div>
   <header id="app-header"></header>
@@ -26,47 +22,24 @@
       <a class="side-link" href="schedule.html?v=2026082134" data-page="match" title="比赛" aria-label="比赛"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/emoji_events.svg" alt="比赛" aria-hidden="true"></span></a>
       <a class="side-link" href="players.html?v=2026082134" data-page="players" title="选手库" aria-label="选手库"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/groups.svg" alt="选手库" aria-hidden="true"></span></a>
       <a class="side-link" href="poster.html?v=2026082134" data-page="poster" title="海报" aria-label="海报"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/vs_poster.svg" alt="海报" aria-hidden="true"></span></a>
-      <a class="side-link is-active" href="stats.html?v=2026082134" data-page="stats" title="数据统计" aria-label="数据统计"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/bar_chart.svg" alt="数据统计" aria-hidden="true"></span></a>
+      <a class="side-link" href="stats.html?v=2026082134" data-page="stats" title="数据统计" aria-label="数据统计"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/bar_chart.svg" alt="数据统计" aria-hidden="true"></span></a>
     </nav>
   </aside>
 
   <div class="layout-body">
     <main id="main-content" tabindex="-1">
-      <h1>数据统计</h1>
-
-      <div class="stats-scope" id="stats-scope">
-        <span class="stats-scope-label">统计范围:</span>
-        <label class="stats-check"><input type="checkbox" id="stats-check-all"> 全选</label>
-        <div id="stats-check-list" class="stats-check-list"></div>
+      <h1>赛程列表</h1>
+      <a class="mobile-back-canvas" href="schedule.html?v=2026082134">切换到画布视图</a>
+      <div class="list-toolbar">
+        <label class="visually-hidden" for="list-tournament-select">选择比赛</label>
+        <select id="list-tournament-select" class="header-select" aria-label="选择比赛"></select>
       </div>
-
-      <div class="champion-banner" id="stats-podium" hidden>
-        <span class="medal" aria-hidden="true"><img class="icon" src="icons/emoji_events.svg" alt="" aria-hidden="true"></span>
-        <span id="stats-podium-text"></span>
-      </div>
-
-      <section class="stats-section" aria-label="职业统计">
-        <h2 class="stats-section-title">职业登场</h2>
-        <div id="stats-class-list" class="stats-class-list"></div>
-      </section>
-
-      <section class="stats-section" aria-label="选手战绩">
-        <h2 class="stats-section-title">选手战绩</h2>
-        <div class="stats-table-wrap">
-          <table class="stats-table" id="stats-player-table">
-            <thead>
-              <tr><th>选手</th><th>胜</th><th>负</th><th>胜率</th><th>小局</th><th>名次</th></tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p class="hint">点击选手行可查看其职业使用率</p>
-      </section>
+      <div id="list-body"></div>
     </main>
   </div>
 
   <script src="canvas-model.js?v=2026082134" defer></script>
   <script src="common.js?v=2026082134" defer></script>
-  <script src="stats.js?v=2026082134" defer></script>
+  <script src="list.js?v=2026082134" defer></script>
 </body>
 </html>

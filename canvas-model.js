@@ -349,7 +349,7 @@
       if (!slot || slot.type !== 'flow' || !byId.has(slot.cardId)) return [];
       const src = resolvedById.get(slot.cardId);
       if (!src) return [];
-      const player = slot.outcome === 'winner' ? src.winner : slot.loser;
+      const player = slot.outcome === 'winner' ? src.winner : src.loser;
       if (!player) return [];
       const srcSide = src.a === player ? 0 : src.b === player ? 1 : -1;
       if (srcSide < 0) return [];
