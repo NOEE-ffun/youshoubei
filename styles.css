@@ -3375,3 +3375,10 @@ body[data-page="home"] {
   font-size: 4vh;
   color: #9aa7c7;
 }
+
+/* 统计页导出按钮组 */
+.stats-export {
+  display: inline-flex;
+  gap: 0.4rem;
+  margin-inline-start: auto;
+}

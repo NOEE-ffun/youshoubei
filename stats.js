@@ -217,7 +217,193 @@
     }
   }
 
+  /* ---------- 导出(图片 PNG / 文本) ---------- */
+
+  function scopeLabel() {
+    const app = window.TournamentApp;
+    const list = app.list || [];
+    if (selectedIds.size >= list.length && list.length > 0) return '全部届汇总';
+    const names = list.filter((t) => selectedIds.has(t.id)).map((t) => t.name);
+    return names.length === 1 ? names[0] : names.length + ' 届汇总';
+  }
+
+  function playerRows() {
+    if (!lastStats) return [];
+    return [...lastStats.players.entries()]
+      .map(([pid, s]) => {
+        const player = (lastPlayers || []).find((p) => p.id === pid) || { id: pid, name: '?' };
+        const total = s.wins + s.losses;
+        return {
+          name: player.name || '?',
+          wins: s.wins,
+          losses: s.losses,
+          winRate: total ? Math.round(s.wins / total * 100) : null,
+          games: (s.gameWins || s.gameLosses) ? s.gameWins + '-' + s.gameLosses : null,
+          best: s.ranks && s.ranks.length ? Math.min(...s.ranks) : null
+        };
+      })
+      .sort((x, y) => y.wins - x.wins || (x.best ?? 99) - (y.best ?? 99));
+  }
+
+  function classRows() {
+    if (!lastStats) return [];
+    const source = selectedPlayerId
+      ? (lastStats.classesByPlayer.get(selectedPlayerId) || new Map())
+      : lastStats.classes;
+    const entries = CanvasModel.CLASS_LIST.map((cls) => ({ cls, count: source.get(cls) || 0 }));
+    const total = entries.reduce((s, e) => s + e.count, 0);
+    return entries.map((e) => ({ ...e, pct: total ? Math.round(e.count / total * 100) : 0 }));
+  }
+
+  function download(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  /** 选手战绩+职业登场画成 2x 缔率清晰 PNG(深色卡片,直接发群) */
+  function exportImage() {
+    const rows = playerRows();
+    const cls = classRows();
+    if (!rows.length && !cls.some((c) => c.count)) {
+      window.TournamentUtils.notify('当前范围没有可导出的数据', 'danger');
+      return;
+    }
+    const W = 1080;
+    const PAD = 60;
+    const ROW_H = 56;
+    const HEAD_H = 130;
+    const CLS_H = 200;
+    const H = HEAD_H + Math.max(rows.length, 1) * ROW_H + (cls.some((c) => c.count) ? CLS_H : 0) + PAD;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    const FONT = '"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif';
+
+    /* 底+头 */
+    ctx.fillStyle = '#0a0e1a';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#8fabff';
+    ctx.font = '700 40px ' + FONT;
+    ctx.fillText('右手杯 · 数据统计', PAD, 72);
+    ctx.fillStyle = '#9aa7c7';
+    ctx.font = '400 24px ' + FONT;
+    ctx.fillText(scopeLabel(), PAD, 108);
+
+    /* 选手表 */
+    let y = HEAD_H;
+    const cols = [
+      { label: '选手', x: PAD, w: 260, align: 'left' },
+      { label: '胜', x: 420, w: 80, align: 'right' },
+      { label: '负', x: 530, w: 80, align: 'right' },
+      { label: '胜率', x: 640, w: 100, align: 'right' },
+      { label: '小局', x: 790, w: 110, align: 'right' },
+      { label: '名次', x: 940, w: 80, align: 'right' }
+    ];
+    ctx.fillStyle = '#9aa7c7';
+    ctx.font = '700 22px ' + FONT;
+    for (const c of cols) {
+      ctx.textAlign = c.align;
+      ctx.fillText(c.label, c.align === 'right' ? c.x + c.w : c.x, y + 30);
+    }
+    ctx.textAlign = 'left';
+    y += 46;
+    ctx.strokeStyle = 'rgba(143,171,255,0.3)';
+    ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+    for (const r of rows) {
+      y += ROW_H;
+      ctx.font = '600 26px ' + FONT;
+      for (const [i, c] of cols.entries()) {
+        const val = i === 0 ? r.name
+          : i === 1 ? String(r.wins)
+          : i === 2 ? String(r.losses)
+          : i === 3 ? (r.winRate == null ? '—' : r.winRate + '%')
+          : i === 4 ? (r.games || '—')
+          : (r.best == null ? '—' : '第' + r.best + '名');
+        ctx.fillStyle = i === 0 ? '#e8ecf8' : i === 1 ? '#7ee787' : i === 2 ? '#ff8b8b' : '#c8d2ec';
+        ctx.textAlign = c.align;
+        ctx.fillText(val, c.align === 'right' ? c.x + c.w : c.x, y - 14);
+      }
+      ctx.textAlign = 'left';
+      ctx.strokeStyle = 'rgba(143,171,255,0.12)';
+      ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+    }
+
+    /* 职业登场 */
+    if (cls.some((c) => c.count)) {
+      y += 50;
+      ctx.fillStyle = '#8fabff';
+      ctx.font = '700 28px ' + FONT;
+      ctx.fillText(selectedPlayerId ? '职业使用率' : '职业登场', PAD, y);
+      y += 26;
+      const barW = W - PAD * 2 - 100;
+      cls.filter((c) => c.count || true).forEach((c, i) => {
+        const cy = y + i * 26;
+        ctx.fillStyle = '#c8d2ec';
+        ctx.font = '400 18px ' + FONT;
+        ctx.fillText(c.cls, PAD, cy + 14);
+        ctx.fillStyle = '#1a2337';
+        ctx.fillRect(PAD + 60, cy + 2, barW, 14);
+        ctx.fillStyle = '#3563e9';
+        ctx.fillRect(PAD + 60, cy + 2, Math.max(2, barW * c.pct / 100), 14);
+        ctx.fillStyle = '#9aa7c7';
+        ctx.font = '600 18px ' + FONT;
+        ctx.textAlign = 'right';
+        ctx.fillText(c.pct + '%', W - PAD, cy + 14);
+        ctx.textAlign = 'left';
+      });
+    }
+
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      download(blob, '数据统计-' + scopeLabel() + '.png');
+    }, 'image/png');
+  }
+
+  /** 文本版:选手战绩 + 职业百分比,复制到剪贴板(失败则下载 .txt) */
+  async function exportText() {
+    const rows = playerRows();
+    const cls = classRows();
+    if (!rows.length && !cls.some((c) => c.count)) {
+      window.TournamentUtils.notify('当前范围没有可导出的数据', 'danger');
+      return;
+    }
+    const lines = ['右手杯 · 数据统计(' + scopeLabel() + ')', ''];
+    if (rows.length) {
+      lines.push('【选手战绩】');
+      for (const r of rows) {
+        const wr = r.winRate == null ? '—' : r.winRate + '%';
+        const gm = r.games || '—';
+        const bk = r.best == null ? '—' : '第' + r.best + '名';
+        lines.push(r.name + ':' + r.wins + '胜' + r.losses + '负(' + wr + ') 小局' + gm + ' ' + bk);
+      }
+      lines.push('');
+    }
+    if (cls.some((c) => c.count)) {
+      lines.push(selectedPlayerId ? '【职业使用率】' : '【职业登场】');
+      lines.push(cls.filter((c) => c.count).map((c) => c.cls + ' ' + c.pct + '%').join(' | '));
+    }
+    const text = lines.join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      window.TournamentUtils.notify('已复制到剪贴板');
+    } catch (error) {
+      download(new Blob([text], { type: 'text/plain;charset=utf-8' }), '数据统计-' + scopeLabel() + '.txt');
+      window.TournamentUtils.notify('剪贴板不可用,已下载 txt');
+    }
+  }
+
   function bind() {
+    const imgBtn = document.getElementById('stats-export-image');
+    const txtBtn = document.getElementById('stats-export-text');
+    if (imgBtn) imgBtn.addEventListener('click', exportImage);
+    if (txtBtn) txtBtn.addEventListener('click', exportText);
     const list = document.getElementById('stats-check-list');
     const all = document.getElementById('stats-check-all');
     if (list) {
