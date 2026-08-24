@@ -233,7 +233,14 @@ async function main() {
     assert.strictEqual(changed.status, 200);
     const relogin = await call(h.login, mockReq('POST', { body: jsonBody({ username: 'tester', password: 'new12345' }) }));
     assert.strictEqual(relogin.status, 200, '新密码可登录');
+    /* 改密后旧 pv 会话必须失效(踢出其他浏览器) */
+    const stale = await call(h.me, mockReq('GET', { headers: auth }));
+    assert.strictEqual(stale.status, 401, '改密后旧 cookie 应 401');
     assert.notStrictEqual(seedAdmin.passHash, undefined, '用户表仍在');
+
+    /* 标量 JSON 请求体 → 400 而非 500 */
+    const scalar = await call(h.login, mockReq('POST', { body: '123' }));
+    assert.strictEqual(scalar.status, 400, '标量 JSON 体应 400');
 
     /* 开发测试码(env) */
     process.env.AUTH_DEV_INVITE_CODES = 'DEV1';

@@ -371,16 +371,12 @@
   }
 
   async function uploadCloudImage(blob) {
-    if (!appInstance.adminToken) throw new Error('需要管理口令');
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      headers: {
-        'Content-Type': blob.type || 'application/octet-stream',
-        'Authorization': 'Bearer ' + appInstance.adminToken
-      },
-      body: blob
-    });
-    if (response.status === 401) throw new Error('管理口令错误');
+    /* 鉴权二选一:管理口令走 Authorization,登录选手靠同源自动携带的会话 cookie */
+    const headers = { 'Content-Type': blob.type || 'application/octet-stream' };
+    if (appInstance.adminToken) headers['Authorization'] = 'Bearer ' + appInstance.adminToken;
+    const response = await fetch('/api/upload', { method: 'POST', headers, body: blob });
+    if (response.status === 401) throw new Error('需要管理员权限或登录后上传');
+    if (response.status === 403) throw new Error('上传功能未配置');
     if (!response.ok) {
       const message = (await apiErrorMessage(response)) || '图片上传失败';
       if (BLOB_QUOTA_RE.test(message)) throw new Error(BLOB_QUOTA_MESSAGE);
@@ -1888,6 +1884,8 @@
       await refreshSession();
       notify((isRegister ? '注册成功,欢迎 ' : '欢迎回来,') + ((data.user && data.user.username) || username));
       if (data.user && data.user.role === 'admin') notify('已获得管理员身份');
+      /* 资料页的空态不会随会话变化自动重建,直接刷新整页最稳 */
+      if (appInstance && appInstance.activePage === 'profile') location.reload();
     } catch (error) {
       statusEl.textContent = '网络错误,请稍后再试';
     } finally {

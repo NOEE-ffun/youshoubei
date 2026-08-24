@@ -75,9 +75,17 @@ function createRateLimiter(now) {
   const WINDOW_MS = 15 * 60 * 1000;
   const LOCK_MS = 10 * 60 * 1000;
   const MAX_FAILS = 5;
+  const MAX_ENTRIES = 5000;
   const table = new Map(); /* ip -> {windowStart, fails, lockUntil} */
+  function sweep() {
+    const t = now();
+    for (const [ip, rec] of table) {
+      if (rec.lockUntil < t && t - rec.windowStart > WINDOW_MS) table.delete(ip);
+    }
+  }
   return {
     blocked(ip) {
+      if (table.size > MAX_ENTRIES) sweep();
       const rec = table.get(ip);
       if (!rec) return 0;
       if (rec.lockUntil > now()) return Math.ceil((rec.lockUntil - now()) / 1000);
@@ -97,6 +105,31 @@ function createRateLimiter(now) {
   };
 }
 
+/* 客户端真实 IP:优先 nginx 的 X-Real-IP(不可伪造);
+ * X-Forwarded-For 用最后一段(add 模式下末段才是真实 TCP 对端,首段可被客户端伪造) */
+function clientIp(req) {
+  const real = req.headers['x-real-ip'];
+  if (real) return String(real).split(',')[0].trim();
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) {
+    const parts = String(xff).split(',');
+    return parts[parts.length - 1].trim();
+  }
+  return (req.socket && req.socket.remoteAddress) || '?';
+}
+
+/* 常量时间字符串比较(管理码这类人工口令防时序侧信道;随机邀请码本身高熵可不加) */
+function safeEqual(a, b) {
+  const ab = Buffer.from(String(a || ''));
+  const bb = Buffer.from(String(b || ''));
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+
+/* 密码版本:passHash 尾 8 位,改密即变 */
+function pvOf(user) {
+  return String(user.passHash || '').slice(-8);
+}
+
 /* ---------- 请求体 ---------- */
 
 async function readJsonBody(req, res) {
@@ -105,12 +138,18 @@ async function readJsonBody(req, res) {
     sendJson(res, 413, { error: '数据过大' });
     return undefined;
   }
+  let parsed;
   try {
-    return JSON.parse(buffer.toString('utf8'));
+    parsed = JSON.parse(buffer.toString('utf8'));
   } catch {
     sendJson(res, 400, { error: '请求体不是合法 JSON' });
     return undefined;
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    sendJson(res, 400, { error: '请求体必须是 JSON 对象' });
+    return undefined;
+  }
+  return parsed;
 }
 
 /* ---------- 处理器工厂(storage 注入 + options.now 时钟注入) ---------- */
@@ -162,7 +201,10 @@ function createHandlers(storage, options) {
     const payload = sessionOf(req);
     if (!payload) return null;
     const users = await readUsers();
-    return users.find((u) => u.id === payload.uid) || null;
+    const user = users.find((u) => u.id === payload.uid) || null;
+    /* pv 不匹配 = 密码已改过,旧会话全部失效 */
+    if (user && payload.pv !== pvOf(user)) return null;
+    return user;
   }
 
   async function playerOf(user) {
@@ -178,19 +220,24 @@ function createHandlers(storage, options) {
       sendJson(res, 405, { error: 'Method Not Allowed' });
       return;
     }
+    const ip = clientIp(req);
+    const wait = rate.blocked(ip);
+    if (wait > 0) {
+      return sendJson(res, 429, { error: '尝试过于频繁,请 ' + wait + ' 秒后再试' });
+    }
     const body = await readJsonBody(req, res);
     if (body === undefined) return;
 
     const code = String(body.code || '').trim();
     const username = String(body.username || '').trim();
     const password = String(body.password || '');
-    if (!code) return sendJson(res, 400, { error: '请填写邀请码' });
-    if (!USERNAME_RE.test(username)) return sendJson(res, 400, { error: '用户名需 2-24 位(中文/字母/数字/_/-)' });
-    if (password.length < 8 || password.length > 72) return sendJson(res, 400, { error: '密码需 8-72 位' });
+    if (!code) return failRegister(res, ip, '请填写邀请码');
+    if (!USERNAME_RE.test(username)) return failRegister(res, ip, '用户名需 2-24 位(中文/字母/数字/_/-)');
+    if (password.length < 8 || password.length > 72) return failRegister(res, ip, '密码需 8-72 位');
 
     const users = await readUsers();
     if (users.some((u) => u.usernameLower === username.toLowerCase())) {
-      return sendJson(res, 409, { error: '用户名已被占用' });
+      return failRegister(res, ip, '用户名已被占用', 409);
     }
 
     const adminCode = process.env.ADMIN_INVITE_CODE;
@@ -198,7 +245,7 @@ function createHandlers(storage, options) {
     let playerId = null;
     let codeKind = '';
 
-    if (adminCode && code === adminCode) {
+    if (adminCode && safeEqual(code, adminCode)) {
       role = 'admin';
       codeKind = 'admin';
     } else {
@@ -209,9 +256,9 @@ function createHandlers(storage, options) {
           const workspace = await readWorkspace();
           const players = (workspace && workspace.players) || [];
           const target = players.find((p) => p && p.id === entry.playerId);
-          if (!target) return sendJson(res, 400, { error: '邀请码绑定的选手不存在' });
+          if (!target) return failRegister(res, ip, '邀请码绑定的选手不存在');
           if (users.some((u) => u.playerId === entry.playerId)) {
-            return sendJson(res, 409, { error: '该选手已被其他账号绑定' });
+            return failRegister(res, ip, '该选手已被其他账号绑定', 409);
           }
           playerId = entry.playerId;
           codeKind = 'bound';
@@ -255,7 +302,7 @@ function createHandlers(storage, options) {
           devUsed.add(code);
           codeKind = 'dev';
         } else {
-          return sendJson(res, 400, { error: '邀请码无效或已被使用' });
+          return failRegister(res, ip, '邀请码无效或已被使用');
         }
       }
     }
@@ -273,8 +320,14 @@ function createHandlers(storage, options) {
     await write(USERS_KEY, users);
     audit('auth.register', 'user=' + username + ' role=' + role + ' player=' + (playerId || '-') + ' code=' + codeKind);
 
-    setSessionCookie(res, issueFor(user.id, now), req);
+    setSessionCookie(res, issueFor(user.id, pvOf(user), now), req);
     sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
+  }
+
+  /* 注册校验失败也计入限速(防在线枚举用户名/撞管理码);冲突类保留 409 语义 */
+  function failRegister(res, ip, message, status) {
+    rate.recordFail(ip);
+    return sendJson(res, status || 400, { error: message });
   }
 
   async function login(req, res) {
@@ -282,7 +335,7 @@ function createHandlers(storage, options) {
       sendJson(res, 405, { error: 'Method Not Allowed' });
       return;
     }
-    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?').split(',')[0].trim();
+    const ip = clientIp(req);
     const wait = rate.blocked(ip);
     if (wait > 0) {
       return sendJson(res, 429, { error: '尝试过于频繁,请 ' + wait + ' 秒后再试' });
@@ -301,7 +354,7 @@ function createHandlers(storage, options) {
     }
     rate.reset(ip);
     audit('auth.login', 'user=' + user.username + ' ip=' + ip);
-    setSessionCookie(res, issueFor(user.id, now), req);
+    setSessionCookie(res, issueFor(user.id, pvOf(user), now), req);
     sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
   }
 
@@ -400,9 +453,12 @@ function createHandlers(storage, options) {
     if (next.length < 8 || next.length > 72) return sendJson(res, 400, { error: '新密码需 8-72 位' });
     const users = await readUsers();
     const idx = users.findIndex((u) => u.id === user.id);
+    if (idx < 0) return sendJson(res, 401, { error: '账号不存在' });
     users[idx].passHash = hashPassword(next);
     await write(USERS_KEY, users);
     audit('me.password', 'user=' + user.username);
+    /* 重签当前会话(新 pv),其他浏览器/旧 cookie 因 pv 不匹配全部下线 */
+    setSessionCookie(res, issueFor(user.id, pvOf(users[idx]), now), req);
     sendJson(res, 200, { ok: true });
   }
 

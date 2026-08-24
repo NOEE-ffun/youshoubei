@@ -33,10 +33,11 @@ function signSession(payload) {
   return body + '.' + b64url(hmac(body));
 }
 
-/* 为用户签发默认 30 天会话 */
-function issueFor(uid, now) {
+/* 为用户签发默认 30 天会话;pv = 密码版本(取 passHash 尾 8 位),
+ * 改密后旧 pv 的会话全部失效(把其他浏览器/被盗 cookie 踢下线) */
+function issueFor(uid, pv, now) {
   const base = typeof now === 'function' ? now() : Date.now();
-  return signSession({ uid, exp: base + SESSION_TTL_MS });
+  return signSession({ uid, pv: String(pv || ''), exp: base + SESSION_TTL_MS });
 }
 
 /* 校验:通过返回 payload 对象,失败返回 null(签名不符/过期/格式错) */
@@ -62,6 +63,7 @@ function verifySession(raw) {
     return null;
   }
   if (!payload || typeof payload.uid !== 'string' || !Number.isFinite(payload.exp)) return null;
+  if (typeof payload.pv !== 'string') return null;
   if (Date.now() > payload.exp) return null;
   return payload;
 }

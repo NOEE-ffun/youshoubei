@@ -107,6 +107,8 @@
   function openList(side) {
     var list = sideEl(side, "list");
     if (!list) return;
+    /* 同一时间只展开一侧抽屉 */
+    SIDES.filter(function (s) { return s !== side; }).forEach(closeList);
     list.hidden = false;
     var search = sideEl(side, "search");
     renderPickerList(side, search ? search.value.trim() : "");
@@ -377,10 +379,13 @@
     return url + (url.indexOf("?") >= 0 ? "&" : "?") + "_ts=" + Date.now();
   }
 
-  /* 应用选手到一侧:头像/队标经 blobUrl → dataURL(可随画布导出) */
+  /* 应用选手到一侧:头像/队标经 blobUrl → dataURL(可随画布导出)。
+   * seq 防竞态:快速连选 A→B 时,A 的慢图片任务返回后直接丢弃,不覆盖 B */
+  var applySeq = { left: 0, right: 0 };
   function applyPlayer(side, player) {
     var d = state.data[side];
     var app = window.TournamentApp;
+    var seq = ++applySeq[side];
     var avatarJob = player.avatar
       ? Promise.resolve(app.blobUrl(player.avatar)).then(function (u) { return VSUpload.handleURL(corsFresh(u)); }).catch(function () { return null; })
       : Promise.resolve(null);
@@ -390,6 +395,7 @@
     var title = typeof player.title === "string" ? player.title : ((player.title && player.title.text) || "");
 
     Promise.all([avatarJob, tagImgJob]).then(function (jobs) {
+      if (seq !== applySeq[side]) return; /* 已被更新的选择取代 */
       d.name = player.name || "";
       d.tag = player.tag || "";
       d.img = jobs[0];

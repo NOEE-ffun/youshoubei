@@ -11,7 +11,8 @@
 const crypto = require('node:crypto');
 
 const args = process.argv.slice(2);
-const count = Math.max(1, Math.min(50, parseInt(args[0], 10) || 1));
+/* 数量取第一个纯数字参数(允许 --all/--player/--push 出现在任意位置) */
+const count = Math.max(1, Math.min(50, parseInt(args.find((a) => /^\d+$/.test(a)), 10) || 1));
 const playerArg = (args.includes('--player') && args[args.indexOf('--player') + 1]) || null;
 const push = args.includes('--push');
 

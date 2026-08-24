@@ -166,6 +166,7 @@
     const app = window.TournamentApp;
     const { user } = app.getSession();
     if (!user) return;
+    $('profile-save').disabled = true;
     const body = {
       name: $('profile-name').value.trim(),
       tag: $('profile-tag').value.trim() || null,
@@ -189,7 +190,6 @@
         body.tagImgRatio = null;
       }
     }
-    $('profile-save').disabled = true;
     try {
       const resp = await fetch('/api/me/player', {
         method: 'PUT',
