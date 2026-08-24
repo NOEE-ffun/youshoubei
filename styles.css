@@ -2248,7 +2248,8 @@ dialog::backdrop {
 
 body[data-page="home"] #bg-layer,
 body[data-page="players"] #bg-layer,
-body[data-page="stats"] #bg-layer {
+body[data-page="stats"] #bg-layer,
+body[data-page="profile"] #bg-layer {
   display: none;
 }
 

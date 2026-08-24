@@ -254,6 +254,9 @@
       renderPickerList(side, search.value.trim());
     });
 
+    var closeBtn = sideEl(side, "list").querySelector("[data-close-list]");
+    if (closeBtn) closeBtn.addEventListener("click", function () { closeList(side); });
+
     var ul = document.querySelector('.roster__list[data-side="' + side + '"]');
     ul.addEventListener("click", function (e) {
       var card = e.target.closest(".roster__card");
@@ -329,6 +332,12 @@
     SIDES.forEach(bindSideControls);
     bindMatchFields();
     bindGlobalActions();
+
+    /* 点击选择器外部任意位置收起抽屉(打开按钮/抽屉内部除外) */
+    document.addEventListener("click", function (e) {
+      if (e.target.closest(".picker-list") || e.target.closest("[data-pick]")) return;
+      SIDES.forEach(closeList);
+    });
   }
 
   /* ---------- 选手库(主站全局选手) ---------- */
@@ -360,15 +369,23 @@
     });
   }
 
+  /* OSS 图片可能已被普通 <img>(非 CORS 模式)加载进 HTTP 缓存,复用那份
+   * 无 Access-Control-Allow-Origin 的缓存响应会被 crossOrigin 加载拒绝;
+   * 加一次性穿透参数强制取回带 CORS 头的新响应(blob:/data: 引用必须原样) */
+  function corsFresh(url) {
+    if (!url || /^(data|blob):/i.test(url)) return url;
+    return url + (url.indexOf("?") >= 0 ? "&" : "?") + "_ts=" + Date.now();
+  }
+
   /* 应用选手到一侧:头像/队标经 blobUrl → dataURL(可随画布导出) */
   function applyPlayer(side, player) {
     var d = state.data[side];
     var app = window.TournamentApp;
     var avatarJob = player.avatar
-      ? Promise.resolve(app.blobUrl(player.avatar)).then(function (u) { return VSUpload.handleURL(u); }).catch(function () { return null; })
+      ? Promise.resolve(app.blobUrl(player.avatar)).then(function (u) { return VSUpload.handleURL(corsFresh(u)); }).catch(function () { return null; })
       : Promise.resolve(null);
     var tagImgJob = player.tagImg
-      ? Promise.resolve(app.blobUrl(player.tagImg)).then(function (u) { return VSUpload.handleURL(u); }).catch(function () { return null; })
+      ? Promise.resolve(app.blobUrl(player.tagImg)).then(function (u) { return VSUpload.handleURL(corsFresh(u)); }).catch(function () { return null; })
       : Promise.resolve(null);
     var title = typeof player.title === "string" ? player.title : ((player.title && player.title.text) || "");
 

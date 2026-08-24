@@ -640,3 +640,14 @@
   border-color: var(--accent, #4a7dff);
   outline: none;
 }
+
+#poster-app .picker-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#poster-app .picker-search-row .field__control {
+  flex: 1;
+  min-width: 0;
+}
