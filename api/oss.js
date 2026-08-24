@@ -207,6 +207,7 @@ function publicUrl(key) {
 
 module.exports = {
   DATA_PATH,
+  isOssConfigured,
   readJson,
   writeJson,
   uploadImageBuffer,

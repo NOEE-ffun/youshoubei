@@ -567,3 +567,76 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* ---------- 选手选择器(选手库驱动) ---------- */
+#poster-app .picker-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#poster-app .picker-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  inline-size: 100%;
+  padding: 18px 12px;
+  border: 1px dashed var(--panel-border, #444c66);
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+#poster-app .picker-empty:hover {
+  border-style: solid;
+}
+
+#poster-app .picker-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--panel-border, #444c66);
+}
+
+#poster-app .picker-card .roster__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+#poster-app .picker-card--selected {
+  border-color: var(--accent, #4a7dff);
+}
+
+#poster-app .picker__tagimg {
+  font-style: normal;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+#poster-app .picker__gone {
+  display: block;
+  font-size: 12px;
+}
+
+#poster-app .picker-list {
+  margin-top: 10px;
+}
+
+#poster-app .picker-list .roster__list {
+  max-block-size: 260px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+#poster-app .picker-list .roster__card {
+  cursor: pointer;
+}
+
+#poster-app .picker-list .roster__card:hover,
+#poster-app .picker-list .roster__card:focus-visible {
+  border-color: var(--accent, #4a7dff);
+  outline: none;
+}

@@ -1593,7 +1593,7 @@
     const header = document.getElementById('app-header');
     if (header && app.current) {
       const active = app.current;
-      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', list: '赛程列表' };
+      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', list: '赛程列表', profile: '个人中心' };
       const headerTitle = pageTitles[app.activePage] || active.name;
 
       const titleEl = header.querySelector('.header-title');
@@ -1641,6 +1641,29 @@
     /* 主题/管理按钮在侧栏底部,与页头是否存在无关 */
     const manageBtn = document.getElementById('manage-btn');
     if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
+
+    /* 登录/账号按钮:本地模式隐藏;登录态显示头像+昵称,点击进资料页 */
+    const loginBtn = document.getElementById('header-login-btn');
+    if (loginBtn) {
+      loginBtn.hidden = mode !== 'cloud';
+      const sig = sessionUser
+        ? sessionUser.id + ':' + (sessionPlayer ? sessionPlayer.name : sessionUser.username)
+        : 'anon';
+      if (loginBtn.dataset.ssig !== sig) {
+        loginBtn.dataset.ssig = sig;
+        if (sessionUser) {
+          const label = (sessionPlayer && sessionPlayer.name) || sessionUser.username;
+          loginBtn.title = '个人中心:' + label;
+          loginBtn.setAttribute('aria-label', loginBtn.title);
+          loginBtn.innerHTML = avatarMarkup(sessionPlayer || { name: sessionUser.username }, 'avatar-side') +
+            '<span class="side-label">' + escapeHtml(label) + '</span>';
+        } else {
+          loginBtn.title = '登录';
+          loginBtn.setAttribute('aria-label', '登录');
+          loginBtn.innerHTML = iconMarkup('person', '登录') + '<span class="side-label">登录</span>';
+        }
+      }
+    }
 
     const theme = currentTheme();
     const themeBtn = document.getElementById('header-theme-btn');
@@ -1718,10 +1741,15 @@
     const group = document.createElement('div');
     group.className = 'side-actions';
     group.innerHTML =
+      '<button type="button" id="header-login-btn" class="side-action" title="登录" aria-label="登录"></button>' +
       '<button type="button" id="header-theme-btn" class="side-action" aria-label="切换主题"></button>' +
       '<button type="button" id="manage-btn" class="side-action" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>';
     sidebar.appendChild(group);
     appendSideLabel(group.querySelector('#manage-btn'), '管理');
+    group.querySelector('#header-login-btn').addEventListener('click', () => {
+      if (sessionUser) location.href = 'profile.html';
+      else openLoginDialog();
+    });
     group.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
     group.querySelector('#manage-btn').addEventListener('click', openManageDialog);
     syncSideToggle();
@@ -1734,6 +1762,146 @@
      * 可见性同步仍需执行(syncHeaderState 内部对页头部分自带守卫) */
     if (!headerBuilt) buildHeaderSkeleton();
     syncHeaderState();
+  }
+
+  /* ---------- 登录会话(一期:邀请码+密码) ---------- */
+
+  let sessionUser = null;   /* {id, username, role, playerId} 或 null */
+  let sessionPlayer = null; /* 会话绑定的选手对象 */
+
+  function getSession() {
+    return { user: sessionUser, player: sessionPlayer };
+  }
+
+  /* 拉取 /api/me 更新会话态并刷新侧栏按钮;任何失败按未登录处理 */
+  async function refreshSession() {
+    try {
+      const resp = await fetch('/api/me', { headers: { 'Accept': 'application/json' } });
+      if (resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        sessionUser = (data && data.user) || null;
+        sessionPlayer = (data && data.player) || null;
+      } else {
+        sessionUser = null;
+        sessionPlayer = null;
+      }
+    } catch (error) {
+      sessionUser = null;
+      sessionPlayer = null;
+    }
+    syncHeaderState();
+    return getSession();
+  }
+
+  async function logoutSession() {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (error) { /* 网络失败也按登出处理 */ }
+    await refreshSession();
+    notify('已退出登录');
+  }
+
+  let loginDialog = null;
+  let loginMode = 'login';
+
+  function setLoginMode(next) {
+    loginMode = next === 'register' ? 'register' : 'login';
+    if (!loginDialog) return;
+    loginDialog.querySelector('#login-dialog-title').textContent = loginMode === 'register' ? '注册账号' : '登录';
+    loginDialog.querySelector('#login-code-row').hidden = loginMode !== 'register';
+    loginDialog.querySelector('#login-submit').textContent = loginMode === 'register' ? '注册' : '登录';
+    loginDialog.querySelector('[data-login-tab="login"]').classList.toggle('btn-primary', loginMode === 'login');
+    loginDialog.querySelector('[data-login-tab="login"]').classList.toggle('btn-ghost', loginMode !== 'login');
+    loginDialog.querySelector('[data-login-tab="register"]').classList.toggle('btn-primary', loginMode === 'register');
+    loginDialog.querySelector('[data-login-tab="register"]').classList.toggle('btn-ghost', loginMode !== 'register');
+    loginDialog.querySelector('#login-status').textContent = '';
+  }
+
+  function ensureLoginDialog() {
+    if (loginDialog) return loginDialog;
+    loginDialog = document.createElement('dialog');
+    loginDialog.id = 'login-dialog';
+    loginDialog.setAttribute('aria-labelledby', 'login-dialog-title');
+    loginDialog.innerHTML =
+      '<div class="dialog-head">' +
+      '  <h2 id="login-dialog-title">登录</h2>' +
+      '  <button type="button" class="btn btn-ghost btn-sm" data-login-close>关闭</button>' +
+      '</div>' +
+      '<div class="dialog-body">' +
+      '  <div class="login-tabs" role="tablist">' +
+      '    <button type="button" data-login-tab="login">登录</button>' +
+      '    <button type="button" data-login-tab="register">注册</button>' +
+      '  </div>' +
+      '  <div class="form-field" id="login-code-row" hidden>' +
+      '    <label for="login-code">邀请码</label>' +
+      '    <input type="text" id="login-code" autocomplete="off" placeholder="向管理员索取">' +
+      '  </div>' +
+      '  <div class="form-field">' +
+      '    <label for="login-username">用户名</label>' +
+      '    <input type="text" id="login-username" autocomplete="username" maxlength="24">' +
+      '  </div>' +
+      '  <div class="form-field">' +
+      '    <label for="login-password">密码</label>' +
+      '    <input type="password" id="login-password" autocomplete="current-password" maxlength="72">' +
+      '  </div>' +
+      '  <p class="hint" id="login-status" role="status"></p>' +
+      '  <div class="dialog-actions">' +
+      '    <button type="button" id="login-submit" class="btn btn-primary">登录</button>' +
+      '  </div>' +
+      '</div>';
+    document.body.appendChild(loginDialog);
+    loginDialog.querySelectorAll('[data-login-close]').forEach((btn) => btn.addEventListener('click', () => loginDialog.close()));
+    loginDialog.querySelectorAll('[data-login-tab]').forEach((btn) => btn.addEventListener('click', () => setLoginMode(btn.dataset.loginTab)));
+    loginDialog.querySelector('#login-submit').addEventListener('click', submitLoginDialog);
+    loginDialog.querySelector('#login-password').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') submitLoginDialog();
+    });
+    return loginDialog;
+  }
+
+  async function submitLoginDialog() {
+    if (!loginDialog) return;
+    const statusEl = loginDialog.querySelector('#login-status');
+    const username = loginDialog.querySelector('#login-username').value.trim();
+    const password = loginDialog.querySelector('#login-password').value;
+    const code = loginDialog.querySelector('#login-code').value.trim();
+    const isRegister = loginMode === 'register';
+    if (!username || !password || (isRegister && !code)) {
+      statusEl.textContent = '请填写完整';
+      return;
+    }
+    const submit = loginDialog.querySelector('#login-submit');
+    submit.disabled = true;
+    statusEl.textContent = isRegister ? '注册中…' : '登录中…';
+    try {
+      const resp = await fetch(isRegister ? '/api/auth/register' : '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isRegister ? { code, username, password } : { username, password })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        statusEl.textContent = data.error || '操作失败,请重试';
+        return;
+      }
+      loginDialog.close();
+      await refreshSession();
+      notify((isRegister ? '注册成功,欢迎 ' : '欢迎回来,') + ((data.user && data.user.username) || username));
+      if (data.user && data.user.role === 'admin') notify('已获得管理员身份');
+    } catch (error) {
+      statusEl.textContent = '网络错误,请稍后再试';
+    } finally {
+      submit.disabled = false;
+    }
+  }
+
+  function openLoginDialog() {
+    const dialog = ensureLoginDialog();
+    loginDialog.querySelector('#login-username').value = '';
+    loginDialog.querySelector('#login-password').value = '';
+    loginDialog.querySelector('#login-code').value = '';
+    setLoginMode('login');
+    if (!dialog.open) dialog.showModal();
   }
 
   /* ---------- 主流程 ---------- */
@@ -1914,11 +2082,16 @@
       isAdmin,
       setAdminToken,
       setActiveId,
+      refreshSession,
+      getSession,
+      logoutSession,
+      openLoginDialog,
       uploadImage: uploadCloudImage,
       fatalError: showFatalError
     };
     window.TournamentApp = appInstance;
     bindSystemThemeChange();
+    refreshSession(); /* 会话态与数据加载并行,拿到后自行刷新侧栏按钮 */
     try {
       const cached = readWorkspaceCache();
       if (cached) {

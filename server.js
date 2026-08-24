@@ -39,11 +39,18 @@ const apiData = require('./api/data');
 const apiUpload = require('./api/upload');
 const apiHealth = require('./api/health');
 const apiPosterStage = require('./api/poster-stage');
+const apiAccount = require('./api/account');
 const API_ROUTES = {
   '/api/data': apiData,
   '/api/upload': apiUpload,
   '/api/health': apiHealth,
-  '/api/poster-stage': apiPosterStage
+  '/api/poster-stage': apiPosterStage,
+  '/api/auth/register': apiAccount.register,
+  '/api/auth/login': apiAccount.login,
+  '/api/auth/logout': apiAccount.logout,
+  '/api/me': apiAccount.me,
+  '/api/me/player': apiAccount.me,
+  '/api/me/password': apiAccount.mePassword
 };
 
 /* 不对外下发的内部目录与根级文件;比对前统一转小写,顺带堵住 /API/ 这类大小写变体 */
@@ -91,10 +98,11 @@ function encodeBody(req, data) {
 
 /* Vercel res 的最小适配:api/*.js 只用 status().json()。
  * 默认 Cache-Control no-store;个别公开只读接口(如 /api/poster-stage GET)
- * 可用 .cacheControl('public, max-age=300') 覆盖。 */
+ * 可用 .cacheControl('public, max-age=300') 覆盖;setHeader 供登录接口写 Set-Cookie。 */
 function apiResponse(rawRes) {
   let statusCode = 200;
   let cacheControl = 'no-store';
+  const extraHeaders = [];
   return {
     status(code) {
       statusCode = code;
@@ -104,6 +112,10 @@ function apiResponse(rawRes) {
       cacheControl = value;
       return this;
     },
+    setHeader(name, value) {
+      extraHeaders.push([String(name), String(value)]);
+      return this;
+    },
     json(payload) {
       const body = Buffer.from(JSON.stringify(payload), 'utf8');
       rawRes.statusCode = statusCode;
@@ -111,6 +123,7 @@ function apiResponse(rawRes) {
       rawRes.setHeader('Cache-Control', cacheControl);
       rawRes.setHeader('X-Content-Type-Options', 'nosniff');
       for (const [key, value] of Object.entries(SECURITY_HEADERS)) rawRes.setHeader(key, value);
+      for (const [key, value] of extraHeaders) rawRes.setHeader(key, value);
       rawRes.setHeader('Content-Length', body.length);
       rawRes.end(body);
     }
@@ -235,7 +248,7 @@ if (require.main === module) {
   const server = createServer();
   server.listen(PORT, () => {
     console.log('赛事网站已启动：http://localhost:' + PORT);
-    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage');
+    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me');
     console.log('按 Ctrl+C 停止服务器');
   });
 }

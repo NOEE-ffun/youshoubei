@@ -3382,3 +3382,58 @@ body[data-page="home"] {
   gap: 0.4rem;
   margin-inline-start: auto;
 }
+
+/* ========== 登录/账号(侧栏底部,主题按钮上方) ========== */
+
+#header-login-btn .avatar-side {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  font-size: 12px;
+  line-height: 22px;
+}
+
+#header-login-btn .side-label {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.login-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.login-tabs button {
+  flex: 1;
+}
+
+/* ========== 个人中心 ========== */
+
+.profile-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.profile-tagimg-preview {
+  max-height: 48px;
+  max-width: 160px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.profile-range-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.profile-range-row input[type='range'] {
+  flex: 1;
+  max-width: 220px;
+}

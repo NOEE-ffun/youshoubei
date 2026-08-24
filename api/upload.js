@@ -1,7 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { adminGate } = require('./auth');
+const { isAuthorized } = require('./auth');
+const { sessionOf } = require('./session');
 const { sendJson, readBody } = require('./helpers');
 const { uploadImageBuffer, publicUrl, appendAudit } = require('./oss');
 
@@ -29,13 +30,26 @@ function sniffImageType(buffer) {
   return null;
 }
 
+/* 鉴权:管理口令(三态)或登录会话(选手上传自己的头像/队标) */
+function uploadGate(req, res) {
+  const authed = isAuthorized(req);
+  if (authed === true) return true;
+  if (sessionOf(req)) return true;
+  if (authed === null) {
+    res.status(403).json({ error: '上传功能未配置(ADMIN_TOKEN)或未登录' });
+  } else {
+    res.status(401).json({ error: '需要管理员口令或登录会话' });
+  }
+  return false;
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') {
     sendJson(res, 405, { error: 'Method Not Allowed' });
     return;
   }
 
-  if (!adminGate(req, res)) return;
+  if (!uploadGate(req, res)) return;
 
   const buffer = await readBody(req, MAX_SIZE);
   if (buffer === null) {

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="view-transition" content="same-origin">
+  <meta name="description" content="右手杯个人中心:登录后管理自己的选手资料。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>个人中心 - 右手杯</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
+  <link rel="prefetch" href="index.html">
+  <link rel="prefetch" href="schedule.html">
+  <link rel="prefetch" href="poster.html">
+  <script src="theme-init.js?v=2026082147"></script>
+  <link rel="stylesheet" href="styles.css?v=2026082147">
+</head>
+<body data-page="profile">
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <div id="bg-layer" aria-hidden="true"></div>
+  <header id="app-header"></header>
+  <aside id="app-sidebar" class="app-sidebar" aria-label="主导航">
+    <nav class="side-nav" aria-label="主导航">
+      <a class="side-link" href="index.html" data-page="home" title="主页" aria-label="主页"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/home.svg" alt="主页" aria-hidden="true"></span></a>
+      <a class="side-link" href="schedule.html" data-page="match" title="比赛" aria-label="比赛"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/emoji_events.svg" alt="比赛" aria-hidden="true"></span></a>
+      <a class="side-link" href="players.html" data-page="players" title="选手库" aria-label="选手库"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/groups.svg" alt="选手库" aria-hidden="true"></span></a>
+      <a class="side-link" href="poster.html" data-page="poster" title="海报" aria-label="海报"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/vs_poster.svg" alt="海报" aria-hidden="true"></span></a>
+      <a class="side-link" href="stats.html?v=2026082147" data-page="stats" title="数据统计" aria-label="数据统计"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/bar_chart.svg" alt="数据统计" aria-hidden="true"></span></a>
+    </nav>
+  </aside>
+
+  <div class="layout-body">
+    <main id="main-content" tabindex="-1">
+      <h1>个人中心</h1>
+
+      <div id="profile-empty" hidden>
+        <p id="profile-empty-text" class="hint">未登录。</p>
+        <button type="button" id="profile-login-btn" class="btn btn-primary" hidden>登录</button>
+      </div>
+
+      <section id="profile-card" hidden aria-labelledby="profile-card-title">
+        <h2 id="profile-card-title" class="visually-hidden">选手资料</h2>
+        <p class="hint">账号名 <strong id="profile-username"></strong>(用于登录,不可修改);以下信息全站展示。</p>
+
+        <div class="form-field">
+          <label>头像</label>
+          <div class="profile-avatar-row">
+            <span id="profile-avatar-preview"></span>
+            <input type="file" id="profile-avatar-file" accept="image/*" class="visually-hidden">
+            <button type="button" id="profile-avatar-upload" class="btn btn-secondary btn-sm">上传头像</button>
+            <button type="button" id="profile-avatar-remove" class="btn btn-ghost btn-sm" hidden>移除</button>
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="profile-name">昵称</label>
+          <input type="text" id="profile-name" maxlength="24" placeholder="展示在赛程/统计/海报上的名字">
+        </div>
+
+        <div class="form-field">
+          <label for="profile-tag">队伍 / ID</label>
+          <input type="text" id="profile-tag" maxlength="16" placeholder="如 DK.FIRE(可选)">
+        </div>
+
+        <div class="form-field">
+          <label>队标图片(可选,替代文字 ID)</label>
+          <div class="profile-avatar-row">
+            <img id="profile-tagimg-preview" class="profile-tagimg-preview" alt="队标预览" hidden>
+            <input type="file" id="profile-tagimg-file" accept="image/*" class="visually-hidden">
+            <button type="button" id="profile-tagimg-upload" class="btn btn-secondary btn-sm">上传队标</button>
+            <button type="button" id="profile-tagimg-remove" class="btn btn-ghost btn-sm" hidden>移除队标</button>
+          </div>
+          <div class="profile-range-row">
+            <label for="profile-tagimg-size">队标大小</label>
+            <input type="range" id="profile-tagimg-size" min="32" max="160" step="4">
+          </div>
+        </div>
+
+        <div class="form-field">
+          <label for="profile-title">赛前垃圾话(可选)</label>
+          <input type="text" id="profile-title" maxlength="30" placeholder="展示在海报上的宣言">
+        </div>
+
+        <div class="form-field">
+          <label for="profile-color">海报颜色</label>
+          <div class="profile-avatar-row">
+            <input type="color" id="profile-color" value="#4a5568">
+            <button type="button" id="profile-color-clear" class="btn btn-ghost btn-sm">跟随主题</button>
+            <span class="hint" id="profile-color-hint"></span>
+          </div>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" id="profile-save" class="btn btn-primary">保存资料</button>
+        </div>
+      </section>
+
+      <section id="profile-password" hidden aria-labelledby="profile-password-title">
+        <h2 id="profile-password-title">修改密码</h2>
+        <div class="form-field">
+          <label for="profile-pass-current">当前密码</label>
+          <input type="password" id="profile-pass-current" autocomplete="current-password" maxlength="72">
+        </div>
+        <div class="form-field">
+          <label for="profile-pass-next">新密码(8-72 位)</label>
+          <input type="password" id="profile-pass-next" autocomplete="new-password" maxlength="72">
+        </div>
+        <div class="dialog-actions">
+          <button type="button" id="profile-pass-save" class="btn btn-secondary">修改密码</button>
+        </div>
+      </section>
+
+      <div class="dialog-actions" id="profile-logout-row" hidden>
+        <button type="button" id="profile-logout" class="btn btn-ghost">退出登录</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="canvas-model.js?v=2026082147" defer></script>
+  <script src="common.js?v=2026082147" defer></script>
+  <script src="vs-poster/js/upload.js?v=2026082147" defer></script>
+  <script src="profile.js?v=2026082147" defer></script>
+</body>
+</html>

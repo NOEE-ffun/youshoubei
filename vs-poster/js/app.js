@@ -1,6 +1,8 @@
 /**
- * 应用装配:状态 ↔ 表单 ↔ 海报渲染 ↔ 导出 ↔ 主站选手库 ↔ OBS 舞台 API
+ * 应用装配:状态 ↔ 选手选择器 ↔ 海报渲染 ↔ 导出 ↔ OBS 舞台 API
  * 与主站解耦:等待 ts:ready 后启动,海报主题写 html[data-poster-theme],不覆盖 data-theme。
+ * 选手数据全部来自主站选手库(TournamentApp.players);左右两侧只做选择与颜色微调,
+ * 资料维护走个人中心(profile.html),本页不再提供自由手填。
  */
 (function () {
   "use strict";
@@ -13,14 +15,8 @@
     bo: $("bo"),
     date: $("match-date"),
     venue: $("venue"),
-    leftName: $("left-name"),
-    leftTag: $("left-tag"),
-    rightName: $("right-name"),
-    rightTag: $("right-tag"),
     leftColor: $("left-color"),
     rightColor: $("right-color"),
-    rosterList: $("roster-list"),
-    rosterEmpty: $("roster-empty"),
     slot: $("poster-slot"),
     toast: $("toast"),
     posterStage: $("poster-stage")
@@ -29,14 +25,8 @@
   var SIDES = ["left", "right"];
   function sideEl(side, suffix) { return $(side + "-" + suffix); }
 
-  /* 转义/权限/错误提示统一走主站 TournamentUtils(common.js 恒先于本文件加载);
-   * 成功类提示保留本页 toast(单例短时样式,与主站堆叠式分工) */
   function esc(s) {
     return window.TournamentUtils.escapeHtml(s);
-  }
-
-  function canEdit() {
-    return window.TournamentUtils.canEdit();
   }
 
   function notifyError(msg) {
@@ -45,9 +35,8 @@
 
   var state = VSState.load();
   var exporting = false;
-  var dragDepth = 0;
-  /* 槽位图片是否被本页改动过(用于「存为选手」时决定是否回写头像/队标图) */
-  var slotChanged = { left: { img: false, tagImg: false }, right: { img: false, tagImg: false } };
+
+  var EMPTY_SIDE = { name: "", tag: "", img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: "" };
 
   function currentData() {
     return {
@@ -56,35 +45,102 @@
       bo: els.bo.value,
       date: els.date.value,
       venue: els.venue.value.trim(),
-      left: {
-        name: els.leftName.value.trim(),
-        tag: els.leftTag.value.trim(),
-        img: state.data.left.img,
-        color: state.data.left.color,
-        rosterId: state.data.left.rosterId,
-        tagImg: state.data.left.tagImg || null,
-        tagImgRatio: state.data.left.tagImgRatio || null,
-        tagImgSize: state.data.left.tagImgSize || null,
-        title: sideEl("left", "title") ? sideEl("left", "title").value.trim() : (state.data.left.title || "")
-      },
-      right: {
-        name: els.rightName.value.trim(),
-        tag: els.rightTag.value.trim(),
-        img: state.data.right.img,
-        color: state.data.right.color,
-        rosterId: state.data.right.rosterId,
-        tagImg: state.data.right.tagImg || null,
-        tagImgRatio: state.data.right.tagImgRatio || null,
-        tagImgSize: state.data.right.tagImgSize || null,
-        title: sideEl("right", "title") ? sideEl("right", "title").value.trim() : (state.data.right.title || "")
-      }
+      left: pickSide("left"),
+      right: pickSide("right")
     };
   }
 
-  function syncTitleControls(side) {
+  /* state 即唯一真源:选手字段全部来自 applyPlayer 写入,不再反向读 DOM */
+  function pickSide(side) {
     var d = state.data[side] || {};
-    var input = sideEl(side, "title");
-    if (input) input.value = typeof d.title === "string" ? d.title : "";
+    return {
+      name: d.name || "",
+      tag: d.tag || "",
+      img: d.img || null,
+      color: d.color || null,
+      rosterId: d.rosterId || null,
+      tagImg: d.tagImg || null,
+      tagImgRatio: d.tagImgRatio || null,
+      tagImgSize: d.tagImgSize || null,
+      title: typeof d.title === "string" ? d.title : ""
+    };
+  }
+
+  function sidePlayer(side) {
+    var id = (state.data[side] || {}).rosterId;
+    if (!id) return null;
+    return findPlayer(id);
+  }
+
+  /* ---------- 侧栏槽位渲染(未选/已选摘要) ---------- */
+
+  function renderSideSlot(side) {
+    var host = sideEl(side, "slot");
+    if (!host) return;
+    var d = state.data[side] || {};
+    if (!d.rosterId) {
+      host.innerHTML =
+        '<button type="button" class="picker-empty" data-pick="' + side + '">' +
+        '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>' +
+        "从选手库选择" + (side === "left" ? "左侧" : "右侧") + "选手</button>";
+      return;
+    }
+    var player = findPlayer(d.rosterId);
+    var avatar = d.img
+      ? '<img class="roster__avatar" src="' + esc(d.img) + '" alt="">'
+      : '<span class="roster__avatar roster__avatar--ph">' + esc((d.name || "?")[0]) + "</span>";
+    var tagLine = d.tag ? '<em class="roster__id">' + esc(d.tag) + "</em>" : (d.tagImg ? '<span class="picker__tagimg">🖼 队标</span>' : "");
+    var titleLine = d.title ? esc(d.title) : "—";
+    host.innerHTML =
+      '<div class="picker-card">' + avatar +
+      '<div class="roster__meta">' +
+      '<span class="roster__name">' + esc(d.name || (player && player.name) || "?") + " " + tagLine + "</span>" +
+      '<span class="roster__tag">' + titleLine + "</span>" +
+      (player ? "" : '<span class="picker__gone hint">选手已被删除,请重新选择</span>') +
+      "</div>" +
+      '<button type="button" class="btn btn--ghost btn--sm" data-pick="' + side + '">更换</button>' +
+      "</div>";
+  }
+
+  /* ---------- 选择列表(搜索 + 卡片单选) ---------- */
+
+  function openList(side) {
+    var list = sideEl(side, "list");
+    if (!list) return;
+    list.hidden = false;
+    var search = sideEl(side, "search");
+    renderPickerList(side, search ? search.value.trim() : "");
+    if (search) search.focus();
+  }
+
+  function closeList(side) {
+    var list = sideEl(side, "list");
+    if (list) list.hidden = true;
+  }
+
+  function renderPickerList(side, filter) {
+    var ul = document.querySelector('.roster__list[data-side="' + side + '"]');
+    var empty = document.querySelector('.roster__empty[data-side="' + side + '"]');
+    if (!ul) return;
+    var players = (window.TournamentApp && window.TournamentApp.players) || [];
+    var kw = String(filter || "").toLowerCase();
+    var visible = players.filter(function (p) {
+      if (!kw) return true;
+      return (p.name || "").toLowerCase().indexOf(kw) >= 0 || (p.tag || "").toLowerCase().indexOf(kw) >= 0;
+    });
+    ul.innerHTML = visible.map(function (p) {
+      var dot = /^#[0-9a-fA-F]{6}$/.test(p.color || "")
+        ? '<span class="roster__dot" style="background:' + p.color + '" title="自定义颜色"></span>'
+        : '<span class="roster__dot roster__dot--none" title="跟随全局主题"></span>';
+      var selected = (state.data[side] || {}).rosterId === p.id ? " picker-card--selected" : "";
+      return '<li class="roster__card' + selected + '" data-id="' + esc(p.id) + '" data-act-side="' + side + '" tabindex="0" role="button">' +
+        rosterAvatarMarkup(p) + dot +
+        '<div class="roster__meta">' +
+        '<span class="roster__name">' + esc(p.name || "?") + (p.tag ? ' <em class="roster__id">' + esc(p.tag) + "</em>" : "") + "</span>" +
+        '<span class="roster__tag">' + esc(titleDisplayText(p)) + "</span>" +
+        "</div></li>";
+    }).join("");
+    if (empty) empty.hidden = visible.length > 0;
   }
 
   function render() {
@@ -95,24 +151,9 @@
     els.slot.innerHTML = VSPoster.build(currentData(), theme);
 
     SIDES.forEach(function (side) {
-      sideEl(side, "name").value = state.data[side].name;
-      sideEl(side, "tag").value = state.data[side].tag || "";
-      var img = state.data[side].img;
-      var preview = sideEl(side, "preview");
-      var hint = sideEl(side, "hint");
-      var remove = sideEl(side, "remove");
-      if (img) {
-        preview.src = img;
-        preview.hidden = false;
-        hint.hidden = true;
-        remove.hidden = false;
-      } else {
-        preview.removeAttribute("src");
-        preview.hidden = true;
-        hint.hidden = false;
-        remove.hidden = true;
-      }
-      var color = state.data[side].color;
+      renderSideSlot(side);
+      var d = state.data[side] || {};
+      var color = d.color;
       var dot = sideEl(side, "color-dot");
       var input = sideEl(side, "color");
       if (color) {
@@ -123,14 +164,6 @@
         dot.style.background = theme[side].main;
         dot.classList.remove("color-dot--custom");
       }
-      syncTitleControls(side);
-      sideEl(side, "save-roster").textContent = state.data[side].rosterId ? "⤓ 更新选手" : "＋ 存为选手";
-      sideEl(side, "tag-img-remove").hidden = !state.data[side].tagImg;
-      sideEl(side, "tag-img").classList.toggle("btn--tag-on", !!state.data[side].tagImg);
-      sideEl(side, "tag-size-field").hidden = !state.data[side].tagImg;
-      var tagSize = state.data[side].tagImgSize || 56;
-      sideEl(side, "tag-size").value = tagSize;
-      sideEl(side, "tag-size-val").textContent = tagSize;
     });
   }
 
@@ -162,9 +195,8 @@
       els.matchName.focus();
       return;
     }
-    if (!els.leftName.value.trim() && !els.rightName.value.trim()) {
-      toast("请填写选手名字", true);
-      els.leftName.focus();
+    if (!(state.data.left.rosterId && state.data.right.rosterId)) {
+      toast("请先选择左右两侧选手", true);
       return;
     }
     exporting = true;
@@ -193,222 +225,57 @@
       });
   }
 
-  /* ---------- 图片转换工具 ---------- */
+  /* ---------- 单侧控件:选色 + 选择器 ---------- */
 
-  /* dataURL → Blob:优先走 atob(不经 fetch,兼容 connect-src 'self' CSP),base64 之外回退 fetch */
-  function dataUrlToBlob(dataURL) {
-    var m = /^data:([^;,]+)(;base64)?,(.*)$/.exec(dataURL);
-    if (!m) return Promise.reject(new Error("图片数据无效"));
-    var mime = m[1];
-    var payload = m[3];
-    if (m[2]) {
-      try {
-        var binary = atob(payload);
-        var bytes = new Uint8Array(binary.length);
-        for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        return Promise.resolve(new Blob([bytes], { type: mime }));
-      } catch (e) {
-        return Promise.reject(e);
-      }
-    }
-    return fetch(dataURL).then(function (r) { return r.blob(); });
-  }
-
-  function imageForStorage(dataURL, app) {
-    if (!dataURL) return Promise.resolve(null);
-    if (!/^data:/i.test(dataURL)) return Promise.resolve(dataURL);
-    return dataUrlToBlob(dataURL).then(function (blob) {
-      if (app.mode === "cloud") return app.uploadImage(blob);
-      return blob;
-    });
-  }
-
-  /* ---------- 头像上传 ---------- */
-
-  function setAvatar(side, dataURL) {
-    state.data[side].img = dataURL;
-    slotChanged[side].img = true;
-    sideEl(side, "url").value = "";
-    saveState();
-    render();
-  }
-
-  function measureImageRatio(dataURL) {
-    return new Promise(function (resolve) {
-      var im = new Image();
-      im.onload = function () { resolve(im.naturalWidth && im.naturalHeight ? im.naturalWidth / im.naturalHeight : 1); };
-      im.onerror = function () { resolve(1); };
-      im.src = dataURL;
-    });
-  }
-
-  /* 单侧选手控件:头像(点击/拖拽/URL/移除)、队标图、垃圾话、选色、存为选手 */
   function bindSideControls(side) {
-    var drop = sideEl(side, "drop");
-    var fileInput = document.createElement("input");
-    fileInput.type = "file";
-    fileInput.accept = "image/*";
-    fileInput.hidden = true;
-    drop.appendChild(fileInput);
-
-    drop.addEventListener("click", function () { fileInput.click(); });
-    fileInput.addEventListener("change", function () {
-      VSUpload.handleFile(fileInput.files[0])
-        .then(function (dataURL) { setAvatar(side, dataURL); })
-        .catch(function (e) { toast(e.message, true); });
-      fileInput.value = "";
-    });
-
-    drop.addEventListener("dragover", function (e) { e.preventDefault(); drop.classList.add("avatar__drop--over"); });
-    drop.addEventListener("dragleave", function () { drop.classList.remove("avatar__drop--over"); });
-    drop.addEventListener("drop", function (e) {
-      e.preventDefault();
-      drop.classList.remove("avatar__drop--over");
-      var file = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (file) {
-        VSUpload.handleFile(file)
-          .then(function (dataURL) { setAvatar(side, dataURL); })
-          .catch(function (err) { toast(err.message, true); });
-      }
-    });
-
-    var urlBtn = document.querySelector('[data-url-btn="' + side + '"]');
-    function loadFromURL() {
-      var url = sideEl(side, "url").value.trim();
-      if (!url) {
-        toast("请先粘贴图片链接", true);
-        return;
-      }
-      VSUpload.handleURL(url)
-        .then(function (dataURL) { setAvatar(side, dataURL); })
-        .catch(function (e) { toast(e.message, true); });
-    }
-    urlBtn.addEventListener("click", loadFromURL);
-    sideEl(side, "url").addEventListener("keydown", function (e) { if (e.key === "Enter") loadFromURL(); });
-
-    var remove = sideEl(side, "remove");
-    function removeAvatar() {
-      setAvatar(side, null);
-      sideEl(side, "url").value = "";
-    }
-    remove.addEventListener("click", removeAvatar);
-    remove.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); removeAvatar(); }
-    });
-
-    // 队标图片
-    var tagImgBtn = sideEl(side, "tag-img");
-    var tagRemoveBtn = sideEl(side, "tag-img-remove");
-    var tagFileInput = document.createElement("input");
-    tagFileInput.type = "file";
-    tagFileInput.accept = "image/*";
-    tagFileInput.hidden = true;
-    tagImgBtn.appendChild(tagFileInput);
-    tagImgBtn.addEventListener("click", function () { tagFileInput.click(); });
-    tagFileInput.addEventListener("change", function () {
-      VSUpload.handleFile(tagFileInput.files[0])
-        .then(function (dataURL) {
-          measureImageRatio(dataURL).then(function (ratio) {
-            state.data[side].tagImg = dataURL;
-            state.data[side].tagImgRatio = ratio;
-            slotChanged[side].tagImg = true;
-            saveState();
-            render();
-            toast("队标图片已应用到 ID 胶囊(优先于文字)");
-          });
-        })
-        .catch(function (e) { toast(e.message, true); });
-      tagFileInput.value = "";
-    });
-    tagRemoveBtn.addEventListener("click", function () {
-      state.data[side].tagImg = null;
-      state.data[side].tagImgRatio = null;
-      state.data[side].tagImgSize = null;
-      slotChanged[side].tagImg = true;
-      saveState();
-      render();
-      toast("已移除队标图片,恢复文字显示");
-    });
-
-    sideEl(side, "tag-size").addEventListener("input", function () {
-      state.data[side].tagImgSize = Number(sideEl(side, "tag-size").value) || null;
-      saveState();
-      render();
-    });
-
-    // 赛前垃圾话(纯文本)
-    sideEl(side, "title").addEventListener("input", function () {
-      state.data[side].title = sideEl(side, "title").value.trim();
-      clearTimeout(titleDebounce[side]);
-      titleDebounce[side] = setTimeout(function () { saveState(); render(); }, 160);
-    });
-
-    // 自由选色
     sideEl(side, "color").addEventListener("input", function () {
       state.data[side].color = sideEl(side, "color").value;
       saveState();
       render();
     });
     sideEl(side, "color-clear").addEventListener("click", function () {
-      state.data[side].color = null;
+      /* 跟随选手:恢复为选手资料里的颜色(无则不覆盖主题) */
+      var player = sidePlayer(side);
+      state.data[side].color = (player && player.color) || null;
       saveState();
       render();
-      toast("已恢复跟随全局主题");
+      toast("已恢复跟随选手资料颜色");
     });
 
-    // 存为选手
-    sideEl(side, "save-roster").addEventListener("click", function () { saveSlotToPlayer(side); });
-  }
-
-  /* 整页拖图:按落点左右半区放入对应选手 */
-  function bindStageDrop() {
-    els.posterStage.addEventListener("dragenter", function (e) { e.preventDefault(); dragDepth++; els.posterStage.classList.add("stage__frame--over"); });
-    els.posterStage.addEventListener("dragover", function (e) { e.preventDefault(); });
-    els.posterStage.addEventListener("dragleave", function (e) {
-      if (--dragDepth <= 0) { dragDepth = 0; els.posterStage.classList.remove("stage__frame--over"); }
-    });
-    els.posterStage.addEventListener("drop", function (e) {
-      e.preventDefault();
-      dragDepth = 0;
-      els.posterStage.classList.remove("stage__frame--over");
-      var file = e.dataTransfer.files && e.dataTransfer.files[0];
-      if (!file) return;
-      var rect = els.posterStage.getBoundingClientRect();
-      var side = (e.clientX - rect.left) < rect.width / 2 ? "left" : "right";
-      VSUpload.handleFile(file)
-        .then(function (dataURL) {
-          setAvatar(side, dataURL);
-          toast("已放入" + (side === "left" ? "左侧" : "右侧") + "选手头像");
-        })
-        .catch(function (err) { toast(err.message, true); });
-    });
-  }
-
-  /* 选手库卡片:左右应用按钮 */
-  function bindRosterList() {
-    els.rosterList.addEventListener("click", function (e) {
-      var btn = e.target.closest ? e.target.closest("button[data-act]") : null;
+    var slotHost = sideEl(side, "slot");
+    slotHost.addEventListener("click", function (e) {
+      var btn = e.target.closest("[data-pick]");
       if (!btn) return;
+      openList(side);
+    });
+
+    var search = sideEl(side, "search");
+    search.addEventListener("input", function () {
+      renderPickerList(side, search.value.trim());
+    });
+
+    var ul = document.querySelector('.roster__list[data-side="' + side + '"]');
+    ul.addEventListener("click", function (e) {
       var card = e.target.closest(".roster__card");
-      var id = card ? card.dataset.id : null;
-      if (!id) return;
-      var player = findPlayer(id);
-      var act = btn.dataset.act;
-      if (act === "left" && player) applyPlayer("left", player);
-      else if (act === "right" && player) applyPlayer("right", player);
+      if (!card) return;
+      var player = findPlayer(card.dataset.id);
+      if (player) applyPlayer(side, player);
+    });
+    ul.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      var card = e.target.closest(".roster__card");
+      if (!card) return;
+      e.preventDefault();
+      var player = findPlayer(card.dataset.id);
+      if (player) applyPlayer(side, player);
     });
   }
 
-  /* 比赛信息字段:输入同步写 state(防"输入后立即保存"读到旧值),
-   * 持久化与重绘走 160ms 防抖;下拉即时 */
+  /* 比赛信息字段:输入同步写 state,持久化与重绘走 160ms 防抖;下拉即时 */
   function bindMatchFields() {
     var fieldMap = {
       "match-name": function (v) { state.data.matchName = v; },
-      "venue": function (v) { state.data.venue = v; },
-      "left-name": function (v) { state.data.left.name = v; },
-      "left-tag": function (v) { state.data.left.tag = v; },
-      "right-name": function (v) { state.data.right.name = v; },
-      "right-tag": function (v) { state.data.right.tag = v; }
+      "venue": function (v) { state.data.venue = v; }
     };
     var debounce = {};
     Object.keys(fieldMap).forEach(function (id) {
@@ -423,26 +290,19 @@
     });
   }
 
-  /* 随机对阵与双击确认重置 */
+  /* 随机对阵(从选手库抽两位)与双击确认重置 */
   function bindGlobalActions() {
     $("btn-random").addEventListener("click", function () {
-      var pair = RANDOM_PAIRS[Math.floor(Math.random() * RANDOM_PAIRS.length)];
-      state.data.left = { name: pair[0], tag: pair[2], img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: "" };
-      state.data.right = { name: pair[1], tag: pair[3], img: null, color: null, rosterId: null, tagImg: null, tagImgRatio: null, tagImgSize: null, title: "" };
-      slotChanged.left.img = true;
-      slotChanged.right.img = true;
-      slotChanged.left.tagImg = true;
-      slotChanged.right.tagImg = true;
-      els.leftName.value = pair[0];
-      els.leftTag.value = pair[2];
-      els.rightName.value = pair[1];
-      els.rightTag.value = pair[3];
-      /* currentData 从输入框读 title,随机对阵同样要清空,否则旧垃圾话复活 */
-      sideEl("left", "title").value = "";
-      sideEl("right", "title").value = "";
-      saveState();
-      render();
-      toast("已生成随机对阵");
+      var players = (window.TournamentApp && window.TournamentApp.players) || [];
+      if (players.length < 2) {
+        toast("选手库选手不足 2 人,无法随机", true);
+        return;
+      }
+      var a = Math.floor(Math.random() * players.length);
+      var b = (a + 1 + Math.floor(Math.random() * (players.length - 1))) % players.length;
+      applyPlayer("left", players[a]);
+      applyPlayer("right", players[b]);
+      toast("已随机:" + players[a].name + " vs " + players[b].name);
     });
 
     $("btn-reset").addEventListener("click", function () {
@@ -457,8 +317,9 @@
       disarmReset();
       VSState.reset();
       state = VSState.load();
+      normalizeSides();
+      SIDES.forEach(closeList);
       syncForm();
-      renderRoster();
       render();
       toast("已重置为默认");
     });
@@ -466,8 +327,6 @@
 
   function bindFormControls() {
     SIDES.forEach(bindSideControls);
-    bindStageDrop();
-    bindRosterList();
     bindMatchFields();
     bindGlobalActions();
   }
@@ -495,149 +354,40 @@
     return '<span class="roster__avatar roster__avatar--ph">' + esc(initial) + "</span>";
   }
 
-  function renderRoster() {
-    var players = (window.TournamentApp && window.TournamentApp.players) || [];
-    els.rosterList.innerHTML = players.map(function (p) {
-      var dot = /^#[0-9a-fA-F]{6}$/.test(p.color || "")
-        ? '<span class="roster__dot" style="background:' + p.color + '" title="自定义颜色"></span>'
-        : '<span class="roster__dot roster__dot--none" title="跟随全局主题"></span>';
-      return '<li class="roster__card" data-id="' + esc(p.id) + '">' +
-        rosterAvatarMarkup(p) + dot +
-        '<div class="roster__meta">' +
-        '<span class="roster__name">' + esc(p.name || "?") + (p.tag ? ' <em class="roster__id">' + esc(p.tag) + "</em>" : "") + "</span>" +
-        '<span class="roster__tag">' + esc(titleDisplayText(p)) + "</span>" +
-        "</div>" +
-        '<div class="roster__ops">' +
-        '<button type="button" class="btn btn--ghost btn--sm" data-act="left">←左</button>' +
-        '<button type="button" class="btn btn--ghost btn--sm" data-act="right">右→</button>' +
-        "</div></li>";
-    }).join("");
-    els.rosterEmpty.hidden = players.length > 0;
+  function refreshLists() {
+    SIDES.forEach(function (side) {
+      renderPickerList(side, sideEl(side, "search") ? sideEl(side, "search").value.trim() : "");
+    });
   }
 
+  /* 应用选手到一侧:头像/队标经 blobUrl → dataURL(可随画布导出) */
   function applyPlayer(side, player) {
     var d = state.data[side];
-    var sameRoster = d.rosterId === player.id;
-    /* 换选手时带出选手库的 ID/队名(tag)与队标图,同人重应用则保留现场编辑值 */
-    var tag = sameRoster ? (d.tag || "") : (player.tag || "");
-    var tagImg = sameRoster ? (d.tagImg || null) : (player.tagImg || null);
-    var tagImgRatio = sameRoster ? (d.tagImgRatio || null) : (player.tagImgRatio || null);
-    var tagImgSize = sameRoster ? (d.tagImgSize || null) : (player.tagImgSize || null);
-
     var app = window.TournamentApp;
     var avatarJob = player.avatar
       ? Promise.resolve(app.blobUrl(player.avatar)).then(function (u) { return VSUpload.handleURL(u); }).catch(function () { return null; })
       : Promise.resolve(null);
-    var title = typeof player.title === "string" ? player.title : ((player.title && player.title.text) || "");
-    /* 选手库的队标图可能是 Blob/URL 引用,海报 state 需要 dataURL 才能随画布导出 */
-    var tagImgJob = (!sameRoster && tagImg)
-      ? Promise.resolve(app.blobUrl(tagImg)).then(function (u) { return VSUpload.handleURL(u); }).catch(function () { return null; })
+    var tagImgJob = player.tagImg
+      ? Promise.resolve(app.blobUrl(player.tagImg)).then(function (u) { return VSUpload.handleURL(u); }).catch(function () { return null; })
       : Promise.resolve(null);
+    var title = typeof player.title === "string" ? player.title : ((player.title && player.title.text) || "");
 
     Promise.all([avatarJob, tagImgJob]).then(function (jobs) {
-      var img = jobs[0];
-      var tagImgData = jobs[1];
-      d.name = player.name;
+      d.name = player.name || "";
+      d.tag = player.tag || "";
+      d.img = jobs[0];
       d.color = player.color || null;
       d.rosterId = player.id;
-      d.tag = tag;
-      d.tagImg = sameRoster ? tagImg : (tagImgData || null);
-      d.tagImgRatio = sameRoster ? tagImgRatio : (tagImgData ? tagImgRatio : null);
-      d.tagImgSize = sameRoster ? tagImgSize : (tagImgData ? tagImgSize : null);
-      d.img = img;
-      d.title = title;
-      slotChanged[side].img = false;
-      slotChanged[side].tagImg = false;
-
-      /* currentData() 会从输入框反向读取 name/tag/title 重建 state,
-       * 三个输入框必须全部同步,否则旧输入值会覆盖刚应用的选手数据 */
-      sideEl(side, "name").value = player.name;
-      sideEl(side, "tag").value = tag || "";
-      sideEl(side, "title").value = title || "";
+      d.tagImg = jobs[1];
+      d.tagImgRatio = jobs[1] ? (player.tagImgRatio || null) : null;
+      d.tagImgSize = jobs[1] ? (player.tagImgSize || null) : null;
+      d.title = title || "";
       saveState();
       render();
-      toast("已应用「" + player.name + "」到" + (side === "left" ? "左侧" : "右侧"));
+      closeList(side);
+      toast("已应用「" + (player.name || "") + "」到" + (side === "left" ? "左侧" : "右侧"));
     });
   }
-
-  function saveSlotToPlayer(side) {
-    if (!canEdit()) { toast("需要管理员权限才能保存选手", true); return; }
-    var app = window.TournamentApp;
-    var utils = window.TournamentUtils;
-    /* 先从输入框重建 state:队名等字段是 160ms 防抖写 state,
-     * 快速输入后立即点保存时 state 可能仍是旧值,这里强制对齐 */
-    saveState();
-    var d = state.data[side];
-    var name = sideEl(side, "name").value.trim();
-    if (!name) {
-      toast("请先填写选手名字再保存", true);
-      sideEl(side, "name").focus();
-      return;
-    }
-
-    var players = (app.players || []).slice();
-    var player = d.rosterId ? players.filter(function (x) { return x.id === d.rosterId; })[0] : null;
-    var isNew = false;
-    if (!player) {
-      isNew = true;
-      player = {
-        id: window.CanvasModel.uid("p"),
-        name: name,
-        avatar: null,
-        title: "",
-        tag: "",
-        tagImg: null,
-        tagImgRatio: null,
-        tagImgSize: null,
-        color: null,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      };
-      players.unshift(player);
-      d.rosterId = player.id;
-      slotChanged[side].img = true;
-    }
-
-    var titleText = typeof d.title === "string" ? d.title : ((d.title && d.title.text) || "");
-    var needAvatar = slotChanged[side].img || isNew;
-    var needTagImg = slotChanged[side].tagImg || isNew;
-
-    var avatarJob = needAvatar ? imageForStorage(d.img, app) : Promise.resolve(null);
-    /* 队标图与头像同管线:本地 Blob / 云端 OSS URL */
-    var tagImgJob = needTagImg ? imageForStorage(d.tagImg, app) : Promise.resolve(null);
-
-    Promise.all([avatarJob, tagImgJob]).then(function (jobs) {
-      var avatar = jobs[0];
-      var tagImg = jobs[1];
-      player.name = name;
-      player.color = /^#[0-9a-fA-F]{6}$/.test(d.color || "") ? d.color : null;
-      player.title = titleText;
-      player.tag = String(d.tag || "").trim().slice(0, 16);
-      if (needTagImg) {
-        player.tagImg = tagImg || null;
-        player.tagImgRatio = d.tagImg ? (d.tagImgRatio || null) : null;
-        player.tagImgSize = d.tagImg ? (d.tagImgSize || null) : null;
-      }
-      player.updatedAt = Date.now();
-      if (needAvatar) player.avatar = avatar;
-
-      app.storagePutPlayers(players).then(function () {
-        app.players = players;
-        slotChanged[side].img = false;
-        slotChanged[side].tagImg = false;
-        renderRoster();
-        saveState();
-        render();
-        toast("已更新选手「" + name + "」");
-      }).catch(function (e) {
-        notifyError("保存选手失败：" + (utils && utils.errMsg ? utils.errMsg(e) : e.message));
-      });
-    }).catch(function (e) {
-      notifyError("保存选手失败：" + (utils && utils.errMsg ? utils.errMsg(e) : e.message));
-    });
-  }
-
-  var titleDebounce = {};
 
   /* ---------- 主题选择器(页头) ---------- */
 
@@ -647,7 +397,7 @@
   function renderThemeMenu() {
     els.themeMenu.innerHTML = VSThemes.map(function (t, i) {
       return '<li role="option" data-theme-id="' + t.id + '" data-index="' + i + '" aria-selected="false" tabindex="-1">' +
-        '<span class="theme-menu__dot" style="background:linear-gradient(135deg,' + t.left.main + " 50%," + t.right.main + " 50%)\"></span>" +
+        '<span class="theme-menu__dot" style="background:linear-gradient(135deg,' + t.left.main + ' 50%,' + t.right.main + ' 50%)"></span>' +
         '<span class="theme-menu__name">' + esc(t.name) + "</span>" +
         "</li>";
     }).join("");
@@ -769,15 +519,7 @@
     });
   }
 
-  /* ---------- 随机示例 / 重置 ---------- */
-
-  var RANDOM_PAIRS = [
-    ["烈焰", "冰霜", "DK.FIRE", "ICE.BLIZZ"],
-    ["雷霆", "疾风", "TD.LEI", "WIND.NIN"],
-    ["猛虎", "雄鹰", "TIGER.01", "EAGLE.X"],
-    ["暗夜", "黎明", "NIGHT.S", "DAWN.K"],
-    ["狂龙", "灵狐", "DRAGON.CN", "FOX.9"]
-  ];
+  /* ---------- 重置 ---------- */
 
   var resetArmed = false;
   var resetTimer = null;
@@ -791,6 +533,19 @@
 
   /* ---------- 初始化 ---------- */
 
+  /* 旧版自由手填遗留的 side(无 rosterId 的假数据)一律清空,
+   * 保证"未选择"状态干净;带 rosterId 的延续上次选择 */
+  function normalizeSides() {
+    SIDES.forEach(function (side) {
+      var d = state.data[side];
+      if (!d || !d.rosterId) {
+        state.data[side] = Object.assign({}, EMPTY_SIDE);
+      } else {
+        state.data[side] = Object.assign({}, EMPTY_SIDE, d);
+      }
+    });
+  }
+
   function syncForm() {
     var d = state.data;
     els.matchName.value = d.matchName;
@@ -799,11 +554,7 @@
     els.bo.value = d.bo;
     els.date.value = d.date;
     els.venue.value = d.venue;
-    els.leftName.value = d.left.name;
-    els.leftTag.value = d.left.tag;
     els.leftColor.value = d.left.color || "#ff2d2d";
-    els.rightName.value = d.right.name;
-    els.rightTag.value = d.right.tag;
     els.rightColor.value = d.right.color || "#1e6bff";
     els.resolution.value = state.resolution;
   }
@@ -823,12 +574,19 @@
     els.exportLabel = $("poster-export-label");
     els.obsBtn = $("poster-obs");
 
+    normalizeSides();
     renderThemeMenu();
     bindHeaderControls();
     bindFormControls();
     syncForm();
-    renderRoster();
+    refreshLists();
     render();
+
+    /* 选手库变更(个人中心改资料/管理员增删)后刷新列表与已选摘要 */
+    document.addEventListener("ts:changed", function () {
+      refreshLists();
+      render();
+    });
   }
 
   document.addEventListener("ts:ready", boot, { once: true });
