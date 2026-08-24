@@ -140,6 +140,7 @@
   /** 构建完整海报 SVG——按主题的 layout 字段分发版式 */
   function build(data, theme) {
     if (theme && theme.layout === "pixel") return buildPixel(data, theme);
+    if (theme && theme.layout === "minimal") return buildMinimal(data, theme);
     return buildRift(data, theme);
   }
 
@@ -574,6 +575,119 @@
   function pixelTextBestOf(parts, boText, x, y, px, theme) {
     parts.push('<text x="' + (x + pixelTextWidth(boText, px) / 2) + '" y="' + (y - 8) + '" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="18" letter-spacing="4" fill="#888">BEST OF</text>');
     parts.push(pixelText(boText, x, y + 8, px, theme.accent, theme.vs.stroke));
+  }
+
+  /* ==================== 极简刊头版式 ====================
+   * 杂志刊头风:超大排版为主视觉、大留白、黑白灰 + 单一强调色;
+   * 无装饰无滤镜无渐变,只靠字号层级和留白呼吸。 */
+
+  function buildMinimal(data, theme) {
+    var name = String(data.matchName || "VS 巅峰对决").trim();
+    var boText = String(data.bo || "BO3").toUpperCase();
+    var metaParts = [data.date, data.venue].filter(Boolean);
+    var meta = metaParts.join(" / ") || "";
+
+    var leftName = String(data.left.name || "").trim();
+    var rightName = String(data.right.name || "").trim();
+    var leftTitle = typeof data.left.title === "string" ? data.left.title : "";
+    var rightTitle = typeof data.right.title === "string" ? data.right.title : "";
+
+    /* 选手自定义色作为名字下划线色(极简版唯一用色的地方) */
+    var leftLine = data.left.color || theme.accent;
+    var rightLine = data.right.color || theme.accent;
+
+    var INK = "#1a1a1e";
+    var MUTED = "#8a8a96";
+
+    var parts = [];
+    parts.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="' + escapeXml(leftName + " vs " + rightName) + '">');
+
+    /* defs:头像方形裁剪(限制 image 溢出) */
+    parts.push('<defs>' +
+      '<clipPath id="clipMinL"><rect x="' + (830 - AV) + '" y="' + (520 - nameFs - 40) + '" width="' + AV + '" height="' + AV + '"/></clipPath>' +
+      '<clipPath id="clipMinR"><rect x="1090" y="' + (520 - nameFs - 40) + '" width="' + AV + '" height="' + AV + '"/></clipPath>' +
+      '</defs>');
+
+    /* 底:纯色平涂 */
+    parts.push('<rect width="1920" height="1080" fill="' + theme.bg.from + '"/>');
+
+    /* 顶部细线 + 赛事名(左对齐,杂志刊头式) */
+    parts.push('<rect x="120" y="90" width="1680" height="2" fill="' + INK + '"/>');
+    parts.push('<text x="120" y="60" font-family="Impact, Arial Black, PingFang SC, sans-serif" font-size="28" letter-spacing="14" fill="' + INK + '">' + escapeXml(name.toUpperCase()) + '</text>');
+    parts.push('<text x="1800" y="60" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="22" letter-spacing="3" fill="' + MUTED + '">' + escapeXml(boText) + '</text>');
+
+    /* 中央:两选手名超大对排 + VS 小号居中 */
+    var nameFs = Math.min(140, Math.max(48, Math.floor(700 / Math.max(1, Math.max(leftName.length, rightName.length)))));
+    /* 左名字右对齐中央偏左 */
+    parts.push('<text x="830" y="520" text-anchor="end" font-family="Impact, Arial Black, PingFang SC, Microsoft YaHei, sans-serif" font-size="' + nameFs + '" font-weight="900" fill="' + INK + '">' + escapeXml(leftName) + '</text>');
+    /* 右名字左对齐中央偏右 */
+    parts.push('<text x="1090" y="520" text-anchor="start" font-family="Impact, Arial Black, PingFang SC, Microsoft YaHei, sans-serif" font-size="' + nameFs + '" font-weight="900" fill="' + INK + '">' + escapeXml(rightName) + '</text>');
+
+    /* VS:小号大写 + 强调色,中缝 */
+    parts.push('<text x="960" y="530" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="36" font-weight="700" letter-spacing="8" fill="' + theme.accent + '">VS</text>');
+
+    /* 名字下划线:选手自定义色(或强调色),极简版的唯一彩色 */
+    var lineW = 180;
+    parts.push('<rect x="' + (830 - lineW) + '" y="560" width="' + lineW + '" height="4" fill="' + leftLine + '"/>');
+    parts.push('<rect x="1090" y="560" width="' + lineW + '" height="4" fill="' + rightLine + '"/>');
+
+    /* 头像:小方形,放名字上方 */
+    var AV = 200;
+    if (isAllowedImgURL(data.left.img)) {
+      parts.push('<image href="' + escapeXml(data.left.img) + '" x="' + (830 - AV) + '" y="' + (520 - nameFs - 40) + '" width="' + AV + '" height="' + AV + '" preserveAspectRatio="xMidYMid slice" clip-path="url(#clipMinL)"/>');
+    } else {
+      parts.push('<rect x="' + (830 - AV) + '" y="' + (520 - nameFs - 40) + '" width="' + AV + '" height="' + AV + '" fill="' + theme.bg.to + '" stroke="' + MUTED + '" stroke-width="2"/>');
+      parts.push('<text x="' + (830 - AV / 2) + '" y="' + (520 - nameFs - 40 + AV / 2 + 20) + '" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-size="' + Math.floor(AV / 3) + '" fill="' + MUTED + '">' + escapeXml((leftName[0] || "?")) + '</text>');
+    }
+    if (isAllowedImgURL(data.right.img)) {
+      parts.push('<image href="' + escapeXml(data.right.img) + '" x="1090" y="' + (520 - nameFs - 40) + '" width="' + AV + '" height="' + AV + '" preserveAspectRatio="xMidYMid slice" clip-path="url(#clipMinR)"/>');
+    } else {
+      parts.push('<rect x="1090" y="' + (520 - nameFs - 40) + '" width="' + AV + '" height="' + AV + '" fill="' + theme.bg.to + '" stroke="' + MUTED + '" stroke-width="2"/>');
+      parts.push('<text x="' + (1090 + AV / 2) + '" y="' + (520 - nameFs - 40 + AV / 2 + 20) + '" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-size="' + Math.floor(AV / 3) + '" fill="' + MUTED + '">' + escapeXml((rightName[0] || "?")) + '</text>');
+    }
+
+    /* 垃圾话:名字下方,小号灰 */
+    if (leftTitle) {
+      parts.push('<text x="830" y="620" text-anchor="end" font-family="PingFang SC, Microsoft YaHei, Noto Sans SC, sans-serif" font-size="22" fill="' + MUTED + '">' + escapeXml(leftTitle) + '</text>');
+    }
+    if (rightTitle) {
+      parts.push('<text x="1090" y="620" text-anchor="start" font-family="PingFang SC, Microsoft YaHei, Noto Sans SC, sans-serif" font-size="22" fill="' + MUTED + '">' + escapeXml(rightTitle) + '</text>');
+    }
+
+    /* 队标/ID:名字上方小号 */
+    var leftTag = String(data.left.tag || "").trim();
+    var rightTag = String(data.right.tag || "").trim();
+    if (leftTag) {
+      parts.push('<text x="830" y="' + (520 - nameFs - 60) + '" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="4" fill="' + MUTED + '">' + escapeXml(leftTag.toUpperCase()) + '</text>');
+    }
+    if (rightTag) {
+      parts.push('<text x="1090" y="' + (520 - nameFs - 60) + '" text-anchor="start" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="4" fill="' + MUTED + '">' + escapeXml(rightTag.toUpperCase()) + '</text>');
+    }
+    /* 队标图片:替代文字,名字上方居中于头像区 */
+    if (data.left.tagImg && isAllowedImgURL(data.left.tagImg)) {
+      var ltH = Math.max(20, Math.min(80, Number(data.left.tagImgSize) || 40));
+      var ltW = ltH * (Number(data.left.tagImgRatio) || 1);
+      if (ltW > 200) { ltW = 200; ltH = ltW / (Number(data.left.tagImgRatio) || 1); }
+      parts.push('<image href="' + escapeXml(data.left.tagImg) + '" x="' + (830 - AV + (AV - ltW) / 2) + '" y="' + (520 - nameFs - 40 + AV + 20) + '" width="' + ltW + '" height="' + ltH + '" preserveAspectRatio="xMidYMid meet"/>');
+    }
+    if (data.right.tagImg && isAllowedImgURL(data.right.tagImg)) {
+      var rtH = Math.max(20, Math.min(80, Number(data.right.tagImgSize) || 40));
+      var rtW = rtH * (Number(data.right.tagImgRatio) || 1);
+      if (rtW > 200) { rtW = 200; rtH = rtW / (Number(data.right.tagImgRatio) || 1); }
+      parts.push('<image href="' + escapeXml(data.right.tagImg) + '" x="' + (1090 + (AV - rtW) / 2) + '" y="' + (520 - nameFs - 40 + AV + 20) + '" width="' + rtW + '" height="' + rtH + '" preserveAspectRatio="xMidYMid meet"/>');
+    }
+
+    /* 底部:细线 + meta(左) + stage(右) */
+    parts.push('<rect x="120" y="990" width="1680" height="2" fill="' + INK + '"/>');
+    if (meta) {
+      parts.push('<text x="120" y="1030" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="2" fill="' + MUTED + '">' + escapeXml(meta) + '</text>');
+    }
+    if (data.stage) {
+      parts.push('<text x="1800" y="1030" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="4" fill="' + theme.accent + '">' + escapeXml(String(data.stage)) + '</text>');
+    }
+
+    parts.push('</svg>');
+    return parts.join("");
   }
 
   window.VSPoster = {

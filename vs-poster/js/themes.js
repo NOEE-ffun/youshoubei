@@ -109,6 +109,19 @@
       particles: ["#ffd500", "#ffffff"],
       grid: true,
       layout: "pixel"
+    },
+    /* 2026-08-24 版式维度新增:极简刊头(超大排版 + 大留白,杂志风) */
+    {
+      id: "minimal-editorial",
+      name: "极简刊头",
+      left:  { main: "#e8e8ec", glow: "#ffffff", dark: "#8a8a96" },
+      right: { main: "#e8e8ec", glow: "#ffffff", dark: "#8a8a96" },
+      accent: "#ff4400",
+      bg: { from: "#f2f0ec", to: "#e6e2da" },
+      vs: { from: "#1a1a1e", to: "#1a1a1e", stroke: "#f2f0ec", glow: "#ff4400" },
+      particles: ["#ff4400", "#1a1a1e"],
+      grid: false,
+      layout: "minimal"
     }
   ];
 

@@ -39,12 +39,12 @@ function test(name, fn) {
 }
 
 console.log("\n[themes.js] 主题数据");
-test("存在 8 个主题(3 基础 + 4 配色调研 + 1 像素版式)", () => {
-  assert.equal(S.VSThemes.length, 8);
+test("存在 9 个主题(3 基础 + 4 配色调研 + 1 像素 + 1 极简)", () => {
+  assert.equal(S.VSThemes.length, 9);
 });
 test("主题 id 覆盖预期集合", () => {
   const ids = S.VSThemes.map((t) => t.id).sort();
-  assert.equal(ids.join(","), ["aurora", "black-gold", "ice-fire", "neon", "pixel-arcade", "purple-gold", "red-blue", "toxic"].join(","));
+  assert.equal(ids.join(","), ["aurora", "black-gold", "ice-fire", "minimal-editorial", "neon", "pixel-arcade", "purple-gold", "red-blue", "toxic"].join(","));
 });
 test("id 唯一且非空", () => {
   const ids = S.VSThemes.map((t) => t.id);
@@ -66,15 +66,18 @@ test("每个主题字段完整且值合法", () => {
     }
     assert.equal(t.particles.length, 2, t.id + ".particles 长度");
     assert.equal(typeof t.grid, "boolean", t.id + ".grid");
-    assert.ok(t.layout === "rift" || t.layout === "pixel", t.id + ".layout 应为 rift/pixel");
+    assert.ok(t.layout === "rift" || t.layout === "pixel" || t.layout === "minimal", t.id + ".layout 应为 rift/pixel/minimal");
   }
 });
-test("layout 分布:7 个 rift + 1 个 pixel", () => {
+test("layout 分布:7 个 rift + 1 pixel + 1 minimal", () => {
   const rift = S.VSThemes.filter((t) => t.layout === "rift").length;
   const pixel = S.VSThemes.filter((t) => t.layout === "pixel").length;
+  const minimal = S.VSThemes.filter((t) => t.layout === "minimal").length;
   assert.equal(rift, 7);
   assert.equal(pixel, 1);
+  assert.equal(minimal, 1);
   assert.equal(S.VSThemes.byId("pixel-arcade").layout, "pixel");
+  assert.equal(S.VSThemes.byId("minimal-editorial").layout, "minimal");
 });
 test("byId 查找与回退", () => {
   assert.equal(S.VSThemes.byId("neon").id, "neon");
@@ -146,7 +149,9 @@ test("build 有头像时内嵌 data URL 图片", () => {
 test("三个主题都能构建且输出长度合理", () => {
   for (const t of S.VSThemes) {
     const svg = S.VSPoster.build(BASE_DATA, t);
-    assert.ok(svg.length > 4000, t.id + " 输出过短");
+    /* 极简版式刻意轻量,阈值按版式放宽 */
+    const minLen = t.layout === "minimal" ? 1500 : 4000;
+    assert.ok(svg.length > minLen, t.id + " 输出过短");
     assert.ok(svg.includes(t.accent), t.id + " 未使用主题点缀色");
   }
 });
@@ -282,6 +287,44 @@ console.log("\n[poster.js] 像素街机版式");
     assert.equal(typeof S.VSPoster.pixelTextWidth, "function");
     const w = S.VSPoster.pixelTextWidth("VS", 30);
     assert.equal(w, 30 * 4 * 2 - 30, "两字符宽 = 7 格");
+  });
+}
+
+console.log("\n[poster.js] 极简刊头版式");
+{
+  const MIN_THEME = S.VSThemes.byId("minimal-editorial");
+  const esc = (s) => S.VSPoster.escapeXml(s);
+  const minSvg = S.VSPoster.build(BASE_DATA, MIN_THEME);
+  test("build 极简版式:基本结构", () => {
+    assert.ok(minSvg.startsWith("<svg"), "应以 <svg 开头");
+    assert.ok(minSvg.includes('viewBox="0 0 1920 1080"'), "viewBox");
+    assert.ok(!minSvg.includes("feGaussianBlur"), "不应有高斯滤镜");
+    assert.ok(!minSvg.includes("url(#gl)"), "不应有渐变");
+    assert.ok(!minSvg.includes("crispEdges"), "不需要硬边缘(那是像素版的事)");
+  });
+  test("极简设计要素:纯色底/细线/超大名字/小 VS", () => {
+    assert.ok(minSvg.includes(MIN_THEME.bg.from), "主题底色");
+    assert.ok((minSvg.match(/height="2"/g) || []).length >= 2, "上下刊头细线");
+    assert.ok(minSvg.includes('text-anchor="end"') && minSvg.includes('text-anchor="start"'), "左右名字对排");
+    assert.ok(minSvg.includes(">VS</text>"), "小号 VS");
+    assert.ok(minSvg.includes(MIN_THEME.accent), "强调色");
+  });
+  test("选手数据:名字/队标/垃圾话/占位头像", () => {
+    const tData = JSON.parse(JSON.stringify(BASE_DATA));
+    tData.left.title = "今天你必输";
+    tData.left.tag = "DK.FIRE";
+    const tSvg = S.VSPoster.build(tData, MIN_THEME);
+    assert.ok(tSvg.includes(esc("烈焰")), "左名字");
+    assert.ok(tSvg.includes(esc("冰霜")), "右名字");
+    assert.ok(tSvg.includes(esc("今天你必输")), "垃圾话");
+    assert.ok(tSvg.includes(esc("DK.FIRE")), "队标 ID");
+    assert.ok(tSvg.includes(">烈</text>") || tSvg.includes(">?</text>"), "占位头像首字");
+  });
+  test("选手色作为下划线色", () => {
+    const tData = JSON.parse(JSON.stringify(BASE_DATA));
+    tData.left.color = "#123456";
+    const tSvg = S.VSPoster.build(tData, MIN_THEME);
+    assert.ok(tSvg.includes("#123456"), "自定义色下划线");
   });
 }
 
