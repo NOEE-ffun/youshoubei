@@ -886,6 +886,21 @@
       '      </div>' +
       '      <p class="hint" id="bg-hint">支持常见图片格式，上传后自动压缩至最长边 1600px。</p>' +
       '    </div>' +
+      '    <div class="form-field">' +
+      '      <span id="deck-window-label">卡组提交</span>' +
+      '      <div class="deck-window-controls">' +
+      '        <label for="deck-window-open">每日开放</label>' +
+      '        <input type="time" id="deck-window-open" aria-label="每日开放时间">' +
+      '        <label for="deck-window-close">至</label>' +
+      '        <input type="time" id="deck-window-close" aria-label="每日关闭时间">' +
+      '        <select id="deck-window-manual" aria-label="手动开关">' +
+      '          <option value="auto">按时段自动</option>' +
+      '          <option value="open">手动：开启</option>' +
+      '          <option value="closed">手动：关闭</option>' +
+      '        </select>' +
+      '      </div>' +
+      '      <p class="hint" id="deck-window-hint">开启期间：选手可在「我的对局」修改自己未开始场次的卡组，未开始场次的卡组对其他人隐藏；关闭即全员公示。时段留空则只看手动开关。</p>' +
+      '    </div>' +
       '    <div class="form-field" id="admin-field" hidden>' +
       '      <label for="settings-admin-token">管理口令</label>' +
       '      <div class="admin-controls">' +
@@ -933,6 +948,18 @@
       record.startTime = startTimeInput && startTimeInput.value
         ? new Date(startTimeInput.value).toISOString()
         : (record.startTime || null);
+      /* 卡组提交开关:手动优先,时段留空=不自动 */
+      const dwOpen = settingsDialog.querySelector('#deck-window-open');
+      const dwClose = settingsDialog.querySelector('#deck-window-close');
+      const dwManual = settingsDialog.querySelector('#deck-window-manual');
+      const dw = { open: '', close: '', manual: null };
+      if (dwOpen && dwClose && dwManual) {
+        dw.open = dwOpen.value || '';
+        dw.close = dwClose.value || '';
+        dw.manual = dwManual.value === 'open' ? 'open' : dwManual.value === 'closed' ? 'closed' : null;
+      }
+      if (dw.open || dw.close || dw.manual) record.deckWindow = dw;
+      else delete record.deckWindow;
       if (pendingBackground !== undefined) {
         record.background = pendingBackground;
       }
@@ -1066,6 +1093,9 @@
       settingsDialog.querySelector('#settings-rules'),
       settingsDialog.querySelector('#bg-upload'),
       settingsDialog.querySelector('#bg-remove'),
+      settingsDialog.querySelector('#deck-window-open'),
+      settingsDialog.querySelector('#deck-window-close'),
+      settingsDialog.querySelector('#deck-window-manual'),
       settingsDialog.querySelector('#settings-form').querySelector('button[type="submit"]')
     ];
 
@@ -1246,6 +1276,13 @@
     if (statusInput) statusInput.value = record.status || 'upcoming';
     if (liveUrlInput) liveUrlInput.value = record.liveUrl || '';
     if (startTimeInput) startTimeInput.value = toDateTimeLocal(record.startTime);
+    const dw = record.deckWindow || {};
+    const dwOpen = settingsDialog.querySelector('#deck-window-open');
+    const dwClose = settingsDialog.querySelector('#deck-window-close');
+    const dwManual = settingsDialog.querySelector('#deck-window-manual');
+    if (dwOpen) dwOpen.value = dw.open || '';
+    if (dwClose) dwClose.value = dw.close || '';
+    if (dwManual) dwManual.value = dw.manual === 'open' ? 'open' : dw.manual === 'closed' ? 'closed' : 'auto';
     pendingBackground = undefined;
     if (record.background) {
       preview.style.backgroundImage = cssUrl(blobUrl(record.background));
@@ -1451,7 +1488,8 @@
       { page: 'match', href: 'schedule.html', icon: 'emoji_events', label: '比赛' },
       { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' },
       { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' },
-      { page: 'stats', href: 'stats.html', icon: 'bar_chart', label: '数据统计' }
+      { page: 'stats', href: 'stats.html', icon: 'bar_chart', label: '数据统计' },
+      { page: 'my-decks', href: 'my-decks.html', icon: 'rule', label: '我的对局' }
     ];
     const isActive = (page) => {
       if (page === 'match') return active === 'schedule' || active === 'match';
@@ -1589,7 +1627,7 @@
     const header = document.getElementById('app-header');
     if (header && app.current) {
       const active = app.current;
-      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', list: '赛程列表', profile: '个人中心' };
+      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', list: '赛程列表', profile: '个人中心', 'my-decks': '我的对局' };
       const headerTitle = pageTitles[app.activePage] || active.name;
 
       const titleEl = header.querySelector('.header-title');
@@ -1637,6 +1675,12 @@
     /* 主题/管理按钮在侧栏底部,与页头是否存在无关 */
     const manageBtn = document.getElementById('manage-btn');
     if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
+
+    /* 「我的对局」导航项:仅云端+登录+已绑定选手可见(游客/管理员不显示) */
+    const myDecksNav = document.querySelector('#app-sidebar .side-link[data-page="my-decks"]');
+    if (myDecksNav) {
+      myDecksNav.hidden = !(mode === 'cloud' && sessionUser && sessionPlayer);
+    }
 
     /* 登录/账号按钮:本地模式隐藏;登录态显示头像+昵称,点击进资料页 */
     const loginBtn = document.getElementById('header-login-btn');

@@ -326,9 +326,42 @@
     return html;
   }
 
-  function classRowHtml(card, effLinks) {
-    const a = classGroupHtml(card, 'a', effLinks);
-    const b = classGroupHtml(card, 'b', effLinks);
+  /* 卡组公示锁:开关开启 + 该卡未打 + 该侧选手已定 + 观看者非该侧选手/非管理员。
+   * 数据侧服务端已剥离 own 条目,这里补占位避免"看起来没交卡"。 */
+  function deckWindowOpenClient(record) {
+    const w = record && record.deckWindow;
+    if (!w) return false;
+    if (w.manual === 'open') return true;
+    if (w.manual === 'closed') return false;
+    const parse = (v) => {
+      const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim());
+      return m && Number(m[1]) <= 23 && Number(m[2]) <= 59 ? Number(m[1]) * 60 + Number(m[2]) : null;
+    };
+    const o = parse(w.open);
+    const c = parse(w.close);
+    if (o === null || c === null || o === c) return false;
+    const cur = new Date().getHours() * 60 + new Date().getMinutes();
+    return o < c ? (cur >= o && cur < c) : (cur >= o || cur < c);
+  }
+
+  function sideDeckHidden(match, side) {
+    if (editMode) return false;
+    if (!deckWindowOpenClient(currentRecord())) return false;
+    if (match.played || !match[side]) return false;
+    const app = window.TournamentApp;
+    if (app && app.isAdmin && app.isAdmin()) return false;
+    const s = app && app.getSession ? app.getSession() : null;
+    const viewerId = (s && s.player && s.player.id) || null;
+    return match[side] !== viewerId;
+  }
+
+  const DECK_LOCK_HTML = '<span class="cl-locked" title="卡组提交中,公示后可见" aria-label="卡组待公示">🔒</span>';
+
+  function classRowHtml(card, match, effLinks) {
+    const lockA = match ? sideDeckHidden(match, 'a') : false;
+    const lockB = match ? sideDeckHidden(match, 'b') : false;
+    const a = lockA ? DECK_LOCK_HTML : classGroupHtml(card, 'a', effLinks);
+    const b = lockB ? DECK_LOCK_HTML : classGroupHtml(card, 'b', effLinks);
     if (!a && !b) return '';
     let html = a;
     if (a && b) html += '<span class="vs-sep">对</span>';
@@ -370,7 +403,7 @@
       playerRow(match, 1) +
       '<div class="score-actions">' +
       scoreBtn +
-      classRowHtml(card, effLinksMap && effLinksMap.get(card.id)) +
+      classRowHtml(card, match, effLinksMap && effLinksMap.get(card.id)) +
       '</div>' +
       '</article>'
     );

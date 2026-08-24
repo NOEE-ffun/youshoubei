@@ -40,6 +40,7 @@ const apiUpload = require('./api/upload');
 const apiHealth = require('./api/health');
 const apiPosterStage = require('./api/poster-stage');
 const apiAccount = require('./api/account');
+const apiDecks = require('./api/decks');
 const API_ROUTES = {
   '/api/data': apiData,
   '/api/upload': apiUpload,
@@ -50,7 +51,8 @@ const API_ROUTES = {
   '/api/auth/logout': apiAccount.logout,
   '/api/me': apiAccount.me,
   '/api/me/player': apiAccount.me,
-  '/api/me/password': apiAccount.mePassword
+  '/api/me/password': apiAccount.mePassword,
+  '/api/me/classlinks': apiDecks
 };
 
 /* 不对外下发的内部目录与根级文件;比对前统一转小写,顺带堵住 /API/ 这类大小写变体 */
