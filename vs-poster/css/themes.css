@@ -61,3 +61,9 @@ html[data-poster-theme="minimal-editorial"] {
   --color-accent-2: #1a1a1e;
   --color-accent-soft: rgba(255, 68, 0, 0.12);
 }
+
+html[data-poster-theme="ornate-fantasy"] {
+  --color-accent: #d4af37;
+  --color-accent-2: #5c3d8f;
+  --color-accent-soft: rgba(212, 175, 55, 0.15);
+}

@@ -39,12 +39,12 @@ function test(name, fn) {
 }
 
 console.log("\n[themes.js] 主题数据");
-test("存在 9 个主题(3 基础 + 4 配色调研 + 1 像素 + 1 极简)", () => {
-  assert.equal(S.VSThemes.length, 9);
+test("存在 10 个主题(3 基础 + 4 配色 + 1 像素 + 1 极简 + 1 魔纹)", () => {
+  assert.equal(S.VSThemes.length, 10);
 });
 test("主题 id 覆盖预期集合", () => {
   const ids = S.VSThemes.map((t) => t.id).sort();
-  assert.equal(ids.join(","), ["aurora", "black-gold", "ice-fire", "minimal-editorial", "neon", "pixel-arcade", "purple-gold", "red-blue", "toxic"].join(","));
+  assert.equal(ids.join(","), ["aurora", "black-gold", "ice-fire", "minimal-editorial", "neon", "ornate-fantasy", "pixel-arcade", "purple-gold", "red-blue", "toxic"].join(","));
 });
 test("id 唯一且非空", () => {
   const ids = S.VSThemes.map((t) => t.id);
@@ -66,18 +66,21 @@ test("每个主题字段完整且值合法", () => {
     }
     assert.equal(t.particles.length, 2, t.id + ".particles 长度");
     assert.equal(typeof t.grid, "boolean", t.id + ".grid");
-    assert.ok(t.layout === "rift" || t.layout === "pixel" || t.layout === "minimal", t.id + ".layout 应为 rift/pixel/minimal");
+    assert.ok(t.layout === "rift" || t.layout === "pixel" || t.layout === "minimal" || t.layout === "ornate", t.id + ".layout 应为 rift/pixel/minimal/ornate");
   }
 });
-test("layout 分布:7 个 rift + 1 pixel + 1 minimal", () => {
+test("layout 分布:7 rift + 1 pixel + 1 minimal + 1 ornate", () => {
   const rift = S.VSThemes.filter((t) => t.layout === "rift").length;
   const pixel = S.VSThemes.filter((t) => t.layout === "pixel").length;
   const minimal = S.VSThemes.filter((t) => t.layout === "minimal").length;
+  const ornate = S.VSThemes.filter((t) => t.layout === "ornate").length;
   assert.equal(rift, 7);
   assert.equal(pixel, 1);
   assert.equal(minimal, 1);
+  assert.equal(ornate, 1);
   assert.equal(S.VSThemes.byId("pixel-arcade").layout, "pixel");
   assert.equal(S.VSThemes.byId("minimal-editorial").layout, "minimal");
+  assert.equal(S.VSThemes.byId("ornate-fantasy").layout, "ornate");
 });
 test("byId 查找与回退", () => {
   assert.equal(S.VSThemes.byId("neon").id, "neon");
@@ -150,8 +153,7 @@ test("三个主题都能构建且输出长度合理", () => {
   for (const t of S.VSThemes) {
     const svg = S.VSPoster.build(BASE_DATA, t);
     /* 极简版式刻意轻量,阈值按版式放宽 */
-    const minLen = t.layout === "minimal" ? 1500 : 4000;
-    assert.ok(svg.length > minLen, t.id + " 输出过短");
+    const minLen = t.layout === "minimal" ? 1500 : 4000;    assert.ok(svg.length > minLen, t.id + " 输出过短");
     assert.ok(svg.includes(t.accent), t.id + " 未使用主题点缀色");
   }
 });
@@ -325,6 +327,50 @@ console.log("\n[poster.js] 极简刊头版式");
     tData.left.color = "#123456";
     const tSvg = S.VSPoster.build(tData, MIN_THEME);
     assert.ok(tSvg.includes("#123456"), "自定义色下划线");
+  });
+}
+
+console.log("\n[poster.js] 魔纹华饰版式");
+{
+  const ORN_THEME = S.VSThemes.byId("ornate-fantasy");
+  const esc = (s) => S.VSPoster.escapeXml(s);
+  const ornSvg = S.VSPoster.build(BASE_DATA, ORN_THEME);
+  test("build 魔纹版式:基本结构(法阵/渐变/滤镜)", () => {
+    assert.ok(ornSvg.startsWith("<svg"), "应以 <svg 开头");
+    assert.ok(ornSvg.includes('viewBox="0 0 1920 1080"'), "viewBox");
+    assert.ok(ornSvg.includes("or-bg"), "背景渐变");
+    assert.ok(ornSvg.includes("or-gold"), "金属渐变");
+    assert.ok(ornSvg.includes("or-glow"), "发光滤镜");
+    assert.ok(ornSvg.includes('clip-path="url(#or-clip-l)"'), "左头像裁剪");
+    assert.ok(ornSvg.includes('clip-path="url(#or-clip-r)"'), "右头像裁剪");
+  });
+  test("法阵元素:魔法阵圆环/刻度/符文/六边形", () => {
+    assert.ok(ornSvg.includes("magicCircle") === false, "magicCircle 是函数名不应出现在输出");
+    assert.ok((ornSvg.match(/<circle /g) || []).length >= 8, "至少 8 个圆(法阵双环+符文球+头像环)");
+    assert.ok(ornSvg.includes("polygon"), "内接多边形");
+    assert.ok(ornSvg.includes("stroke-dasharray"), "虚线内环");
+  });
+  test("纹章 VS:盾形徽记 + 衬线字体", () => {
+    assert.ok(ornSvg.includes(">VS</text>"), "VS 文字");
+    assert.ok(ornSvg.includes("serif"), "衬线字体");
+    assert.ok(ORN_THEME.accent && ornSvg.includes(ORN_THEME.accent), "金色点缀");
+  });
+  test("选手数据:名字/队标徽带/垃圾话/头像", () => {
+    const tData = JSON.parse(JSON.stringify(BASE_DATA));
+    tData.left.title = "今天你必输";
+    tData.left.tag = "DK.FIRE";
+    const tSvg = S.VSPoster.build(tData, ORN_THEME);
+    assert.ok(tSvg.includes(esc("烈焰")), "左名字");
+    assert.ok(tSvg.includes(esc("冰霜")), "右名字");
+    assert.ok(tSvg.includes(esc("今天你必输")), "垃圾话");
+    assert.ok(tSvg.includes(esc("DK.FIRE")), "队标");
+    assert.ok(tSvg.includes("data:image/"), "占位头像");
+  });
+  test("选手自定义色:法阵主色跟随", () => {
+    const tData = JSON.parse(JSON.stringify(BASE_DATA));
+    tData.left.color = "#123456";
+    const tSvg = S.VSPoster.build(tData, ORN_THEME);
+    assert.ok(tSvg.includes("#123456"), "自定义色");
   });
 }
 

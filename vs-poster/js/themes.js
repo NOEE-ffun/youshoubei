@@ -122,6 +122,19 @@
       particles: ["#ff4400", "#1a1a1e"],
       grid: false,
       layout: "minimal"
+    },
+    /* 2026-08-24 版式维度新增:魔纹华饰(魔法阵+纹章+奇幻金属,贴合影之诗世界观) */
+    {
+      id: "ornate-fantasy",
+      name: "魔纹华饰",
+      left:  { main: "#5c3d8f", glow: "#9b7ec8", dark: "#2a1848" },
+      right: { main: "#8f5c3d", glow: "#c89b7e", dark: "#482a18" },
+      accent: "#d4af37",
+      bg: { from: "#0d0a14", to: "#1a1226" },
+      vs: { from: "#ffe68a", to: "#b8860b", stroke: "#3a2c06", glow: "#d4af37" },
+      particles: ["#d4af37", "#9b7ec8"],
+      grid: false,
+      layout: "ornate"
     }
   ];
 

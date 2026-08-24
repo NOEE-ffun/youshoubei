@@ -141,6 +141,7 @@
   function build(data, theme) {
     if (theme && theme.layout === "pixel") return buildPixel(data, theme);
     if (theme && theme.layout === "minimal") return buildMinimal(data, theme);
+    if (theme && theme.layout === "ornate") return buildOrnate(data, theme);
     return buildRift(data, theme);
   }
 
@@ -685,6 +686,176 @@
     if (data.stage) {
       parts.push('<text x="1800" y="1030" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="4" fill="' + theme.accent + '">' + escapeXml(String(data.stage)) + '</text>');
     }
+
+    parts.push('</svg>');
+    return parts.join("");
+  }
+
+  /* ==================== 魔纹华饰版式 ====================
+   * 奇幻纹章风:魔法阵圆环 + 对称纹饰 + 金属质感渐变 + 衬线字体。
+   * 贴合影之诗世界观——法阵环绕头像,VS 像纹章徽记,暗底金属色。 */
+
+  var SERIF = '"Palatino Linotype", Palatino, "Times New Roman", Georgia, serif';
+
+  /** 魔法阵圆环:多层同心圆 + 刻度线 + 符文小球 + 内接多边形 */
+  function magicCircle(cx, cy, radius, strokeCol, accentCol) {
+    var parts = [];
+    /* 外环(双线) */
+    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + radius + '" fill="none" stroke="' + strokeCol + '" stroke-width="3"/>');
+    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + (radius - 8) + '" fill="none" stroke="' + strokeCol + '" stroke-width="1" opacity="0.6"/>');
+    /* 刻度:12 等分短线 */
+    for (var i = 0; i < 12; i++) {
+      var angle = (i / 12) * Math.PI * 2 - Math.PI / 2;
+      var x1 = cx + Math.cos(angle) * (radius - 4);
+      var y1 = cy + Math.sin(angle) * (radius - 4);
+      var x2 = cx + Math.cos(angle) * (radius + 6);
+      var y2 = cy + Math.sin(angle) * (radius + 6);
+      parts.push('<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 + '" stroke="' + accentCol + '" stroke-width="2"/>');
+    }
+    /* 符文小球:6 个,交替放在外环上 */
+    for (var j = 0; j < 6; j++) {
+      var a2 = (j / 6) * Math.PI * 2;
+      var bx = cx + Math.cos(a2) * (radius + 18);
+      var by = cy + Math.sin(a2) * (radius + 18);
+      parts.push('<circle cx="' + bx + '" cy="' + by + '" r="6" fill="' + accentCol + '" opacity="0.8"/>');
+    }
+    /* 内接六边形 */
+    var hexPts = [];
+    for (var k = 0; k < 6; k++) {
+      var a3 = (k / 6) * Math.PI * 2 - Math.PI / 2;
+      hexPts.push((cx + Math.cos(a3) * (radius * 0.72)).toFixed(1) + ',' + (cy + Math.sin(a3) * (radius * 0.72)).toFixed(1));
+    }
+    parts.push('<polygon points="' + hexPts.join(' ') + '" fill="none" stroke="' + strokeCol + '" stroke-width="1.5" opacity="0.4"/>');
+    /* 内环虚线 */
+    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + (radius * 0.85) + '" fill="none" stroke="' + accentCol + '" stroke-width="1" stroke-dasharray="4 6" opacity="0.5"/>');
+    return parts.join("");
+  }
+
+  /** 纹章装饰角:对称花纹线(简洁的卷曲线) */
+  function cornerFlourish(x, y, scale, col, flipX, flipY) {
+    var fx = flipX ? -1 : 1;
+    var fy = flipY ? -1 : 1;
+    function tx(px, py) { return (x + px * fx * scale).toFixed(1) + ',' + (y + py * fy * scale).toFixed(1); }
+    return '<path d="M ' + tx(0, 40) + ' Q ' + tx(30, 40) + ' ' + tx(40, 10) + ' Q ' + tx(45, -8) + ' ' + tx(30, -20) + ' Q ' + tx(18, -30) + ' ' + tx(8, -20) + '" fill="none" stroke="' + col + '" stroke-width="2.5" stroke-linecap="round"/>' +
+      '<circle cx="' + (x + 42 * fx * scale) + '" cy="' + (y + 14 * fy * scale) + '" r="' + (4 * scale) + '" fill="' + col + '"/>';
+  }
+
+  function buildOrnate(data, theme) {
+    var name = String(data.matchName || "VS 决斗").trim();
+    var boText = String(data.bo || "BO3").toUpperCase();
+    var metaParts = [data.date, data.venue, data.stage, data.bo].filter(Boolean);
+    var meta = metaParts.join(" · ");
+
+    var leftCol = data.left.color ? deriveColor(data.left.color) : { main: theme.left.main, glow: theme.left.glow, dark: theme.left.dark };
+    var rightCol = data.right.color ? deriveColor(data.right.color) : { main: theme.right.main, glow: theme.right.glow, dark: theme.right.dark };
+    var leftImg = isAllowedImgURL(data.left.img) ? data.left.img : placeholderAvatar(String(data.left.name || "?")[0], leftCol);
+    var rightImg = isAllowedImgURL(data.right.img) ? data.right.img : placeholderAvatar(String(data.right.name || "?")[0], rightCol);
+    var leftName = String(data.left.name || "").trim();
+    var rightName = String(data.right.name || "").trim();
+    var leftTitle = typeof data.left.title === "string" ? data.left.title : "";
+    var rightTitle = typeof data.right.title === "string" ? data.right.title : "";
+
+    var GOLD = theme.accent;
+    var parts = [];
+    parts.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="' + escapeXml(leftName + " vs " + rightName) + '">');
+
+    /* defs:金属渐变 + 暗角滤镜 */
+    parts.push('<defs>');
+    parts.push('<linearGradient id="or-bg" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="' + theme.bg.from + '"/><stop offset="1" stop-color="' + theme.bg.to + '"/></linearGradient>');
+    parts.push('<linearGradient id="or-gold" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#fff3c4"/><stop offset="0.5" stop-color="' + GOLD + '"/><stop offset="1" stop-color="#8a6e1a"/></linearGradient>');
+    parts.push('<linearGradient id="or-left" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="' + leftCol.main + '" stop-opacity="0.35"/><stop offset="1" stop-color="' + leftCol.dark + '" stop-opacity="0.1"/></linearGradient>');
+    parts.push('<linearGradient id="or-right" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="' + rightCol.main + '" stop-opacity="0.35"/><stop offset="1" stop-color="' + rightCol.dark + '" stop-opacity="0.1"/></linearGradient>');
+    parts.push('<radialGradient id="or-vig" cx="0.5" cy="0.5" r="0.7">' +
+      '<stop offset="0.6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.5"/></radialGradient>');
+    parts.push('<filter id="or-glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>');
+    parts.push('<clipPath id="or-clip-l"><circle cx="430" cy="480" r="160"/></clipPath>');
+    parts.push('<clipPath id="or-clip-r"><circle cx="1490" cy="480" r="160"/></clipPath>');
+    parts.push('</defs>');
+
+    /* 背景:暗底渐变 + 左右半场微光 + 中心装饰线 */
+    parts.push('<rect width="1920" height="1080" fill="url(#or-bg)"/>');
+    parts.push('<polygon points="0,0 960,0 960,1080 0,1080" fill="url(#or-left)"/>');
+    parts.push('<polygon points="960,0 1920,0 1920,1080 960,1080" fill="url(#or-right)"/>');
+
+    /* 中央装饰柱:竖线 + 菱形 + 上下花纹 */
+    parts.push('<line x1="960" y1="80" x2="960" y2="1000" stroke="' + GOLD + '" stroke-width="1.5" opacity="0.4"/>');
+    parts.push('<line x1="950" y1="80" x2="950" y2="1000" stroke="' + GOLD + '" stroke-width="0.8" opacity="0.2"/>');
+    parts.push('<line x1="970" y1="80" x2="970" y2="1000" stroke="' + GOLD + '" stroke-width="0.8" opacity="0.2"/>');
+
+    /* 顶部纹章:赛事名(衬线大写)+ 上方菱形 + 两侧渐变线 */
+    parts.push('<polygon points="960,40 980,60 960,80 940,60" fill="url(#or-gold)"/>');
+    parts.push('<line x1="500" y1="60" x2="930" y2="60" stroke="' + GOLD + '" stroke-width="1" opacity="0.5"/>');
+    parts.push('<line x1="990" y1="60" x2="1420" y2="60" stroke="' + GOLD + '" stroke-width="1" opacity="0.5"/>');
+    parts.push('<text x="960" y="128" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="44" font-weight="700" letter-spacing="8" fill="url(#or-gold)" filter="url(#or-glow)">' + escapeXml(name) + '</text>');
+    parts.push('<text x="960" y="164" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="20" font-style="italic" letter-spacing="4" fill="' + GOLD + '" opacity="0.7">' + escapeXml(meta) + '</text>');
+
+    /* 魔法阵:左右各一,环绕头像 */
+    parts.push(magicCircle(430, 480, 230, leftCol.main, GOLD));
+    parts.push(magicCircle(1490, 480, 230, rightCol.main, GOLD));
+
+    /* 头像:圆形裁剪,金环 */
+    parts.push('<circle cx="430" cy="480" r="164" fill="' + theme.bg.to + '" stroke="url(#or-gold)" stroke-width="5"/>');
+    parts.push('<circle cx="1490" cy="480" r="164" fill="' + theme.bg.to + '" stroke="url(#or-gold)" stroke-width="5"/>');
+    parts.push('<image href="' + escapeXml(leftImg) + '" x="270" y="320" width="320" height="320" preserveAspectRatio="xMidYMid slice" clip-path="url(#or-clip-l)"/>');
+    parts.push('<image href="' + escapeXml(rightImg) + '" x="1330" y="320" width="320" height="320" preserveAspectRatio="xMidYMid slice" clip-path="url(#or-clip-r)"/>');
+
+    /* 队标/ID:头像下方,纹章徽带 */
+    var leftTag = String(data.left.tag || "").trim();
+    var rightTag = String(data.right.tag || "").trim();
+    if (leftTag) {
+      var ltW = Math.max(120, leftTag.length * 16 + 40);
+      parts.push('<rect x="' + (430 - ltW / 2) + '" y="730" width="' + ltW + '" height="40" rx="20" fill="' + leftCol.dark + '" stroke="' + GOLD + '" stroke-width="1.5"/>');
+      parts.push('<text x="430" y="758" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="20" letter-spacing="3" fill="' + GOLD + '">' + escapeXml(leftTag) + '</text>');
+    }
+    if (rightTag) {
+      var rtW = Math.max(120, rightTag.length * 16 + 40);
+      parts.push('<rect x="' + (1490 - rtW / 2) + '" y="730" width="' + rtW + '" height="40" rx="20" fill="' + rightCol.dark + '" stroke="' + GOLD + '" stroke-width="1.5"/>');
+      parts.push('<text x="1490" y="758" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="20" letter-spacing="3" fill="' + GOLD + '">' + escapeXml(rightTag) + '</text>');
+    }
+
+    /* 选手名:衬线大字,头像/徽带下方 */
+    var nameFs = Math.min(72, Math.max(36, Math.floor(560 / Math.max(1, Math.max(leftName.length, rightName.length)))));
+    parts.push('<text x="430" y="860" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="' + nameFs + '" font-weight="700" fill="#fff" stroke="' + leftCol.dark + '" stroke-width="1" paint-order="stroke">' + escapeXml(leftName) + '</text>');
+    parts.push('<text x="1490" y="860" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="' + nameFs + '" font-weight="700" fill="#fff" stroke="' + rightCol.dark + '" stroke-width="1" paint-order="stroke">' + escapeXml(rightName) + '</text>');
+
+    /* 垃圾话:名字下方,斜体 */
+    if (leftTitle) {
+      parts.push('<text x="430" y="910" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="22" font-style="italic" fill="' + leftCol.glow + '">' + escapeXml(leftTitle) + '</text>');
+    }
+    if (rightTitle) {
+      parts.push('<text x="1490" y="910" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="22" font-style="italic" fill="' + rightCol.glow + '">' + escapeXml(rightTitle) + '</text>');
+    }
+
+    /* 中央 VS:纹章徽记(盾形+VS字) */
+    parts.push('<g filter="url(#or-glow)">');
+    /* 盾形 */
+    parts.push('<path d="M 960 400 L 1030 430 L 1030 500 Q 1030 560 960 590 Q 890 560 890 500 L 890 430 Z" fill="' + theme.bg.to + '" stroke="url(#or-gold)" stroke-width="4"/>');
+    parts.push('<path d="M 960 415 L 1018 440 L 1018 500 Q 1018 550 960 575 Q 902 550 902 500 L 902 440 Z" fill="none" stroke="' + GOLD + '" stroke-width="1" opacity="0.5"/>');
+    parts.push('<text x="960" y="520" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="64" font-weight="900" font-style="italic" fill="url(#or-gold)">VS</text>');
+    /* 盾上方十字纹 */
+    parts.push('<line x1="960" y1="375" x2="960" y2="395" stroke="' + GOLD + '" stroke-width="3"/>');
+    parts.push('<line x1="948" y1="385" x2="972" y2="385" stroke="' + GOLD + '" stroke-width="3"/>');
+    /* 盾下方装饰菱形链 */
+    parts.push('<polygon points="960,610 972,625 960,640 948,625" fill="' + GOLD + '"/>');
+    parts.push('<polygon points="960,648 968,658 960,668 952,658" fill="' + GOLD + '" opacity="0.6"/>');
+    parts.push('</g>');
+
+    /* 四角花纹装饰 */
+    parts.push(cornerFlourish(80, 80, 1.2, GOLD, false, false));
+    parts.push(cornerFlourish(1840, 80, 1.2, GOLD, true, false));
+    parts.push(cornerFlourish(80, 1000, 1.2, GOLD, false, true));
+    parts.push(cornerFlourish(1840, 1000, 1.2, GOLD, true, true));
+
+    /* 底部 BO 徽记:左右两侧 */
+    parts.push('<text x="200" y="1040" font-family=' + JSON.stringify(SERIF) + ' font-size="24" letter-spacing="3" fill="' + GOLD + '" opacity="0.7">' + escapeXml(boText) + '</text>');
+    parts.push('<text x="1720" y="1040" text-anchor="end" font-family=' + JSON.stringify(SERIF) + ' font-size="24" letter-spacing="3" fill="' + GOLD + '" opacity="0.7">' + escapeXml(boText) + '</text>');
+
+    /* 暗角 */
+    parts.push('<rect width="1920" height="1080" fill="url(#or-vig)"/>');
 
     parts.push('</svg>');
     return parts.join("");
