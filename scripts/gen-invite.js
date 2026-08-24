@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 
-/* 邀请码生成器(本地或 ECS 上运行):
- *   node scripts/gen-invite.js 8                     生成 8 个空白码
+/* 邀请码生成器(本地或 ECS 上运行,需 OSS 环境变量):
+ *   node scripts/gen-invite.js 8                     生成 8 个空白码(新选手)
  *   node scripts/gen-invite.js 3 --player 雨橘        生成 3 个绑定到「雨橘」的码
- *   node scripts/gen-invite.js 5 --push               生成后直接写入 OSS invite-codes.json(需 env)
- * 未 --push 时只打印,由管理员手工粘贴进 OSS 控制台的 invite-codes.json。
+ *   node scripts/gen-invite.js --all                  给每个未绑定的存量选手各生成 1 个绑定码(幂等,可反复跑)
+ *   --push:生成后直接写入 OSS invite-codes.json;不加则只打印。
  * 绑定码为老选手过渡方案,三期将整体删除。 */
 
 const crypto = require('node:crypto');
@@ -37,18 +37,31 @@ async function resolvePlayerId(nameOrId) {
 }
 
 async function main() {
-  let player = null;
-  if (playerArg) {
-    player = await resolvePlayerId(playerArg);
-  }
+  const oss = require('../api/oss');
+  let entries = [];
 
-  const entries = [];
-  for (let i = 0; i < count; i++) {
-    entries.push({ code: newCode(), playerId: player ? player.id : null, note: player ? '绑定:' + player.name : '', used: false });
+  if (args.includes('--all')) {
+    /* 给每个还没被账号绑定、且还没有未用绑定码的选手各生成一个绑定码(可重复执行) */
+    const workspace = await oss.readJson('data.json');
+    const players = ((workspace && workspace.players) || []).filter((p) => p && p.id);
+    const users = (await oss.readJson('users.json')) || [];
+    const boundIds = new Set(users.filter((u) => u && u.playerId).map((u) => u.playerId));
+    const codes = (await oss.readJson('invite-codes.json')) || [];
+    const hasOpenCode = new Set(codes.filter((c) => c && !c.used && c.playerId).map((c) => c.playerId));
+    const pending = players.filter((p) => !boundIds.has(p.id) && !hasOpenCode.has(p.id));
+    entries = pending.map((p) => ({ code: newCode(), playerId: p.id, note: '绑定:' + p.name, used: false, playerName: p.name }));
+    console.log('选手总数 ' + players.length + ',已绑定 ' + boundIds.size + ',待发码 ' + entries.length + ':');
+  } else {
+    let player = null;
+    if (playerArg) {
+      player = await resolvePlayerId(playerArg);
+    }
+    for (let i = 0; i < count; i++) {
+      entries.push({ code: newCode(), playerId: player ? player.id : null, note: player ? '绑定:' + player.name : '', used: false, playerName: player ? player.name : '' });
+    }
   }
 
   if (push) {
-    const oss = require('../api/oss');
     const codes = (await oss.readJson('invite-codes.json')) || [];
     const existing = new Set(codes.map((c) => c && c.code));
     let n = 0;
@@ -62,7 +75,7 @@ async function main() {
   console.table ? console.table(entries) : console.log(JSON.stringify(entries, null, 2));
   if (!push) {
     console.log('提示:加 --push 直接写入 OSS;或把上表粘进 OSS 的 invite-codes.json 数组。');
-    console.log('绑定码使用者登录后即继承选手「' + (player ? player.name : '-') + '」的全部数据。');
+    console.log('绑定码使用者登录后即继承选手的全部数据。');
   }
 }
 
