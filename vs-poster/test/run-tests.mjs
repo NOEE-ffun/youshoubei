@@ -39,12 +39,12 @@ function test(name, fn) {
 }
 
 console.log("\n[themes.js] 主题数据");
-test("存在 10 个主题(3 基础 + 4 配色 + 1 像素 + 1 极简 + 1 魔纹)", () => {
-  assert.equal(S.VSThemes.length, 10);
+test("存在 11 个主题(3 基础 + 4 配色 + 1 像素 + 1 极简 + 1 魔纹 + 1 赛博)", () => {
+  assert.equal(S.VSThemes.length, 11);
 });
 test("主题 id 覆盖预期集合", () => {
   const ids = S.VSThemes.map((t) => t.id).sort();
-  assert.equal(ids.join(","), ["aurora", "black-gold", "ice-fire", "minimal-editorial", "neon", "ornate-fantasy", "pixel-arcade", "purple-gold", "red-blue", "toxic"].join(","));
+  assert.equal(ids.join(","), ["aurora", "black-gold", "cyber-neon", "ice-fire", "minimal-editorial", "neon", "ornate-fantasy", "pixel-arcade", "purple-gold", "red-blue", "toxic"].join(","));
 });
 test("id 唯一且非空", () => {
   const ids = S.VSThemes.map((t) => t.id);
@@ -66,21 +66,24 @@ test("每个主题字段完整且值合法", () => {
     }
     assert.equal(t.particles.length, 2, t.id + ".particles 长度");
     assert.equal(typeof t.grid, "boolean", t.id + ".grid");
-    assert.ok(t.layout === "rift" || t.layout === "pixel" || t.layout === "minimal" || t.layout === "ornate", t.id + ".layout 应为 rift/pixel/minimal/ornate");
+    assert.ok(t.layout === "rift" || t.layout === "pixel" || t.layout === "minimal" || t.layout === "ornate" || t.layout === "cyber", t.id + ".layout 应为 rift/pixel/minimal/ornate/cyber");
   }
 });
-test("layout 分布:7 rift + 1 pixel + 1 minimal + 1 ornate", () => {
+test("layout 分布:7 rift + 1 pixel + 1 minimal + 1 ornate + 1 cyber", () => {
   const rift = S.VSThemes.filter((t) => t.layout === "rift").length;
   const pixel = S.VSThemes.filter((t) => t.layout === "pixel").length;
   const minimal = S.VSThemes.filter((t) => t.layout === "minimal").length;
   const ornate = S.VSThemes.filter((t) => t.layout === "ornate").length;
+  const cyber = S.VSThemes.filter((t) => t.layout === "cyber").length;
   assert.equal(rift, 7);
   assert.equal(pixel, 1);
   assert.equal(minimal, 1);
   assert.equal(ornate, 1);
+  assert.equal(cyber, 1);
   assert.equal(S.VSThemes.byId("pixel-arcade").layout, "pixel");
   assert.equal(S.VSThemes.byId("minimal-editorial").layout, "minimal");
   assert.equal(S.VSThemes.byId("ornate-fantasy").layout, "ornate");
+  assert.equal(S.VSThemes.byId("cyber-neon").layout, "cyber");
 });
 test("byId 查找与回退", () => {
   assert.equal(S.VSThemes.byId("neon").id, "neon");
@@ -371,6 +374,60 @@ console.log("\n[poster.js] 魔纹华饰版式");
     tData.left.color = "#123456";
     const tSvg = S.VSPoster.build(tData, ORN_THEME);
     assert.ok(tSvg.includes("#123456"), "自定义色");
+  });
+}
+
+console.log("\n[poster.js] 赛博霓虹版式");
+{
+  const CY_THEME = S.VSThemes.byId("cyber-neon");
+  const esc = (s) => S.VSPoster.escapeXml(s);
+  const cySvg = S.VSPoster.build(BASE_DATA, CY_THEME);
+  test("build 赛博版式:基本结构(渐变/霓虹滤镜/扫描线)", () => {
+    assert.ok(cySvg.startsWith("<svg"), "应以 <svg 开头");
+    assert.ok(cySvg.includes('viewBox="0 0 1920 1080"'), "viewBox");
+    assert.ok(cySvg.includes("cy-bg"), "背景渐变");
+    assert.ok(cySvg.includes("cy-neon"), "霓虹发光滤镜");
+    assert.ok(cySvg.includes("cy-scan"), "扫描线 pattern");
+    assert.ok(cySvg.includes("cy-horizon"), "地平线辉光渐变");
+  });
+  test("透视网格地面:地平线 + 放射线 + 透视横线", () => {
+    assert.ok((cySvg.match(/<line /g) || []).length >= 25, "放射线(21)+ 横线(6)+ 装饰线");
+    assert.ok(cySvg.includes('y1="650"'), "地平线 y=650 放射线起点");
+    assert.ok(cySvg.includes('y2="1080"'), "放射线延伸到底边");
+    assert.ok(cySvg.includes('stroke-width="1" opacity="0.25"') || cySvg.includes('opacity="0.25"'), "放射线组透明度");
+  });
+  test("故障感 VS:双色偏移层 + 白色主层 + 霓虹滤镜", () => {
+    const vsTexts = cySvg.match(/font-size="180"[^>]*>VS</g) || [];
+    assert.equal(vsTexts.length, 3, "VS 三层(青偏移/品红偏移/白主层)");
+    assert.ok(cySvg.includes('filter="url(#cy-neon)">VS</text>'), "主层带霓虹滤镜");
+    assert.ok(cySvg.includes("Impact"), "Impact 字体");
+  });
+  test("方形头像:左右各自裁剪区 + L 型角饰", () => {
+    assert.ok(cySvg.includes('clip-path="url(#cy-clip-l)"'), "左头像裁剪");
+    assert.ok(cySvg.includes('clip-path="url(#cy-clip-r)"'), "右头像裁剪");
+    assert.ok(cySvg.includes('stroke-linecap="square"'), "L 型角饰");
+    assert.ok(cySvg.includes('preserveAspectRatio="xMidYMid slice"'), "头像填满裁剪");
+  });
+  test("选手数据:名字/队标/垃圾话/占位头像", () => {
+    const tData = JSON.parse(JSON.stringify(BASE_DATA));
+    tData.left.title = "今天你必输";
+    tData.left.tag = "DK.FIRE";
+    const tSvg = S.VSPoster.build(tData, CY_THEME);
+    assert.ok(tSvg.includes(esc("烈焰")), "左名字");
+    assert.ok(tSvg.includes(esc("冰霜")), "右名字");
+    assert.ok(tSvg.includes(esc("今天你必输")), "垃圾话");
+    assert.ok(tSvg.includes(esc("DK.FIRE")), "队标");
+    assert.ok(tSvg.includes("data:image/"), "占位头像");
+  });
+  test("选手自定义色:霓虹框主色跟随", () => {
+    const tData = JSON.parse(JSON.stringify(BASE_DATA));
+    tData.left.color = "#123456";
+    const tSvg = S.VSPoster.build(tData, CY_THEME);
+    assert.ok(tSvg.includes("#123456"), "自定义色");
+  });
+  test("底部数据流:黑色底条 + 二进制装饰", () => {
+    assert.ok(cySvg.includes('y="1020" width="1920" height="60" fill="#000"'), "数据流底条");
+    assert.ok(/fill="#[0-9a-f]{6}" opacity="0\.3">[01]{40}</.test(cySvg), "二进制串");
   });
 }
 

@@ -142,6 +142,7 @@
     if (theme && theme.layout === "pixel") return buildPixel(data, theme);
     if (theme && theme.layout === "minimal") return buildMinimal(data, theme);
     if (theme && theme.layout === "ornate") return buildOrnate(data, theme);
+    if (theme && theme.layout === "cyber") return buildCyber(data, theme);
     return buildRift(data, theme);
   }
 
@@ -856,6 +857,176 @@
 
     /* 暗角 */
     parts.push('<rect width="1920" height="1080" fill="url(#or-vig)"/>');
+
+    parts.push('</svg>');
+    return parts.join("");
+  }
+
+  /* ==================== 赛博霓虹版式 ====================
+   * 赛博朋克风:透视网格地面 + 霓虹描边 + 扫描线 + 故障色偏移。
+   * OBS 直播时视觉效果最强——高对比荧光色对 + 动感透视线。 */
+
+  var CYBER_MONO = '"Courier New", Courier, ui-monospace, Menlo, monospace';
+
+  function buildCyber(data, theme) {
+    var name = String(data.matchName || "NEON DUEL").trim();
+    var boText = String(data.bo || "BO3").toUpperCase();
+    var metaParts = [data.date, data.venue].filter(Boolean);
+    var meta = metaParts.join(" / ") || "";
+
+    var leftCol = data.left.color ? deriveColor(data.left.color) : { main: theme.left.main, glow: theme.left.glow, dark: theme.left.dark };
+    var rightCol = data.right.color ? deriveColor(data.right.color) : { main: theme.right.main, glow: theme.right.glow, dark: theme.right.dark };
+    var leftImg = isAllowedImgURL(data.left.img) ? data.left.img : placeholderAvatar(String(data.left.name || "?")[0], leftCol);
+    var rightImg = isAllowedImgURL(data.right.img) ? data.right.img : placeholderAvatar(String(data.right.name || "?")[0], rightCol);
+    var leftName = String(data.left.name || "").trim();
+    var rightName = String(data.right.name || "").trim();
+    var leftTitle = typeof data.left.title === "string" ? data.left.title : "";
+    var rightTitle = typeof data.right.title === "string" ? data.right.title : "";
+    var leftTag = String(data.left.tag || "").trim();
+    var rightTag = String(data.right.tag || "").trim();
+
+    var NEON = theme.accent;
+    var parts = [];
+    parts.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="' + escapeXml(leftName + " vs " + rightName) + '">');
+
+    /* defs:渐变 + 滤镜 + 图案 */
+    parts.push('<defs>');
+    parts.push('<linearGradient id="cy-bg" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="' + theme.bg.from + '"/><stop offset="1" stop-color="' + theme.bg.to + '"/></linearGradient>');
+    /* 地平线辉光 */
+    parts.push('<linearGradient id="cy-horizon" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="' + NEON + '" stop-opacity="0.3"/><stop offset="1" stop-color="' + NEON + '" stop-opacity="0"/></linearGradient>');
+    /* 扫描线 pattern */
+    parts.push('<pattern id="cy-scan" width="6" height="6" patternUnits="userSpaceOnUse">' +
+      '<rect width="6" height="3" fill="#000" opacity="0.15"/><rect y="3" width="6" height="3" fill="none"/></pattern>');
+    /* 霓虹发光滤镜 */
+    parts.push('<filter id="cy-neon" x="-20%" y="-20%" width="140%" height="140%">' +
+      '<feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>');
+    parts.push('<filter id="cy-neon-thin" x="-20%" y="-20%" width="140%" height="140%">' +
+      '<feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>');
+    parts.push('<clipPath id="cy-clip-l"><rect x="240" y="220" width="380" height="380"/></clipPath>');
+    parts.push('<clipPath id="cy-clip-r"><rect x="1300" y="220" width="380" height="380"/></clipPath>');
+    parts.push('</defs>');
+
+    /* 背景 */
+    parts.push('<rect width="1920" height="1080" fill="url(#cy-bg)"/>');
+
+    /* 顶部氛围:渐变光晕(左紫右青) */
+    parts.push('<ellipse cx="480" cy="100" rx="600" ry="250" fill="' + leftCol.main + '" opacity="0.08"/>');
+    parts.push('<ellipse cx="1440" cy="100" rx="600" ry="250" fill="' + rightCol.main + '" opacity="0.08"/>');
+
+    /* ===== 透视网格地面(下半,地平线在 y=650) ===== */
+    var HORIZON = 650;
+    /* 地平线光带 */
+    parts.push('<rect x="0" y="' + (HORIZON - 3) + '" width="1920" height="6" fill="' + NEON + '" opacity="0.6" filter="url(#cy-neon-thin)"/>');
+    parts.push('<rect x="0" y="' + HORIZON + '" width="1920" height="' + (1080 - HORIZON) + '" fill="url(#cy-horizon)"/>');
+    /* 透视放射线(从消失点 960,HORIZON 向下发散) */
+    parts.push('<g stroke="' + NEON + '" stroke-width="1" opacity="0.25">');
+    for (var rx = -10; rx <= 10; rx++) {
+      var bottomX = 960 + rx * 200;
+      parts.push('<line x1="960" y1="' + HORIZON + '" x2="' + bottomX + '" y2="1080"/>');
+    }
+    parts.push('</g>');
+    /* 横向网格线(透视间距:越来越密靠近地平线) */
+    parts.push('<g stroke="' + NEON + '" stroke-width="1" opacity="0.2">');
+    var gridYs = [680, 720, 775, 845, 930, 1030];
+    for (var gi = 0; gi < gridYs.length; gi++) {
+      parts.push('<line x1="0" y1="' + gridYs[gi] + '" x2="1920" y2="' + gridYs[gi] + '"/>');
+    }
+    parts.push('</g>');
+
+    /* ===== 顶部 HUD:赛事名 + BO ===== */
+    parts.push('<text x="960" y="70" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="32" font-weight="700" letter-spacing="12" fill="' + NEON + '" filter="url(#cy-neon)">' + escapeXml(name.toUpperCase()) + '</text>');
+    /* 装饰:两侧短横线 */
+    parts.push('<line x1="600" y1="60" x2="750" y2="60" stroke="' + NEON + '" stroke-width="2" opacity="0.5"/>');
+    parts.push('<line x1="1170" y1="60" x2="1320" y2="60" stroke="' + NEON + '" stroke-width="2" opacity="0.5"/>');
+    /* BO 标签(故障双色偏移) */
+    var boLabel = boText;
+    parts.push('<text x="956" y="110" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="24" letter-spacing="6" fill="' + leftCol.main + '" opacity="0.7">' + escapeXml(boLabel) + '</text>');
+    parts.push('<text x="964" y="110" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="24" letter-spacing="6" fill="' + rightCol.main + '" opacity="0.7">' + escapeXml(boLabel) + '</text>');
+    parts.push('<text x="960" y="110" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="24" font-weight="700" letter-spacing="6" fill="#fff">' + escapeXml(boLabel) + '</text>');
+    if (meta) {
+      parts.push('<text x="960" y="142" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="16" letter-spacing="3" fill="#888">' + escapeXml(meta) + '</text>');
+    }
+
+    /* ===== 选手区:方形霓虹框头像 ===== */
+    function cyberSide(cx, col, img, playerName, title, tag, clipId) {
+      var sp = [];
+      var AV = 380;
+      var ax = cx - AV / 2, ay = 220;
+
+      /* 霓虹方框:双线(外粗内细)+ 四角L型加粗 */
+      sp.push('<rect x="' + (ax - 12) + '" y="' + (ay - 12) + '" width="' + (AV + 24) + '" height="' + (AV + 24) + '" fill="none" stroke="' + col.main + '" stroke-width="4" filter="url(#cy-neon)"/>');
+      sp.push('<rect x="' + (ax - 4) + '" y="' + (ay - 4) + '" width="' + (AV + 8) + '" height="' + (AV + 8) + '" fill="none" stroke="' + col.glow + '" stroke-width="1" opacity="0.6"/>');
+      /* 四角 L 型 */
+      var L = 36, T = 6;
+      sp.push('<path d="M ' + ax + ' ' + (ay + L) + ' L ' + ax + ' ' + ay + ' L ' + (ax + L) + ' ' + ay + '" fill="none" stroke="' + NEON + '" stroke-width="' + T + '" stroke-linecap="square" filter="url(#cy-neon-thin)"/>');
+      sp.push('<path d="M ' + (ax + AV - L) + ' ' + ay + ' L ' + (ax + AV) + ' ' + ay + ' L ' + (ax + AV) + ' ' + (ay + L) + '" fill="none" stroke="' + NEON + '" stroke-width="' + T + '" stroke-linecap="square" filter="url(#cy-neon-thin)"/>');
+      sp.push('<path d="M ' + (ax + AV) + ' ' + (ay + AV - L) + ' L ' + (ax + AV) + ' ' + (ay + AV) + ' L ' + (ax + AV - L) + ' ' + (ay + AV) + '" fill="none" stroke="' + NEON + '" stroke-width="' + T + '" stroke-linecap="square" filter="url(#cy-neon-thin)"/>');
+      sp.push('<path d="M ' + (ax + L) + ' ' + (ay + AV) + ' L ' + ax + ' ' + (ay + AV) + ' L ' + ax + ' ' + (ay + AV - L) + '" fill="none" stroke="' + NEON + '" stroke-width="' + T + '" stroke-linecap="square" filter="url(#cy-neon-thin)"/>');
+
+      /* 头像 */
+      sp.push('<rect x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" fill="' + theme.bg.to + '"/>');
+      sp.push('<image href="' + escapeXml(img) + '" x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + clipId + ')" style="image-rendering:auto"/>');
+
+      /* 队标/ID */
+      if (tag) {
+        var tagW = Math.max(100, tag.length * 14 + 24);
+        sp.push('<rect x="' + (cx - tagW / 2) + '" y="' + (ay + AV + 24) + '" width="' + tagW + '" height="32" fill="' + col.dark + '" stroke="' + col.main + '" stroke-width="1.5"/>');
+        sp.push('<text x="' + cx + '" y="' + (ay + AV + 46) + '" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="18" letter-spacing="2" fill="' + NEON + '">' + escapeXml(tag.toUpperCase()) + '</text>');
+      }
+
+      /* 选手名:超大等宽 + 故障色偏移 */
+      var nfs = Math.min(80, Math.max(36, Math.floor(600 / Math.max(1, playerName.length))));
+      var nameY = ay + AV + 130;
+      sp.push('<text x="' + (cx - 3) + '" y="' + nameY + '" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="' + nfs + '" font-weight="700" letter-spacing="4" fill="' + col.main + '" opacity="0.5">' + escapeXml(playerName) + '</text>');
+      sp.push('<text x="' + (cx + 3) + '" y="' + nameY + '" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="' + nfs + '" font-weight="700" letter-spacing="4" fill="' + rightCol.main + '" opacity="0.5">' + escapeXml(playerName) + '</text>');
+      sp.push('<text x="' + cx + '" y="' + nameY + '" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="' + nfs + '" font-weight="700" letter-spacing="4" fill="#fff" filter="url(#cy-neon-thin)">' + escapeXml(playerName) + '</text>');
+
+      /* 垃圾话 */
+      if (title) {
+        sp.push('<text x="' + cx + '" y="' + (nameY + 42) + '" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="22" letter-spacing="2" fill="' + col.glow + '" opacity="0.8">' + escapeXml(title) + '</text>');
+      }
+      return sp.join("");
+    }
+    parts.push(cyberSide(430, leftCol, leftImg, leftName, leftTitle, leftTag, "cy-clip-l"));
+    parts.push(cyberSide(1490, rightCol, rightImg, rightName, rightTitle, rightTag, "cy-clip-r"));
+
+    /* ===== 中央 VS:大字霓虹 + 故障偏移 ===== */
+    var vsX = 960, vsY = 470;
+    /* 底层偏移(青) */
+    parts.push('<text x="' + (vsX - 6) + '" y="' + vsY + '" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-size="180" font-weight="900" font-style="italic" fill="' + leftCol.main + '" opacity="0.4">' + "VS" + '</text>');
+    /* 底层偏移(品红) */
+    parts.push('<text x="' + (vsX + 6) + '" y="' + (vsY + 4) + '" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-size="180" font-weight="900" font-style="italic" fill="' + rightCol.main + '" opacity="0.4">' + "VS" + '</text>');
+    /* 主层(白+霓虹滤镜) */
+    parts.push('<text x="' + vsX + '" y="' + vsY + '" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-size="180" font-weight="900" font-style="italic" fill="#fff" filter="url(#cy-neon)">VS</text>');
+    /* 上下装饰线 */
+    parts.push('<line x1="' + (vsX - 100) + '" y1="' + (vsY - 130) + '" x2="' + (vsX + 100) + '" y2="' + (vsY - 130) + '" stroke="' + NEON + '" stroke-width="2" filter="url(#cy-neon-thin)"/>');
+    parts.push('<line x1="' + (vsX - 60) + '" y1="' + (vsY + 60) + '" x2="' + (vsX + 60) + '" y2="' + (vsY + 60) + '" stroke="' + NEON + '" stroke-width="2" filter="url(#cy-neon-thin)"/>');
+
+    /* ===== 侧边装饰竖线(霓虹边框) ===== */
+    parts.push('<line x1="30" y1="180" x2="30" y2="900" stroke="' + leftCol.main + '" stroke-width="3" filter="url(#cy-neon)" opacity="0.6"/>');
+    parts.push('<line x1="1890" y1="180" x2="1890" y2="900" stroke="' + rightCol.main + '" stroke-width="3" filter="url(#cy-neon)" opacity="0.6"/>');
+    /* 边线上的节点 */
+    for (var ni = 0; ni < 5; ni++) {
+      var ny = 200 + ni * 180;
+      parts.push('<rect x="24" y="' + (ny - 6) + '" width="12" height="12" fill="' + leftCol.main + '" transform="rotate(45 30 ' + ny + ')"/>');
+      parts.push('<rect x="1884" y="' + (ny - 6) + '" width="12" height="12" fill="' + rightCol.main + '" transform="rotate(45 1890 ' + ny + ')"/>');
+    }
+
+    /* ===== 底部 HUD:数据流条 ===== */
+    parts.push('<rect x="0" y="1020" width="1920" height="60" fill="#000" opacity="0.7"/>');
+    parts.push('<line x1="0" y1="1020" x2="1920" y2="1020" stroke="' + NEON + '" stroke-width="1" opacity="0.5"/>');
+    /* 二进制装饰 */
+    var binStr = "";
+    for (var bi = 0; bi < 40; bi++) binStr += (bi % 3 === 0 ? "1" : "0");
+    parts.push('<text x="60" y="1058" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="18" letter-spacing="4" fill="' + leftCol.main + '" opacity="0.3">' + binStr + '</text>');
+    parts.push('<text x="1860" y="1058" text-anchor="end" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="18" letter-spacing="4" fill="' + rightCol.main + '" opacity="0.3">' + binStr + '</text>');
+    /* 中央 LOGO 文字 */
+    parts.push('<text x="960" y="1058" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="20" font-weight="700" letter-spacing="8" fill="' + NEON + '" filter="url(#cy-neon-thin)">' + escapeXml(name.toUpperCase().slice(0, 12)) + '</text>');
+
+    /* 扫描线覆盖 */
+    parts.push('<rect width="1920" height="1080" fill="url(#cy-scan)"/>');
 
     parts.push('</svg>');
     return parts.join("");

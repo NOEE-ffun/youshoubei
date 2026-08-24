@@ -67,3 +67,9 @@ html[data-poster-theme="ornate-fantasy"] {
   --color-accent-2: #5c3d8f;
   --color-accent-soft: rgba(212, 175, 55, 0.15);
 }
+
+html[data-poster-theme="cyber-neon"] {
+  --color-accent: #b7ff00;
+  --color-accent-2: #ff00e5;
+  --color-accent-soft: rgba(183, 255, 0, 0.12);
+}

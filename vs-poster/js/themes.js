@@ -135,6 +135,19 @@
       particles: ["#d4af37", "#9b7ec8"],
       grid: false,
       layout: "ornate"
+    },
+    /* 2026-08-24 版式维度新增:赛博霓虹(透视网格地面+扫描线+故障感,OBS 效果最炸) */
+    {
+      id: "cyber-neon",
+      name: "赛博霓虹",
+      left:  { main: "#ff00e5", glow: "#ff7af0", dark: "#3d0038" },
+      right: { main: "#00e5ff", glow: "#7af7ff", dark: "#00303d" },
+      accent: "#b7ff00",
+      bg: { from: "#050014", to: "#0d0524" },
+      vs: { from: "#d6f7ff", to: "#ff00e5", stroke: "#1a0033", glow: "#7af7ff" },
+      particles: ["#ff00e5", "#00e5ff"],
+      grid: true,
+      layout: "cyber"
     }
   ];
 
