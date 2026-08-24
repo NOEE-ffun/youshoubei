@@ -36,7 +36,7 @@ test('统计页:多选范围与选手职业视图', async ({ page }) => {
   await page.waitForSelector('#card-edit-dialog', { state: 'hidden' });
   await card0.locator('.score-open').click();
   await page.waitForSelector('#score-dialog');
-  await page.locator('[data-score-preset]').first().click();
+  await page.locator('[data-score-preset]').nth(1).click(); // 2:1
   await page.locator('[data-score-save]').click();
   await page.waitForSelector('#score-dialog', { state: 'hidden' });
   await page.waitForTimeout(500);
@@ -49,6 +49,10 @@ test('统计页:多选范围与选手职业视图', async ({ page }) => {
   await expect(rows).toHaveCount(2);
   await expect(rows.first()).toContainText('选手 1');
   await expect(rows.first().locator('td').nth(1)).toHaveText('1');
+
+  // 小局归属:胜者 2-1、败者 1-2(胜者丢的局与败者赢的局都要入账)
+  await expect(rows.first().locator('td').nth(4)).toHaveText('2-1');
+  await expect(rows.nth(1).locator('td').nth(4)).toHaveText('1-2');
 
   // 取消全选 → 空态;恢复 → 行回来
   await page.locator('#stats-check-all').uncheck();

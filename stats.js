@@ -43,11 +43,12 @@
         if (m.played && m.winner && m.loser) {
           ensure(m.winner).wins += 1;
           ensure(m.loser).losses += 1;
-          /* 小局归属:winnerSide 0 = A 位胜 */
-          const winnerGames = m.winnerSide === 0 ? m.scoreA : m.scoreB;
-          const loserGames = m.winnerSide === 0 ? m.scoreB : m.scoreA;
-          if (Number.isFinite(Number(winnerGames))) ensure(m.winner).gameWins += Math.max(0, Number(winnerGames));
-          if (Number.isFinite(Number(loserGames))) ensure(m.loser).gameLosses += Math.max(0, Number(loserGames));
+          /* 小局按选手位归属:A 位记 scoreA 胜 scoreB 负,B 位反之。
+           * 胜者丢的局和败者赢的局都要入账;弃权比分可能为负值,钳到 0 */
+          const gamesA = Math.max(0, Number(m.scoreA) || 0);
+          const gamesB = Math.max(0, Number(m.scoreB) || 0);
+          if (m.a) { const gs = ensure(m.a); gs.gameWins += gamesA; gs.gameLosses += gamesB; }
+          if (m.b) { const gb2 = ensure(m.b); gb2.gameWins += gamesB; gb2.gameLosses += gamesA; }
         }
 
         /* 职业登场:该场该选手位的有效卡组(自己填的或连线继承)计一次 */
