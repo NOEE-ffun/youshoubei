@@ -1911,6 +1911,7 @@
       storageGetAll,
       storagePutPlayers,
       storageDeletePlayer,
+      isAdmin,
       setAdminToken,
       setActiveId,
       uploadImage: uploadCloudImage,
