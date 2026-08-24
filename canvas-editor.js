@@ -161,11 +161,33 @@
   /* ---------- 缩放 ---------- */
 
   /* 相机落点(轻量):平移/缩放高频调用,只写样式不读布局 */
+  let hqTimer = null;
+  let rasterScale = 1;
+
+  /* 缩放落定后按当前比例重新光栅化。will-change 合成层的纹理分辨率固定在
+   * 上次绘制时的缩放比,之后仅改 transform 会一直放大/缩小旧纹理——
+   * 在小比例时重绘过一次,放大后卡片就永久模糊。这里在缩放停止 ~200ms 后
+   * 把层降级一帧再提升,强制浏览器以新 scale 重画内容,任何缩放下都最精细 */
+  function scheduleHqRaster() {
+    if (hqTimer) clearTimeout(hqTimer);
+    hqTimer = setTimeout(function () {
+      hqTimer = null;
+      const b = board();
+      if (!b) return;
+      rasterScale = scale;
+      b.style.willChange = 'auto';
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { b.style.willChange = 'transform'; });
+      });
+    }, 200);
+  }
+
   function applyCamera() {
     const b = board();
     if (!b) return;
     b.style.transformOrigin = '0 0';
     b.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
+    if (Math.abs(scale - rasterScale) > 0.001) scheduleHqRaster();
     /* 右下角常驻缩放控件的百分比读数（仅赛程页存在该元素） */
     const label = document.getElementById('zoom-level');
     if (label) label.textContent = Math.round(scale * 100) + '%';
