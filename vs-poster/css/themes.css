@@ -49,3 +49,9 @@ html[data-poster-theme="aurora"] {
   --color-accent-2: #7c4dff;
   --color-accent-soft: rgba(0, 255, 200, 0.15);
 }
+
+html[data-poster-theme="pixel-arcade"] {
+  --color-accent: #ffd500;
+  --color-accent-2: #00b7ff;
+  --color-accent-soft: rgba(255, 213, 0, 0.15);
+}

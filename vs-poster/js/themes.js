@@ -21,7 +21,8 @@
       bg: { from: "#0b0b16", to: "#191428" },
       vs: { from: "#ffe27a", to: "#ff9d00", stroke: "#6b2400", glow: "#ffd23d" },
       particles: ["#ff6b4a", "#4db4ff"],
-      grid: false
+      grid: false,
+      layout: "rift"
     },
     {
       id: "black-gold",
@@ -32,7 +33,8 @@
       bg: { from: "#070707", to: "#1c1c1c" },
       vs: { from: "#fff3c4", to: "#b8860b", stroke: "#3a2c06", glow: "#ffe68a" },
       particles: ["#ffe68a", "#8f8f8f"],
-      grid: false
+      grid: false,
+      layout: "rift"
     },
     {
       id: "neon",
@@ -43,7 +45,8 @@
       bg: { from: "#0a0418", to: "#170b33" },
       vs: { from: "#d6f7ff", to: "#5c6bff", stroke: "#14143d", glow: "#7af7ff" },
       particles: ["#ff7af0", "#7af7ff"],
-      grid: true
+      grid: true,
+      layout: "rift"
     },
     /* 2026-08-12 配色调研新增:互补色对 + 80/20 主导,暗底高饱和 */
     {
@@ -55,7 +58,8 @@
       bg: { from: "#070d13", to: "#101c26" },
       vs: { from: "#fff0d6", to: "#ff7a1f", stroke: "#7a2400", glow: "#ff9d5c" },
       particles: ["#ff9d5c", "#6ee7ff"],
-      grid: false
+      grid: false,
+      layout: "rift"
     },
     {
       id: "purple-gold",
@@ -66,7 +70,8 @@
       bg: { from: "#0d0818", to: "#1c1030" },
       vs: { from: "#fff3d6", to: "#d4a017", stroke: "#6e4a00", glow: "#ffd23d" },
       particles: ["#c084fc", "#ffd23d"],
-      grid: false
+      grid: false,
+      layout: "rift"
     },
     {
       id: "toxic",
@@ -77,7 +82,8 @@
       bg: { from: "#060d08", to: "#0f1a10" },
       vs: { from: "#eaffd6", to: "#a6ff00", stroke: "#2b4a00", glow: "#b7ff00" },
       particles: ["#69f0ae", "#ff6b81"],
-      grid: false
+      grid: false,
+      layout: "rift"
     },
     {
       id: "aurora",
@@ -88,7 +94,21 @@
       bg: { from: "#061018", to: "#0e1c2e" },
       vs: { from: "#e8f6ff", to: "#7c4dff", stroke: "#1c0f4a", glow: "#b39dff" },
       particles: ["#7dffea", "#b39dff"],
-      grid: true
+      grid: true,
+      layout: "rift"
+    },
+    /* 2026-08-24 版式维度新增:像素街机(街机色板 + 阶梯分隔/像素 VS/HUD 排版) */
+    {
+      id: "pixel-arcade",
+      name: "像素街机",
+      left:  { main: "#ff004d", glow: "#ff5c8a", dark: "#5c001c" },
+      right: { main: "#00b7ff", glow: "#5cd4ff", dark: "#003c5c" },
+      accent: "#ffd500",
+      bg: { from: "#0a0a12", to: "#14142a" },
+      vs: { from: "#ffd500", to: "#ffa000", stroke: "#3c2e00", glow: "#ffd500" },
+      particles: ["#ffd500", "#ffffff"],
+      grid: true,
+      layout: "pixel"
     }
   ];
 

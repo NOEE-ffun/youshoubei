@@ -39,12 +39,12 @@ function test(name, fn) {
 }
 
 console.log("\n[themes.js] 主题数据");
-test("存在 7 个主题(3 基础 + 4 配色调研新增)", () => {
-  assert.equal(S.VSThemes.length, 7);
+test("存在 8 个主题(3 基础 + 4 配色调研 + 1 像素版式)", () => {
+  assert.equal(S.VSThemes.length, 8);
 });
 test("主题 id 覆盖预期集合", () => {
   const ids = S.VSThemes.map((t) => t.id).sort();
-  assert.equal(ids.join(","), ["aurora", "black-gold", "ice-fire", "neon", "purple-gold", "red-blue", "toxic"].join(","));
+  assert.equal(ids.join(","), ["aurora", "black-gold", "ice-fire", "neon", "pixel-arcade", "purple-gold", "red-blue", "toxic"].join(","));
 });
 test("id 唯一且非空", () => {
   const ids = S.VSThemes.map((t) => t.id);
@@ -66,7 +66,15 @@ test("每个主题字段完整且值合法", () => {
     }
     assert.equal(t.particles.length, 2, t.id + ".particles 长度");
     assert.equal(typeof t.grid, "boolean", t.id + ".grid");
+    assert.ok(t.layout === "rift" || t.layout === "pixel", t.id + ".layout 应为 rift/pixel");
   }
+});
+test("layout 分布:7 个 rift + 1 个 pixel", () => {
+  const rift = S.VSThemes.filter((t) => t.layout === "rift").length;
+  const pixel = S.VSThemes.filter((t) => t.layout === "pixel").length;
+  assert.equal(rift, 7);
+  assert.equal(pixel, 1);
+  assert.equal(S.VSThemes.byId("pixel-arcade").layout, "pixel");
 });
 test("byId 查找与回退", () => {
   assert.equal(S.VSThemes.byId("neon").id, "neon");
@@ -234,6 +242,48 @@ test("title 空/缺失不渲染", () => {
   const svg = S.VSPoster.build(t, THEME);
   assert.ok(!svg.includes('y="876"'), "空 title 不额外输出文字节点");
 });
+
+console.log("\n[poster.js] 像素街机版式");
+{
+  const PIX_THEME = S.VSThemes.byId("pixel-arcade");
+  const esc = (s) => S.VSPoster.escapeXml(s);
+  const pixSvg = S.VSPoster.build(BASE_DATA, PIX_THEME);
+  test("build 像素版式:基本结构(crispEdges/阶梯/扫描线)", () => {
+    assert.ok(pixSvg.startsWith("<svg"), "应以 <svg 开头");
+    assert.ok(pixSvg.includes('viewBox="0 0 1920 1080"'), "viewBox");
+    assert.ok(pixSvg.includes('shape-rendering="crispEdges"'), "硬边缘");
+    assert.ok(pixSvg.includes("px-grid"), "像素网格 pattern");
+    assert.ok(pixSvg.includes("px-scan"), "扫描线 pattern");
+    assert.ok(!pixSvg.includes("feGaussianBlur"), "像素版式不应有高斯滤镜");
+    assert.ok(!pixSvg.includes("url(#gl)"), "不应有半场径向渐变");
+  });
+  test("像素 VS:rect 网格拼字 + 金色", () => {
+    assert.ok(pixSvg.includes(PIX_THEME.vs.from), "VS 用主题金色");
+    assert.ok((pixSvg.match(/<rect /g) || []).length > 100, "像素版式由大量 rect 构成");
+  });
+  test("HUD:PLAYER 标签 + BEST OF + READY? FIGHT!", () => {
+    assert.ok(pixSvg.includes("PLAYER 1"), "左标签");
+    assert.ok(pixSvg.includes("PLAYER 2"), "右标签");
+    assert.ok(pixSvg.includes("BEST OF"), "BO 标签");
+    assert.ok(pixSvg.includes("READY?"), "街机台词条");
+  });
+  test("选手数据渲染(名字/垃圾话/头像)", () => {
+    const tData = JSON.parse(JSON.stringify(BASE_DATA));
+    tData.left.title = "今天你必输";
+    const tSvg = S.VSPoster.build(tData, PIX_THEME);
+    assert.ok(tSvg.includes(esc(BASE_DATA.left.name)), "左名字");
+    assert.ok(tSvg.includes(esc(BASE_DATA.right.name)), "右名字");
+    assert.ok(tSvg.includes(esc("今天你必输")), "左垃圾话");
+    assert.ok(tSvg.includes('image-rendering:pixelated'), "头像 pixelated");
+    assert.ok(tSvg.includes("data:image/"), "占位头像");
+  });
+  test("pixelText/pixelTextWidth 导出可用", () => {
+    assert.equal(typeof S.VSPoster.pixelText, "function");
+    assert.equal(typeof S.VSPoster.pixelTextWidth, "function");
+    const w = S.VSPoster.pixelTextWidth("VS", 30);
+    assert.equal(w, 30 * 4 * 2 - 30, "两字符宽 = 7 格");
+  });
+}
 
 console.log("\n[upload.js] URL 白名单");
 test("允许 http/https/data", () => {

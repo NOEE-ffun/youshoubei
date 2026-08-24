@@ -137,8 +137,14 @@
 
   /* ---------- 海报主体 ---------- */
 
-  /** 构建完整海报 SVG。data: { matchName, stage, bo, date, venue, left:{name,tag,img,tagImg,tagImgRatio,tagImgSize}, right:{...同} } */
+  /** 构建完整海报 SVG——按主题的 layout 字段分发版式 */
   function build(data, theme) {
+    if (theme && theme.layout === "pixel") return buildPixel(data, theme);
+    return buildRift(data, theme);
+  }
+
+  /** 构建完整海报 SVG(撕裂分屏版式)。data: { matchName, stage, bo, date, venue, left:{name,tag,img,tagImg,tagImgRatio,tagImgSize}, right:{...同} } */
+  function buildRift(data, theme) {
 
     var name = String(data.matchName || "VS 巅峰对决").trim();
     var metaParts = [data.date, data.venue, data.stage, data.bo].filter(Boolean);
@@ -348,10 +354,234 @@
     return parts.join("");
   }
 
+  /* ==================== 像素街机版式 ====================
+   * 纯平面、硬边缘(shape-rendering="crispEdges"),无渐变无滤镜——
+   * 结构感来自阶梯分隔/像素字/街机 HUD,对抗撕裂版的辉光+毛玻璃。 */
+
+  var MONO = '"Courier New", Courier, ui-monospace, Menlo, monospace';
+
+  /* 3×5 像素字模(大写字母/数字/符号),用于手工拼字 */
+  var PIXEL_FONT = {
+    V: ["101","101","101","101","010"],
+    S: ["111","100","111","001","111"],
+    "1": ["010","110","010","010","111"],
+    "2": ["111","001","111","100","111"],
+    "3": ["111","001","111","001","111"],
+    "4": ["101","101","111","001","001"],
+    "5": ["111","100","111","001","111"],
+    "6": ["111","100","111","101","111"],
+    "7": ["111","001","001","001","001"],
+    "8": ["111","101","111","101","111"],
+    "9": ["111","101","111","001","111"],
+    "0": ["111","101","101","101","111"]
+  };
+
+  /** 用像素字模拼字符串(仅支持字模表内字符,其他跳过)。
+   * 返回 rect 网格;spacingPx 为字符间距(pixelSize 的倍数) */
+  function pixelText(str, x, y, pixelSize, fill, shadowFill) {
+    var parts = [];
+    var cursorX = x;
+    var chars = String(str || "").toUpperCase().split("");
+    for (var ci = 0; ci < chars.length; ci++) {
+      var glyph = PIXEL_FONT[chars[ci]];
+      if (!glyph) { cursorX += pixelSize * 4; continue; }
+      for (var row = 0; row < glyph.length; row++) {
+        for (var col = 0; col < glyph[row].length; col++) {
+          if (glyph[row][col] !== "1") continue;
+          var rx = cursorX + col * pixelSize;
+          var ry = y + row * pixelSize;
+          if (shadowFill) {
+            parts.push('<rect x="' + (rx + pixelSize) + '" y="' + (ry + pixelSize) + '" width="' + pixelSize + '" height="' + pixelSize + '" fill="' + shadowFill + '"/>');
+          }
+          parts.push('<rect x="' + rx + '" y="' + ry + '" width="' + pixelSize + '" height="' + pixelSize + '" fill="' + fill + '"/>');
+        }
+      }
+      cursorX += pixelSize * 4; /* 3 列字模 + 1 列间隔 */
+    }
+    return parts.join("");
+  }
+
+  /** 像素字串宽度(用于居中) */
+  function pixelTextWidth(str, pixelSize) {
+    var chars = String(str || "").toUpperCase().split("");
+    var n = 0;
+    for (var i = 0; i < chars.length; i++) {
+      if (PIXEL_FONT[chars[i]]) n++;
+    }
+    return n * pixelSize * 4 - pixelSize;
+  }
+
+  /** 像素星(十字):5×5 方块十字 */
+  function pixelStar(x, y, size, fill) {
+    return '<rect x="' + (x + size) + '" y="' + y + '" width="' + size + '" height="' + size * 3 + '" fill="' + fill + '"/>' +
+      '<rect x="' + x + '" y="' + (y + size) + '" width="' + size * 3 + '" height="' + size + '" fill="' + fill + '"/>';
+  }
+
+  /** 像素心(街机生命):7×6 网格 */
+  function pixelHeart(x, y, s, fill) {
+    var g = ["01010","11111","11111","01110","00100"];
+    var parts = [];
+    for (var r = 0; r < g.length; r++) {
+      for (var c = 0; c < g[r].length; c++) {
+        if (g[r][c] === "1") {
+          parts.push('<rect x="' + (x + c * s) + '" y="' + (y + r * s) + '" width="' + s + '" height="' + s + '" fill="' + fill + '"/>');
+        }
+      }
+    }
+    return parts.join("");
+  }
+
+  function buildPixel(data, theme) {
+    var name = String(data.matchName || "VS 巅峰对决").trim();
+    var metaParts = [data.date, data.venue, data.stage, data.bo].filter(Boolean);
+    var meta = metaParts.join(" · ") || "VS";
+    var boText = String(data.bo || "BO3").toUpperCase().replace(/BO(\d+)/, "$1");
+
+    var leftCol = data.left.color ? deriveColor(data.left.color) : { main: theme.left.main, glow: theme.left.glow, dark: theme.left.dark };
+    var rightCol = data.right.color ? deriveColor(data.right.color) : { main: theme.right.main, glow: theme.right.glow, dark: theme.right.dark };
+    var leftImg = isAllowedImgURL(data.left.img) ? data.left.img : placeholderAvatar(String(data.left.name || "?")[0], leftCol);
+    var rightImg = isAllowedImgURL(data.right.img) ? data.right.img : placeholderAvatar(String(data.right.name || "?")[0], rightCol);
+    var leftName = String(data.left.name || "").trim();
+    var rightName = String(data.right.name || "").trim();
+    var leftTitle = typeof data.left.title === "string" ? data.left.title : "";
+    var rightTitle = typeof data.right.title === "string" ? data.right.title : "";
+
+    var parts = [];
+    parts.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="' + escapeXml(leftName + " vs " + rightName) + '">');
+
+    /* defs:像素网格 pattern + 扫描线 */
+    parts.push('<defs>');
+    parts.push('<pattern id="px-grid" width="32" height="32" patternUnits="userSpaceOnUse">' +
+      '<rect width="32" height="32" fill="none"/><rect x="0" y="0" width="1" height="1" fill="' + theme.accent + '" opacity="0.06"/></pattern>');
+    parts.push('<pattern id="px-scan" width="4" height="4" patternUnits="userSpaceOnUse">' +
+      '<rect width="4" height="2" fill="#000" opacity="0.12"/><rect y="2" width="4" height="2" fill="none"/></pattern>');
+    parts.push('</defs>');
+
+    /* 背景:平涂暗色 + 像素网格 + 上下色带 */
+    parts.push('<g shape-rendering="crispEdges">');
+    parts.push('<rect width="1920" height="1080" fill="' + theme.bg.from + '"/>');
+    parts.push('<rect width="1920" height="1080" fill="url(#px-grid)"/>');
+    parts.push('<rect x="0" y="0" width="1920" height="8" fill="' + leftCol.main + '"/>');
+    parts.push('<rect x="0" y="1072" width="1920" height="8" fill="' + rightCol.main + '"/>');
+    parts.push('<rect x="0" y="8" width="1920" height="4" fill="' + leftCol.dark + '"/>');
+    parts.push('<rect x="0" y="1068" width="1920" height="4" fill="' + rightCol.dark + '"/>');
+
+    /* 中央阶梯分隔:方块台阶交替左右色 */
+    var stepW = 48;
+    for (var sy = 120; sy < 960; sy += stepW) {
+      var stepIdx = Math.floor((sy - 120) / stepW);
+      var isLeft = stepIdx % 2 === 0;
+      var color = isLeft ? leftCol.main : rightCol.main;
+      var offset = isLeft ? 0 : stepW;
+      parts.push('<rect x="' + (912 + offset) + '" y="' + sy + '" width="' + stepW + '" height="' + stepW + '" fill="' + color + '"/>');
+      parts.push('<rect x="' + (912 + offset) + '" y="' + sy + '" width="' + stepW + '" height="' + (stepW / 8) + '" fill="' + (isLeft ? leftCol.glow : rightCol.glow) + '" opacity="0.6"/>');
+    }
+
+    /* 顶部 HUD:比赛名 + BO 像素字 */
+    parts.push('<rect x="660" y="28" width="600" height="60" fill="#000" opacity="0.6"/>');
+    parts.push('<rect x="660" y="28" width="600" height="4" fill="' + theme.accent + '"/>');
+    parts.push('<rect x="660" y="84" width="600" height="4" fill="' + theme.accent + '"/>');
+    parts.push('<text x="960" y="70" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="34" font-weight="700" letter-spacing="4" fill="#fff">' + escapeXml(name) + '</text>');
+
+    /* BO 像素数字(中央,BEST OF N) */
+    var boPx = 12;
+    var boW = pixelTextWidth(boText, boPx);
+    pixelTextBestOf(parts, boText, 960 - boW / 2, 130, boPx, theme);
+
+    /* 像素 VS(中央大字,5×5 字模 × 30px) */
+    var vsPx = 30;
+    var vsW = pixelTextWidth("VS", vsPx);
+    var vsX = 960 - vsW / 2;
+    var vsY = 440;
+    parts.push('<rect x="' + (vsX - 30) + '" y="' + (vsY - 20) + '" width="' + (vsW + 60) + '" height="' + (vsPx * 5 + 40) + '" fill="#000"/>');
+    parts.push('<rect x="' + (vsX - 30) + '" y="' + (vsY - 20) + '" width="' + (vsW + 60) + '" height="8" fill="' + theme.accent + '"/>');
+    parts.push('<rect x="' + (vsX - 30) + '" y="' + (vsY + vsPx * 5 + 12) + '" width="' + (vsW + 60) + '" height="8" fill="' + theme.accent + '"/>');
+    parts.push(pixelText("VS", vsX, vsY, vsPx, theme.vs.from, theme.vs.stroke));
+
+    /* 左右选手区 */
+    function pixelSide(side, cx, col, img, playerName, title, tag, tagImg) {
+      var sp = [];
+      var AV = 320; /* 头像显示边长 */
+
+      /* PLAYER 标签 */
+      var label = side === "left" ? "PLAYER 1" : "PLAYER 2";
+      sp.push('<rect x="' + (cx - 120) + '" y="140" width="240" height="44" fill="' + col.main + '"/>');
+      sp.push('<rect x="' + (cx - 120) + '" y="176" width="240" height="8" fill="' + col.dark + '"/>');
+      sp.push('<text x="' + cx + '" y="172" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="26" font-weight="700" letter-spacing="6" fill="#fff">' + label + '</text>');
+
+      /* 方形头像 + 像素角饰 */
+      var ax = cx - AV / 2, ay = 230;
+      sp.push('<rect x="' + (ax - 16) + '" y="' + (ay - 16) + '" width="' + (AV + 32) + '" height="' + (AV + 32) + '" fill="' + col.dark + '"/>');
+      sp.push('<rect x="' + (ax - 8) + '" y="' + (ay - 8) + '" width="' + (AV + 16) + '" height="' + (AV + 16) + '" fill="' + col.main + '"/>');
+      sp.push('<rect x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" fill="' + theme.bg.to + '"/>');
+      sp.push('<image href="' + escapeXml(img) + '" x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" preserveAspectRatio="xMidYMid slice" style="image-rendering:pixelated"/>');
+      /* 四角像素块 */
+      var corner = 24;
+      sp.push('<rect x="' + (ax - 16) + '" y="' + (ay - 16) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
+      sp.push('<rect x="' + (ax + AV + 16 - corner) + '" y="' + (ay - 16) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
+      sp.push('<rect x="' + (ax - 16) + '" y="' + (ay + AV + 16 - corner) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
+      sp.push('<rect x="' + (ax + AV + 16 - corner) + '" y="' + (ay + AV + 16 - corner) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
+
+      /* 队标或像素徽章 */
+      if (tagImg && isAllowedImgURL(tagImg)) {
+        var tagH = Math.max(24, Math.min(120, Number(data[side].tagImgSize) || 56));
+        var tagW = tagH * (Number(data[side].tagImgRatio) || 1);
+        if (tagW > 300) { tagW = 300; tagH = tagW / (Number(data[side].tagImgRatio) || 1); }
+        sp.push('<rect x="' + (cx - tagW / 2 - 12) + '" y="' + (ay + AV + 40 - tagH / 2) + '" width="' + (tagW + 24) + '" height="' + (tagH + 16) + '" fill="#000" opacity="0.7"/>');
+        sp.push('<image href="' + escapeXml(tagImg) + '" x="' + (cx - tagW / 2) + '" y="' + (ay + AV + 48 - tagH / 2) + '" width="' + tagW + '" height="' + tagH + '" preserveAspectRatio="xMidYMid meet" style="image-rendering:pixelated"/>');
+      }
+
+      /* 大名字(等宽大写) */
+      var displayName = playerName || "";
+      var fs = Math.min(72, Math.max(36, Math.floor(620 / Math.max(1, displayName.length))));
+      sp.push('<text x="' + cx + '" y="' + (ay + AV + 130) + '" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="' + fs + '" font-weight="700" letter-spacing="6" fill="#fff">' + escapeXml(displayName) + '</text>');
+
+      /* 垃圾话 */
+      if (title) {
+        sp.push('<text x="' + cx + '" y="' + (ay + AV + 180) + '" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="24" letter-spacing="2" fill="' + col.glow + '">' + escapeXml(title) + '</text>');
+      }
+      return sp.join("");
+    }
+    parts.push(pixelSide("left", 430, leftCol, leftImg, leftName, leftTitle, data.left.tag, data.left.tagImg));
+    parts.push(pixelSide("right", 1490, rightCol, rightImg, rightName, rightTitle, data.right.tag, data.right.tagImg));
+
+    /* 像素装饰:星 + 心 */
+    parts.push(pixelStar(140, 200, 16, theme.accent));
+    parts.push(pixelStar(1780, 240, 12, theme.particles[0]));
+    parts.push(pixelStar(120, 880, 20, theme.particles[1]));
+    parts.push(pixelStar(1800, 860, 14, theme.accent));
+    parts.push(pixelHeart(180, 940, 14, leftCol.main));
+    parts.push(pixelHeart(1720, 940, 14, rightCol.main));
+
+    /* 底部 HUD:街机台词条 */
+    parts.push('<rect x="0" y="1000" width="1920" height="80" fill="#000"/>');
+    parts.push('<rect x="0" y="1000" width="1920" height="4" fill="' + theme.accent + '"/>');
+    parts.push('<rect x="40" y="1020" width="8" height="40" fill="' + theme.accent + '"/>');
+    parts.push('<rect x="56" y="1020" width="8" height="40" fill="' + theme.accent + '" opacity="0.6"/>');
+    parts.push('<text x="90" y="1050" font-family=' + JSON.stringify(MONO) + ' font-size="24" letter-spacing="2" fill="#ccc">' + escapeXml(meta) + '</text>');
+    /* READY? FIGHT! 双色 */
+    parts.push('<text x="1880" y="1050" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="24" font-weight="700" letter-spacing="4" fill="' + theme.accent + '">READY? </text>');
+    parts.push('<text x="1880" y="1050" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="24" font-weight="700" letter-spacing="4" fill="' + leftCol.main + '" dx="110">FIGHT!</text>');
+
+    /* CRT 扫描线覆盖 */
+    parts.push('<rect width="1920" height="1080" fill="url(#px-scan)"/>');
+    parts.push('</g>');
+    parts.push('</svg>');
+    return parts.join("");
+  }
+
+  /** BO 像素字 + "BEST OF" 标签 */
+  function pixelTextBestOf(parts, boText, x, y, px, theme) {
+    parts.push('<text x="' + (x + pixelTextWidth(boText, px) / 2) + '" y="' + (y - 8) + '" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="18" letter-spacing="4" fill="#888">BEST OF</text>');
+    parts.push(pixelText(boText, x, y + 8, px, theme.accent, theme.vs.stroke));
+  }
+
   window.VSPoster = {
     escapeXml: escapeXml,
     deriveColor: deriveColor,
     placeholderAvatar: placeholderAvatar,
-    build: build
+    build: build,
+    pixelText: pixelText,
+    pixelTextWidth: pixelTextWidth
   };
 })();
