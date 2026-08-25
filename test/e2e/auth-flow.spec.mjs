@@ -66,3 +66,28 @@ test('登录 API:错密码 401、正确登录 200', async ({ request }) => {
   const body = await ok.json();
   expect(body.user.username).toBe('e2e-login-user');
 });
+
+test('越权回归:选手会话携带正确管理口令也被拒绝(2026-08-25 紧急加固)', async ({ request }) => {
+  // 1. 仅口令无会话 → 门禁通过(老管理通道保持可用;E2E 无 OSS,写入报 500 属预期)
+  const tokenOnly = await request.put(BASE + '/api/data', {
+    headers: { Authorization: 'Bearer e2e-admin-token' },
+    data: { tournaments: [], activeId: null }
+  });
+  expect(tokenOnly.status()).not.toBe(403);
+  expect(tokenOnly.status()).not.toBe(401);
+
+  // 2. 注册选手(该 request 上下文此后携带其会话 cookie)
+  const reg = await request.post(BASE + '/api/auth/register', {
+    data: { code: 'e2e-dev-3', username: 'e2e-priv-test', password: '12345678' }
+  });
+  expect(reg.status()).toBe(200);
+
+  // 3. 选手 cookie + 正确 Bearer 口令 → 403(身份按选手算,口令失效)
+  const denied = await request.put(BASE + '/api/data', {
+    headers: { Authorization: 'Bearer e2e-admin-token' },
+    data: { tournaments: [] }
+  });
+  expect(denied.status()).toBe(403);
+  const deniedBody = await denied.json();
+  expect(deniedBody.error).toContain('选手账号无管理权限');
+});

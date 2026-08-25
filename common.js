@@ -481,6 +481,8 @@
   }
 
   function isAdmin() {
+    /* 登录身份优先:选手会话绝不因浏览器残留管理口令获得权限 */
+    if (sessionUser && sessionUser.role === 'player') return false;
     return Boolean(appInstance && appInstance.adminToken);
   }
 
@@ -1828,6 +1830,13 @@
     } catch (error) {
       sessionUser = null;
       sessionPlayer = null;
+    }
+    /* 选手登录时,浏览器残留的管理口令立即作废并清除
+     * (2026-08-25 紧急加固:防止同浏览器先解锁管理再登录选手导致越权) */
+    if (sessionUser && sessionUser.role === 'player' && appInstance && appInstance.adminToken) {
+      setAdminToken('');
+      syncSettingsAdminState();
+      notify('已登录选手账号,管理口令已自动停用');
     }
     syncHeaderState();
     return getSession();

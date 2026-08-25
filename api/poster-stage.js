@@ -101,7 +101,7 @@ function createHandler(storage, options) {
     }
 
     if (req.method === 'POST') {
-      if (!adminGate(req, res)) return;
+      if (!(await adminGate(req, res))) return;
 
       const body = await readBody(req, MAX_BODY);
       if (body === null) {
