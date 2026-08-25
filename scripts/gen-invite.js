@@ -2,9 +2,10 @@
 'use strict';
 
 /* 邀请码生成器(本地或 ECS 上运行,需 OSS 环境变量):
+ *   node scripts/gen-invite.js --list                查看所有码的绑定/使用状态 + 未认领选手
  *   node scripts/gen-invite.js 8                     生成 8 个空白码(新选手)
  *   node scripts/gen-invite.js 3 --player 雨橘        生成 3 个绑定到「雨橘」的码
- *   node scripts/gen-invite.js --all                  给每个未绑定的存量选手各生成 1 个绑定码(幂等,可反复跑)
+ *   node scripts/gen-invite.js --all                 给每个未绑定的存量选手各生成 1 个绑定码(幂等,可反复跑)
  *   --push:生成后直接写入 OSS invite-codes.json;不加则只打印。
  * 绑定码为老选手过渡方案,三期将整体删除。 */
 
@@ -39,6 +40,30 @@ async function resolvePlayerId(nameOrId) {
 
 async function main() {
   const oss = require('../api/oss');
+
+  /* --list:只读查看——码状态、绑定归属、未认领选手 */
+  if (args.includes('--list')) {
+    const [codes, workspace, users] = await Promise.all([
+      oss.readJson('invite-codes.json'),
+      oss.readJson('data.json'),
+      oss.readJson('users.json')
+    ]);
+    const pmap = new Map((((workspace && workspace.players) || []).filter((p) => p && p.id)).map((p) => [p.id, p.name]));
+    const boundIds = new Set((((users || []).filter((u) => u && u.playerId))).map((u) => u.playerId));
+    const list = (codes || []).filter(Boolean);
+    const unused = list.filter((c) => !c.used).length;
+    console.log('邀请码共 ' + list.length + ' 个,未用 ' + unused + ' 个:');
+    console.table(list.map((c) => ({
+      code: c.code,
+      选手: c.playerId ? (pmap.get(c.playerId) || c.playerId + '(已删)') : '(空白码)',
+      状态: c.used ? '已用 → ' + (c.usedBy || '?') : '未用',
+      使用时间: c.usedAt || ''
+    })));
+    const unclaimed = [...pmap.entries()].filter(([id]) => !boundIds.has(id));
+    console.log('未被账号认领的老选手(' + unclaimed.length + '):' + (unclaimed.map(([, n]) => n).join('、') || '无'));
+    return;
+  }
+
   let entries = [];
 
   if (args.includes('--all')) {
