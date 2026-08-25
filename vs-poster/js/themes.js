@@ -149,6 +149,19 @@
       grid: true,
       layout: "cyber"
     },
+      /* 2026-08-26 版式维度新增:动效作品集(个人作品展示页 hero 风:玻璃拟态+轨道环+粒子拖尾) */
+      {
+        id: "motion-showcase",
+        name: "动效作品集",
+        left:  { main: "#5b8cff", glow: "#a9c7ff", dark: "#14265c" },
+        right: { main: "#ff5ca8", glow: "#ffb1d6", dark: "#5c1033" },
+        accent: "#7dffd4",
+        bg: { from: "#05070f", to: "#0c1220" },
+        vs: { from: "#f4f8ff", to: "#7dffd4", stroke: "#141b33", glow: "#5b8cff" },
+        particles: ["#5b8cff", "#ff5ca8"],
+        grid: true,
+        layout: "motion"
+      },
     /* 2026-08-25 版式维度新增:聚光擂台(顶部追光锥+六边形封环+六边形 VS 徽记) */
     {
       id: "halo-duel",

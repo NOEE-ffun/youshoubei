@@ -39,12 +39,12 @@ function test(name, fn) {
 }
 
 console.log("\n[themes.js] 主题数据");
-test("存在 12 个主题(3 基础 + 4 配色 + 1 像素 + 1 极简 + 1 魔纹 + 1 赛博 + 1 聚光)", () => {
-  assert.equal(S.VSThemes.length, 12);
+test("存在 13 个主题(3 基础 + 4 配色 + 1 像素 + 1 极简 + 1 魔纹 + 1 赛博 + 1 聚光 + 1 动效作品集)", () => {
+  assert.equal(S.VSThemes.length, 13);
 });
 test("主题 id 覆盖预期集合", () => {
   const ids = S.VSThemes.map((t) => t.id).sort();
-  assert.equal(ids.join(","), ["aurora", "black-gold", "cyber-neon", "halo-duel", "ice-fire", "minimal-editorial", "neon", "ornate-fantasy", "pixel-arcade", "purple-gold", "red-blue", "toxic"].join(","));
+  assert.equal(ids.join(","), ["aurora", "black-gold", "cyber-neon", "halo-duel", "ice-fire", "minimal-editorial", "motion-showcase", "neon", "ornate-fantasy", "pixel-arcade", "purple-gold", "red-blue", "toxic"].join(","));
 });
 test("id 唯一且非空", () => {
   const ids = S.VSThemes.map((t) => t.id);
@@ -66,27 +66,30 @@ test("每个主题字段完整且值合法", () => {
     }
     assert.equal(t.particles.length, 2, t.id + ".particles 长度");
     assert.equal(typeof t.grid, "boolean", t.id + ".grid");
-    assert.ok(t.layout === "rift" || t.layout === "pixel" || t.layout === "minimal" || t.layout === "ornate" || t.layout === "cyber" || t.layout === "halo", t.id + ".layout 应为 rift/pixel/minimal/ornate/cyber/halo");
+    assert.ok(t.layout === "rift" || t.layout === "pixel" || t.layout === "minimal" || t.layout === "ornate" || t.layout === "cyber" || t.layout === "halo" || t.layout === "motion", t.id + ".layout 应为 rift/pixel/minimal/ornate/cyber/halo/motion");
   }
 });
-test("layout 分布:7 rift + 1 pixel + 1 minimal + 1 ornate + 1 cyber + 1 halo", () => {
+test("layout 分布:7 rift + 1 pixel + 1 minimal + 1 ornate + 1 cyber + 1 halo + 1 motion", () => {
   const rift = S.VSThemes.filter((t) => t.layout === "rift").length;
   const pixel = S.VSThemes.filter((t) => t.layout === "pixel").length;
   const minimal = S.VSThemes.filter((t) => t.layout === "minimal").length;
   const ornate = S.VSThemes.filter((t) => t.layout === "ornate").length;
   const cyber = S.VSThemes.filter((t) => t.layout === "cyber").length;
   const halo = S.VSThemes.filter((t) => t.layout === "halo").length;
+    const motion = S.VSThemes.filter((t) => t.layout === "motion").length;
   assert.equal(rift, 7);
   assert.equal(pixel, 1);
   assert.equal(minimal, 1);
   assert.equal(ornate, 1);
   assert.equal(cyber, 1);
   assert.equal(halo, 1);
+    assert.equal(motion, 1);
   assert.equal(S.VSThemes.byId("pixel-arcade").layout, "pixel");
   assert.equal(S.VSThemes.byId("minimal-editorial").layout, "minimal");
   assert.equal(S.VSThemes.byId("ornate-fantasy").layout, "ornate");
   assert.equal(S.VSThemes.byId("cyber-neon").layout, "cyber");
   assert.equal(S.VSThemes.byId("halo-duel").layout, "halo");
+    assert.equal(S.VSThemes.byId("motion-showcase").layout, "motion");
 });
 test("byId 查找与回退", () => {
   assert.equal(S.VSThemes.byId("neon").id, "neon");
@@ -509,6 +512,95 @@ console.log("\n[poster.js] 聚光擂台版式");
     assert.ok(svg2.startsWith("<svg") && svg2.includes('aria-label="烈焰 vs 冰霜"'), "缺元信息仍可构建");
   });
 }
+
+console.log("\n[poster.js] 动效作品集版式");
+{
+  const MO_THEME = S.VSThemes.byId("motion-showcase");
+  const esc = (s) => S.VSPoster.escapeXml(s);
+  const moSvg = S.VSPoster.build(BASE_DATA, MO_THEME);
+  test("build 动效版式:基本结构(mo- 前缀 defs/内联 SMIL/裁剪/无 script/foreignObject/class)", () => {
+    assert.ok(moSvg.startsWith("<svg"), "应以 <svg 开头");
+    assert.ok(moSvg.includes('viewBox="0 0 1920 1080"'), "viewBox");
+    assert.ok(moSvg.includes('id="mo-bg"'), "背景渐变 defs");
+    assert.ok(moSvg.includes('id="mo-clip-l"') && moSvg.includes('id="mo-clip-r"'), "头像裁剪 defs");
+    assert.ok(moSvg.includes("<animateTransform"), "应含内联动效");
+    assert.ok(!moSvg.includes("<script") && !moSvg.includes("<foreignObject") && !moSvg.includes("class="), "禁用 script/foreignObject/外部 class");
+  });
+  test("动效版式动态文本全部经 escapeXml 转义", () => {
+    const evil = {
+      matchName: `<img src=x onerror=alert(1)>`,
+      stage: '总决赛"加引号', bo: "BO3", date: "", venue: "",
+      left: { name: `<script>alert(1)</script>`, tag: "T&G", title: "<b>&", img: null },
+      right: { name: "正常", tag: "", title: "", img: null }
+    };
+    const svg = S.VSPoster.build(evil, MO_THEME);
+    assert.ok(!svg.includes("<script>"), "出现未转义的 <script>");
+    assert.ok(!svg.includes("<img "), "出现未转义的 <img");
+    assert.ok(svg.includes("&lt;script&gt;"), "名字未转义");
+    assert.ok(svg.includes("&lt;b&gt;&amp;"), "title 未转义");
+    assert.ok(svg.includes("T&amp;G"), "tag & 未转义");
+    assert.ok(svg.includes("&quot;"), "stage 引号未转义");
+  });
+  test("中央 VS:mo-vsgrad 使用 theme.vs 四色", () => {
+    assert.ok(moSvg.includes(">VS</text>") && moSvg.includes("VERSUS"), "VS 徽章");
+    assert.ok(moSvg.includes('id="mo-vsgrad"'), "VS 渐变 defs");
+    assert.ok(moSvg.includes(MO_THEME.vs.from) && moSvg.includes(MO_THEME.vs.to), "VS 渐变双色");
+    assert.ok(moSvg.includes('stroke="' + MO_THEME.vs.stroke + '"'), "VS 描边色");
+    assert.ok(moSvg.includes('flood-color="' + MO_THEME.vs.glow + '"'), "VS 辉光色");
+  });
+  test("选手四件套:名字/ID 胶囊/垃圾话/占位头像", () => {
+    const tData = JSON.parse(JSON.stringify(BASE_DATA));
+    tData.left.title = "今天你必输";
+    const tSvg = S.VSPoster.build(tData, MO_THEME);
+    assert.ok(tSvg.includes(esc("烈焰")) && tSvg.includes(esc("冰霜")), "名字");
+    assert.ok(tSvg.includes(esc("DK.FIRE")) && tSvg.includes(esc("ICE.BLIZZ")), "ID 胶囊");
+    assert.ok(tSvg.includes(esc("今天你必输")), "垃圾话");
+    assert.ok(tSvg.includes("data:image/svg+xml"), "空 img 用占位头像");
+  });
+  test("空 tag/tagImg/title/img 均优雅回退", () => {
+    const empty = JSON.parse(JSON.stringify(BASE_DATA));
+    empty.left.tag = ""; empty.left.tagImg = null; empty.left.title = ""; empty.left.img = null;
+    empty.right.tag = ""; empty.right.tagImg = null; empty.right.title = ""; empty.right.img = null;
+    const svg = S.VSPoster.build(empty, MO_THEME);
+    assert.ok(!svg.includes('rx="27"'), "两侧 tag 空不应有文字胶囊");
+    assert.ok(!svg.includes('y="960"'), "空 title 不应渲染小字");
+    assert.ok(svg.includes("data:image/svg+xml"), "空 img 应回退占位头像");
+  });
+  test("队标图:高 clamp 24–200(默认 56)、宽等比封顶 420;有图替代文字胶囊", () => {
+    const withLogo = JSON.parse(JSON.stringify(BASE_DATA));
+    withLogo.left.tagImg = "data:image/png;base64,AAA";
+    withLogo.left.tagImgRatio = 10;
+    const svg = S.VSPoster.build(withLogo, MO_THEME);
+    assert.ok(svg.includes('width="420.0"') && svg.includes('height="42.0"'), "超宽队标应封顶 420×42");
+    assert.ok(!svg.includes(">DK.FIRE<"), "有图侧不再画文字 ID");
+    assert.ok(svg.includes(">ICE.BLIZZ<"), "无图侧保持文字胶囊");
+    const sized = JSON.parse(JSON.stringify(BASE_DATA));
+    sized.right.tagImg = "data:image/png;base64,AAA";
+    sized.right.tagImgRatio = 1;
+    const svg2 = S.VSPoster.build(sized, MO_THEME);
+    assert.ok(svg2.includes('width="56.0"') && svg2.includes('height="56.0"'), "缺 size 默认 56×56");
+  });
+  test("选手自定义色:deriveColor 三色进入轨道/面板/占位头像,未设色回退主题侧色", () => {
+    const tData = JSON.parse(JSON.stringify(BASE_DATA));
+    tData.left.color = "#123456";
+    const svg = S.VSPoster.build(tData, MO_THEME);
+    const derived = S.VSPoster.deriveColor("#123456");
+    assert.ok(svg.includes("#123456"), "主色");
+    assert.ok(svg.includes(derived.glow), "辉光");
+    assert.ok(svg.includes(derived.dark), "深色描边");
+    assert.ok(svg.includes("%23" + MO_THEME.right.main.slice(1)), "右侧未设色回退主题色");
+  });
+  test("元信息:matchName + stage/bo 必现,date/venue 存在才渲染", () => {
+    assert.ok(moSvg.includes(esc(BASE_DATA.matchName)), "主标题");
+    assert.ok(moSvg.includes(esc("总决赛 · BO5")), "stage + bo");
+    assert.ok(moSvg.includes(esc("2026-08-12 · 上海体育馆")), "date + venue");
+    const bare = JSON.parse(JSON.stringify(BASE_DATA));
+    bare.date = ""; bare.venue = ""; bare.stage = ""; bare.bo = "";
+    const svg2 = S.VSPoster.build(bare, MO_THEME);
+    assert.ok(svg2.startsWith("<svg") && svg2.includes('aria-label="烈焰 vs 冰霜"'), "缺元信息仍可构建");
+  });
+}
+
 
 console.log("\n[upload.js] URL 白名单");
 test("允许 http/https/data", () => {

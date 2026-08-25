@@ -79,3 +79,10 @@ html[data-poster-theme="halo-duel"] {
   --color-accent-2: #00d26a;
   --color-accent-soft: rgba(255, 226, 122, 0.14);
 }
+
+html[data-poster-theme="motion-showcase"] {
+  --color-accent: #7dffd4;
+  --color-accent-2: #ff5ca8;
+  --color-accent-soft: rgba(125, 255, 212, 0.14);
+}
+
