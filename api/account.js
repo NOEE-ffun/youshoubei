@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 const { sendJson, readBody } = require('./helpers');
-const { readJson, writeJson, appendAudit, backupData, isOssConfigured } = require('./oss');
+const { readJson, writeJson, appendAudit, backupData, backupJson, isOssConfigured } = require('./oss');
 const { sessionOf, setSessionCookie, issueFor } = require('./session');
 
 /* 账号体系(一期):
@@ -294,6 +294,7 @@ function createHandlers(storage, options) {
         entry.used = true;
         entry.usedBy = username;
         entry.usedAt = t0iso(now);
+        await backupJson(CODES_KEY, 'codes');
         await write(CODES_KEY, codes);
       } else {
         /* 开发测试码(env 提供,仅内存核销) */
@@ -317,6 +318,7 @@ function createHandlers(storage, options) {
       createdAt: t0iso(now)
     };
     users.push(user);
+    await backupJson(USERS_KEY, 'users');
     await write(USERS_KEY, users);
     audit('auth.register', 'user=' + username + ' role=' + role + ' player=' + (playerId || '-') + ' code=' + codeKind);
 
@@ -455,6 +457,7 @@ function createHandlers(storage, options) {
     const idx = users.findIndex((u) => u.id === user.id);
     if (idx < 0) return sendJson(res, 401, { error: '账号不存在' });
     users[idx].passHash = hashPassword(next);
+    await backupJson(USERS_KEY, 'users');
     await write(USERS_KEY, users);
     audit('me.password', 'user=' + user.username);
     /* 重签当前会话(新 pv),其他浏览器/旧 cookie 因 pv 不匹配全部下线 */

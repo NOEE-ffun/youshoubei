@@ -50,3 +50,18 @@ const { backupKeyNow, pruneBackupKeys } = require('../api/oss');
 }
 
 console.log('oss-backup 全部 5 组测试通过 ✓');
+
+/* 前缀隔离:users/codes 备份与 data 备份互不干扰(2026-08-25 账号数据保护) */
+{
+  const names = [
+    'backups/data-2026-08-01T00-00-00-000Z.json',
+    'backups/users-2026-08-01T00-00-00-000Z.json',
+    'backups/codes-2026-08-01T00-00-00-000Z.json',
+    'backups/manual-2026-08-01T00-00-00-000Z-data.json'
+  ];
+  assert.deepEqual(pruneBackupKeys(names, 0, 'users'), ['backups/users-2026-08-01T00-00-00-000Z.json'], 'users 前缀只删自己的');
+  assert.deepEqual(pruneBackupKeys(names, 0, 'data'), ['backups/data-2026-08-01T00-00-00-000Z.json'], 'data 前缀只删自己的');
+  assert.deepEqual(pruneBackupKeys(names, 0, 'codes'), ['backups/codes-2026-08-01T00-00-00-000Z.json'], 'codes 前缀只删自己的');
+  assert.equal(backupKeyNow(0, 'users'), 'backups/users-1970-01-01T00-00-00-000Z.json', '带前缀命名');
+  console.log('✓ 备份前缀隔离(users/codes/data/manual)');
+}

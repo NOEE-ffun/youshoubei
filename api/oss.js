@@ -82,31 +82,30 @@ function isOssConfigured() {
   return Boolean(process.env.OSS_REGION && process.env.OSS_BUCKET && process.env.OSS_ACCESS_KEY_ID && process.env.OSS_ACCESS_KEY_SECRET);
 }
 
-/** 纯函数:当前备份对象名(时间戳可注入,可单测) */
-function backupKeyNow(now) {
+/** 纯函数:当前备份对象名(时间戳可注入,可单测;prefix 区分 data/users/codes) */
+function backupKeyNow(now, prefix) {
   const ts = new Date(now).toISOString().replace(/[:.]/g, '-');
-  return BACKUP_PREFIX + 'data-' + ts + '.json';
+  return BACKUP_PREFIX + (prefix || 'data') + '-' + ts + '.json';
 }
 
 /** 纯函数:给定现有备份名列表,返回应删除的(超出保留数的最旧者)。
- * 名字即时间戳,字典序=时间序;非本命名规则的条目不动。 */
-function pruneBackupKeys(names, keep) {
+ * 名字即时间戳,字典序=时间序;按 prefix 隔离,非本命名规则的条目不动。 */
+function pruneBackupKeys(names, keep, prefix) {
   const n = Number.isFinite(keep) ? keep : BACKUP_KEEP;
-  const ours = (names || [])
-    .filter((name) => /^backups\/data-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.json$/.test(name))
-    .sort();
+  const re = new RegExp('^backups\\/' + (prefix || 'data') + '-\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}-\\d{3}Z\\.json$');
+  const ours = (names || []).filter((name) => re.test(name)).sort();
   if (ours.length <= n) return [];
   return ours.slice(0, ours.length - n);
 }
 
-/** 把当前 data.json 备份一份并清理过期备份;失败只记日志 */
-async function backupData() {
+/** 把指定对象备份一份并清理过期备份;失败只记日志 */
+async function backupJson(key, prefix) {
   if (!isOssConfigured()) return; // 本地/无配置环境跳过
   try {
     const client = getClient();
-    const existing = await client.get(DATA_PATH);
+    const existing = await client.get(key);
     if (!existing.content) return;
-    await client.copy(backupKeyNow(Date.now()), DATA_PATH);
+    await client.copy(backupKeyNow(Date.now(), prefix), key);
     /* 分页列全量(>1000 份时单轮也只删第一页最旧的,多轮收敛) */
     let marker;
     const names = [];
@@ -118,12 +117,17 @@ async function backupData() {
       if (!listed.isTruncated || !listed.nextMarker) break;
       marker = listed.nextMarker;
     }
-    for (const stale of pruneBackupKeys(names, BACKUP_KEEP)) {
+    for (const stale of pruneBackupKeys(names, BACKUP_KEEP, prefix)) {
       await client.delete(stale);
     }
   } catch (error) {
-    console.error('[backup] data.json 备份失败(不影响本次写入):', error.message);
+    console.error('[backup] ' + key + ' 备份失败(不影响本次写入):', error.message);
   }
+}
+
+/** 把当前 data.json 备份一份并清理过期备份;失败只记日志 */
+async function backupData() {
+  return backupJson(DATA_PATH, 'data');
 }
 
 /* ========== 审计日志 ==========
