@@ -76,6 +76,10 @@
     state.myId = player.id;
     $('my-decks-empty').hidden = true;
     $('my-decks-body').hidden = false;
+    /* 窗口状态/场次指派强依赖最新数据,不吃 60s 缓存:强制校新一次 */
+    if (typeof app.revalidateWorkspace === 'function') {
+      await app.revalidateWorkspace();
+    }
     await loadRecords();
     renderTournamentOptions();
     render();
@@ -237,6 +241,10 @@
         card.classLinks[form.dataset.side] = links;
       }
       notify('卡组已保存');
+      /* 拉服务器最新并回写缓存:切到赛程页立刻能看到自己提交的卡组 */
+      if (typeof window.TournamentApp.revalidateWorkspace === 'function') {
+        await window.TournamentApp.revalidateWorkspace();
+      }
       render();
     } catch (error) {
       hint.textContent = '';

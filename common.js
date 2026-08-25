@@ -203,7 +203,9 @@
       const hasAbort = typeof AbortController !== 'undefined';
       const controller = hasAbort ? new AbortController() : null;
       timer = controller ? setTimeout(() => controller.abort(), 2000) : null;
-      const response = await fetch('/api/data', controller ? { signal: controller.signal } : {});
+      const response = await fetch('/api/data', controller
+        ? { signal: controller.signal, headers: cloudGetHeaders() }
+        : { headers: cloudGetHeaders() });
       clearTimeout(timer);
       timer = null;
       if (!response.ok) {
@@ -279,9 +281,17 @@
     writeWorkspaceCache(workspace);
   }
 
+  /* 管理口令在场时 GET 也带上:服务端对未公示卡组按请求者剥离,
+   * 管理员必须拿全量数据,否则本地快照再保存会把选手已提交的卡组抹掉 */
+  function cloudGetHeaders() {
+    const headers = { 'Accept': 'application/json' };
+    if (appInstance && appInstance.adminToken) headers['Authorization'] = 'Bearer ' + appInstance.adminToken;
+    return headers;
+  }
+
   async function revalidateWorkspaceQuietly() {
     try {
-      const response = await fetch('/api/data');
+      const response = await fetch('/api/data', { headers: cloudGetHeaders() });
       /* 非 200(含 404=API 未部署)一律保留缓存:
        * cloudGetWorkspace 会把 404 当"空云端"返回,直连会把缓存覆盖成默认空赛事 */
       if (!response.ok) return;
@@ -292,6 +302,7 @@
         return;
       }
       setCloudWorkspace(fresh);
+      writeWorkspaceCache(fresh); /* 变化时也必须回写,否则后续页面 60s 内命中旧缓存 */
       await refreshApp();
       document.dispatchEvent(new CustomEvent(EVT_CHANGED));
     } catch (error) {
@@ -300,7 +311,7 @@
   }
 
   async function cloudGetWorkspace() {
-    const response = await fetch('/api/data');
+    const response = await fetch('/api/data', { headers: cloudGetHeaders() });
     if (response.status === 404) return { tournaments: [], activeId: null };
     if (!response.ok) throw new Error((await apiErrorMessage(response)) || '读取云端数据失败');
     return response.json();
@@ -313,7 +324,9 @@
     for (const t of (latest && latest.tournaments) || []) byId.set(t.id, t);
     for (const t of (local && local.tournaments) || []) {
       const remote = byId.get(t.id);
-      if (!remote || (t.updatedAt || 0) >= (remote.updatedAt || 0)) byId.set(t.id, t);
+      if (!remote) byId.set(t.id, t);
+      else if ((t.updatedAt || 0) >= (remote.updatedAt || 0)) byId.set(t.id, mergeRecordClassLinks(t, remote));
+      else byId.set(t.id, mergeRecordClassLinks(remote, t));
     }
     const playerMap = new Map();
     for (const p of (latest && latest.players) || []) playerMap.set(p.id, p);
@@ -326,6 +339,25 @@
       players: [...playerMap.values()],
       tournaments: [...byId.values()]
     };
+  }
+
+  /* 管理端旧快照落盘时,远端记录里选手已提交的 classLinks 不能丢:
+   * 逐卡逐侧,胜者侧为"未填"([]/缺省)而败者侧有实际条目 → 保留败者条目。
+   * 显式 null(阻断继承)是有意为之,不做让位。 */
+  function mergeRecordClassLinks(winner, loser) {
+    const loserCards = new Map(((loser && loser.canvas && loser.canvas.cards) || []).map((c) => [c.id, c]));
+    for (const card of ((winner && winner.canvas && winner.canvas.cards) || [])) {
+      const other = loserCards.get(card.id);
+      if (!other || !other.classLinks) continue;
+      if (!card.classLinks || typeof card.classLinks !== 'object') card.classLinks = { a: [], b: [] };
+      for (const side of ['a', 'b']) {
+        const mine = card.classLinks[side];
+        const theirs = other.classLinks[side];
+        const mineEmpty = mine === undefined || (Array.isArray(mine) && mine.length === 0);
+        if (mineEmpty && Array.isArray(theirs) && theirs.length > 0) card.classLinks[side] = theirs;
+      }
+    }
+    return winner;
   }
 
   /* 云端写队列：同一页面内串行化，避免并发写乱序覆盖 */
@@ -393,6 +425,9 @@
 
   async function storagePut(record) {
     if (mode === 'cloud') {
+      /* 保存即打时间戳:合并逻辑按 updatedAt 取新者,不打戳的话
+       * 选手提交刚顶新过服务器记录,管理端这次保存会被整条丢弃 */
+      record.updatedAt = Date.now();
       const tournaments = cloudWorkspace.tournaments;
       const index = tournaments.findIndex((t) => t.id === record.id);
       if (index >= 0) tournaments[index] = record;
@@ -1839,6 +1874,8 @@
       notify('已登录选手账号,管理口令已自动停用');
     }
     syncHeaderState();
+    /* 会话就绪晚于页面首渲(如赛程页公示锁按本人判定),广播一次让依赖身份的视图重绘 */
+    document.dispatchEvent(new CustomEvent('ts:session'));
     return getSession();
   }
 
@@ -1937,8 +1974,8 @@
       await refreshSession();
       notify((isRegister ? '注册成功,欢迎 ' : '欢迎回来,') + ((data.user && data.user.username) || username));
       if (data.user && data.user.role === 'admin') notify('已获得管理员身份');
-      /* 资料页的空态不会随会话变化自动重建,直接刷新整页最稳 */
-      if (appInstance && appInstance.activePage === 'profile') location.reload();
+      /* 资料页/我的对局的空态不随会话变化自动重建,直接刷新整页最稳 */
+      if (appInstance && (appInstance.activePage === 'profile' || appInstance.activePage === 'my-decks')) location.reload();
     } catch (error) {
       statusEl.textContent = '网络错误,请稍后再试';
     } finally {
@@ -2137,6 +2174,7 @@
       getSession,
       logoutSession,
       openLoginDialog,
+      revalidateWorkspace: revalidateWorkspaceQuietly,
       uploadImage: uploadCloudImage,
       fatalError: showFatalError
     };

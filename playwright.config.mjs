@@ -19,7 +19,7 @@ export default defineConfig({
       ...process.env,
       ADMIN_TOKEN: 'e2e-admin-token',
       ADMIN_INVITE_CODE: 'e2e-admin-code',
-      AUTH_DEV_INVITE_CODES: 'e2e-dev-1,e2e-dev-2,e2e-dev-3',
+      AUTH_DEV_INVITE_CODES: 'e2e-dev-1,e2e-dev-2,e2e-dev-3,e2e-dev-4',
       SESSION_SECRET: 'e2e-session-secret'
     }
   }

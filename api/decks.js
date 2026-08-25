@@ -3,6 +3,7 @@
 const { sendJson, readBody } = require('./helpers');
 const { DATA_PATH, readJson, writeJson, backupData, appendAudit, isOssConfigured } = require('./oss');
 const account = require('./account');
+const devStore = require('./dev-store');
 const { CLASS_LIST, resolveCanvas, getResult } = require('../canvas-model');
 
 /* 卡组提交窗口(二期):
@@ -60,24 +61,16 @@ function createHandler(storage, options) {
   const backup = typeof o.backupData === 'function' ? o.backupData : backupData;
   /* 会话→用户解析默认走全局 account(共用其存储降级);测试可注入 */
   const currentUser = typeof o.currentUser === 'function' ? o.currentUser : (req) => account.currentUser(req);
-  let memory = null;
 
   async function read(key) {
     if (storage && storage.readJson) return storage.readJson(key);
-    if (!isOssConfigured()) {
-      if (!memory) memory = new Map();
-      return memory.has(key) ? JSON.parse(memory.get(key)) : null;
-    }
+    if (!isOssConfigured()) return devStore.readJson(key);
     return readJson(key);
   }
 
   async function write(key, value) {
     if (storage && storage.writeJson) return storage.writeJson(key, value);
-    if (!isOssConfigured()) {
-      if (!memory) memory = new Map();
-      memory.set(key, JSON.stringify(value));
-      return;
-    }
+    if (!isOssConfigured()) return devStore.writeJson(key, value);
     return writeJson(key, value);
   }
 

@@ -52,7 +52,8 @@ const API_ROUTES = {
   '/api/me': apiAccount.me,
   '/api/me/player': apiAccount.me,
   '/api/me/password': apiAccount.mePassword,
-  '/api/me/classlinks': apiDecks
+  '/api/me/classlinks': apiDecks,
+  '/api/dev/reset': require('./api/dev-store').resetHandler
 };
 
 /* 不对外下发的内部目录与根级文件;比对前统一转小写,顺带堵住 /API/ 这类大小写变体 */

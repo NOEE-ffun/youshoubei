@@ -5,13 +5,20 @@ const { sessionOf } = require('./session');
 const { isWindowOpen } = require('./decks');
 const { resolveCanvas, getResult } = require('../canvas-model');
 const { sendJson, readBody } = require('./helpers');
-const { DATA_PATH, readJson, writeJson, backupData, appendAudit } = require('./oss');
+const { DATA_PATH, readJson, writeJson, backupData, appendAudit, isOssConfigured } = require('./oss');
+const devStore = require('./dev-store');
 
 /* data.json 只含文本数据（图片存 OSS 为 URL），1MB 上限绰绰有余，防内存被打爆 */
 const MAX_BODY = 1024 * 1024;
 
-async function readWorkspace() {
-  return readJson(DATA_PATH);
+/* 开发降级:无 OSS 环境(E2E/本地联调)用进程内存承载 workspace,行为与云端一致。
+ * 生产(OSS 已配置)完全不经过此路径。 */
+function readWorkspace() {
+  return isOssConfigured() ? readJson(DATA_PATH) : devStore.readJson(DATA_PATH);
+}
+
+function persistWorkspace(value) {
+  return isOssConfigured() ? writeJson(DATA_PATH, value) : devStore.writeJson(DATA_PATH, value);
 }
 
 /* 未公示卡组剥离:开关开启期间,该届未录比分的卡,某侧已提交的 own classLinks
@@ -60,6 +67,12 @@ module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     try {
       const workspace = await readWorkspace();
+      /* 开发存储为空时按"云端不可用"处理(500),页面回落本地模式——
+       * 与旧无 OSS 行为一致,避免 E2E 各用例间状态串扰 */
+      if (workspace === null && !isOssConfigured()) {
+        sendJson(res, 500, { error: 'OSS 配置不完整:需要 OSS_REGION / OSS_BUCKET / OSS_ACCESS_KEY_ID / OSS_ACCESS_KEY_SECRET' });
+        return;
+      }
       let payload = workspace || { tournaments: [], activeId: null };
       /* 管理员原样;登录选手保留自己两侧;游客/其他选手剥离未公示卡组 */
       if (isAuthorized(req) !== true) {
@@ -99,7 +112,7 @@ module.exports = async function handler(req, res) {
     try {
       /* 覆盖前备份当前版本(best-effort,失败不阻塞) */
       await backupData();
-      await writeJson(DATA_PATH, workspace);
+      await persistWorkspace(workspace);
       /* 审计:记录届数与当前届名,不落具体内容 */
       appendAudit('data.put', (workspace.tournaments || []).length + ' 届 / active=' + ((workspace.tournaments || []).find((t) => t.id === workspace.activeId) || {}).name);
       sendJson(res, 200, { ok: true });

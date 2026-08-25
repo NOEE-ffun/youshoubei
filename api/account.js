@@ -3,6 +3,7 @@
 const crypto = require('node:crypto');
 const { sendJson, readBody } = require('./helpers');
 const { readJson, writeJson, appendAudit, backupData, backupJson, isOssConfigured } = require('./oss');
+const devStore = require('./dev-store');
 const { sessionOf, setSessionCookie, issueFor } = require('./session');
 
 /* 账号体系(一期):
@@ -160,28 +161,20 @@ function createHandlers(storage, options) {
   const audit = typeof o.appendAudit === 'function' ? o.appendAudit : appendAudit;
   const backup = typeof o.backupData === 'function' ? o.backupData : backupData;
   const rate = o.rateLimiter || createRateLimiter(now);
-  let memory = null; /* OSS 未配置时的开发降级存储 */
 
+  /* 注入存储 > 开发共享内存(dev-store,与 data/decks 一致)> OSS */
   async function read(key) {
     if (storage && storage.readJson) return storage.readJson(key);
-    if (!isOssConfigured()) {
-      if (!memory) memory = new Map();
-      return memory.has(key) ? JSON.parse(memory.get(key)) : null;
-    }
+    if (!isOssConfigured()) return devStore.readJson(key);
     return readJson(key);
   }
 
   async function write(key, value) {
     if (storage && storage.writeJson) return storage.writeJson(key, value);
-    if (!isOssConfigured()) {
-      if (!memory) memory = new Map();
-      memory.set(key, JSON.stringify(value));
-      return;
-    }
+    if (!isOssConfigured()) return devStore.writeJson(key, value);
     return writeJson(key, value);
   }
 
-  const ossLive = () => !storage && isOssConfigured();
   /* 开发测试码核销记录(模块级,随进程) */
   const devUsed = new Set();
 
@@ -212,6 +205,30 @@ function createHandlers(storage, options) {
     const workspace = await readWorkspace();
     const players = (workspace && workspace.players) || [];
     return players.find((p) => p && p.id === user.playerId) || null;
+  }
+
+  /* 以用户名新建选手并入 workspace(空白码/开发码共用) */
+  async function createPlayerFor(username) {
+    const t = now();
+    const player = {
+      id: newId('p'),
+      name: username,
+      tag: null,
+      tagImg: null,
+      tagImgRatio: null,
+      tagImgSize: null,
+      title: null,
+      color: null,
+      avatar: null,
+      createdAt: t,
+      updatedAt: t
+    };
+    const workspace = (await read(DATA_KEY)) || { tournaments: [], players: [], activeId: null };
+    if (!Array.isArray(workspace.players)) workspace.players = [];
+    workspace.players.push(player);
+    await backup();
+    await write(DATA_KEY, workspace);
+    return player.id;
   }
 
   /* 邀请码注册。绑定码(码文件里预写 playerId)为老选手过渡逻辑,三期删除 */
@@ -264,31 +281,7 @@ function createHandlers(storage, options) {
           codeKind = 'bound';
         } else {
           /* 空白码:以用户名建新选手 */
-          const t = now();
-          const player = {
-            id: newId('p'),
-            name: username,
-            tag: null,
-            tagImg: null,
-            tagImgRatio: null,
-            tagImgSize: null,
-            title: null,
-            color: null,
-            avatar: null,
-            createdAt: t,
-            updatedAt: t
-          };
-          if (ossLive() || storage) {
-            const workspace = (await read(DATA_KEY)) || { tournaments: [], players: [], activeId: null };
-            if (!Array.isArray(workspace.players)) workspace.players = [];
-            workspace.players.push(player);
-            await backup();
-            await write(DATA_KEY, workspace);
-            playerId = player.id;
-          } else {
-            /* 开发降级(无 OSS):不落盘,仅建号不建选手 */
-            playerId = null;
-          }
+          playerId = await createPlayerFor(username);
           codeKind = 'blank';
         }
         entry.used = true;
@@ -301,6 +294,8 @@ function createHandlers(storage, options) {
         const devCodes = String(process.env.AUTH_DEV_INVITE_CODES || '').split(',').map((s) => s.trim()).filter(Boolean);
         if (devCodes.includes(code) && !devUsed.has(code)) {
           devUsed.add(code);
+          /* 开发码等价空白码:同样以用户名建选手(E2E 全链路可见) */
+          playerId = await createPlayerFor(username);
           codeKind = 'dev';
         } else {
           return failRegister(res, ip, '邀请码无效或已被使用');

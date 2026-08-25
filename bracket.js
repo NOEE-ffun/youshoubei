@@ -1002,6 +1002,11 @@
     autoFitCanvas();
     syncEditUI();
   });
+  /* 会话身份就绪(晚于首渲)后重绘:公示锁/图标按"本人视角"重新判定 */
+  document.addEventListener('ts:session', () => {
+    renderAll();
+    syncEditUI();
+  });
   bindCanvas();
   window.TournamentAppInit('schedule').catch((error) => {
     if (window.TournamentApp) window.TournamentApp.fatalError(error);

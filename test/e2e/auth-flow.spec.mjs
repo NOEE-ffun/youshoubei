@@ -27,18 +27,19 @@ test('登录 API:注册/会话/登出/开发码/一次性', async ({ request }) 
   const meAfter = await request.get(BASE + '/api/me');
   expect(meAfter.status()).toBe(401);
 
-  // 4. 开发码注册选手账号(无 OSS:建号不建选手)
+  // 4. 开发码注册选手账号(等价空白码:建号且建选手)
   const regPlayer = await request.post(BASE + '/api/auth/register', {
     data: { code: 'e2e-dev-1', username: 'e2e-player', password: '12345678' }
   });
   expect(regPlayer.status()).toBe(200);
   const playerBody = await regPlayer.json();
   expect(playerBody.user.role).toBe('player');
-  expect(playerBody.user.playerId).toBeNull();
+  expect(playerBody.user.playerId).toBeTruthy();
+  expect(playerBody.player && playerBody.player.name).toBe('e2e-player');
 
-  // 5. 未绑选手账号编辑资料 → 400
+  // 5. 已绑选手账号可自助编辑资料(200)
   const upd = await request.put(BASE + '/api/me/player', { data: { name: 'x' } });
-  expect(upd.status()).toBe(400);
+  expect(upd.status()).toBe(200);
 
   // 6. 开发码一次性
   const again = await request.post(BASE + '/api/auth/register', {
