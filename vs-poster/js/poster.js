@@ -143,6 +143,7 @@
     if (theme && theme.layout === "minimal") return buildMinimal(data, theme);
     if (theme && theme.layout === "ornate") return buildOrnate(data, theme);
     if (theme && theme.layout === "cyber") return buildCyber(data, theme);
+    if (theme && theme.layout === "halo") return buildHalo(data, theme);
     return buildRift(data, theme);
   }
 
@@ -1029,6 +1030,227 @@
     parts.push('<rect width="1920" height="1080" fill="url(#cy-scan)"/>');
 
     parts.push('</svg>');
+    return parts.join("");
+  }
+
+  /* ==================== 聚光擂台版式 ====================
+   * 舞台追光风:顶部双追光锥 + 六边形封环 + 中央六边形 VS 徽记;
+   * 对抗感来自双色光锥对撞与六边形封印,辉光与暗角收拢舞台气氛。 */
+
+  /** 正六边形顶点(平顶,rotDeg 按度旋转) */
+  function hexPoints(cx, cy, r, rotDeg) {
+    var pts = [];
+    for (var i = 0; i < 6; i++) {
+      var a = (i * 60 + (rotDeg || 0)) * Math.PI / 180;
+      pts.push((cx + Math.cos(a) * r).toFixed(1) + "," + (cy + Math.sin(a) * r).toFixed(1));
+    }
+    return pts.join(" ");
+  }
+
+  function buildHalo(data, theme) {
+    var name = String(data.matchName || "VS 巅峰对决").trim();
+    var stageBo = [data.stage, data.bo].filter(Boolean).join(" · ");
+    var whenWhere = [data.date, data.venue].filter(Boolean).join(" · ");
+
+    var leftName = String(data.left.name || "").trim();
+    var rightName = String(data.right.name || "").trim();
+    var leftTag = String(data.left.tag || "").trim().slice(0, 14);
+    var rightTag = String(data.right.tag || "").trim().slice(0, 14);
+
+    var leftFont = fitFontSize(leftName || "?", 620, 96, 42);
+    var rightFont = fitFontSize(rightName || "?", 620, 96, 42);
+
+    /* 选手自定义色优先,未设置回退主题侧色;版式内该侧颜色一律取 L/R */
+    var L = data.left.color ? deriveColor(data.left.color) : theme.left;
+    var R = data.right.color ? deriveColor(data.right.color) : theme.right;
+
+    var leftImg = isAllowedImgURL(data.left.img) ? data.left.img : placeholderAvatar(leftName, L);
+    var rightImg = isAllowedImgURL(data.right.img) ? data.right.img : placeholderAvatar(rightName, R);
+
+    var parts = [];
+    parts.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="' + escapeXml(leftName + " vs " + rightName) + '">');
+
+    /* ---- defs(全部 hl- 前缀) ---- */
+    var d = ["<defs>"];
+    d.push('<linearGradient id="hl-bg" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="' + theme.bg.from + '"/>' +
+      '<stop offset="1" stop-color="' + theme.bg.to + '"/></linearGradient>');
+    /* 半场辉光(选手色;自定义色时增强强度) */
+    d.push('<radialGradient id="hl-glow-l" cx="0.5" cy="0.5" r="0.5">' +
+      '<stop offset="0" stop-color="' + L.main + '" stop-opacity="' + (data.left.color ? 0.55 : 0.4) + '"/>' +
+      '<stop offset="1" stop-color="' + L.main + '" stop-opacity="0"/></radialGradient>');
+    d.push('<radialGradient id="hl-glow-r" cx="0.5" cy="0.5" r="0.5">' +
+      '<stop offset="0" stop-color="' + R.main + '" stop-opacity="' + (data.right.color ? 0.55 : 0.4) + '"/>' +
+      '<stop offset="1" stop-color="' + R.main + '" stop-opacity="0"/></radialGradient>');
+    /* 顶部追光锥(竖渐变:辉光→透明) */
+    d.push('<linearGradient id="hl-beam-l" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="' + L.glow + '" stop-opacity="0.34"/>' +
+      '<stop offset="1" stop-color="' + L.glow + '" stop-opacity="0"/></linearGradient>');
+    d.push('<linearGradient id="hl-beam-r" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="' + R.glow + '" stop-opacity="0.34"/>' +
+      '<stop offset="1" stop-color="' + R.glow + '" stop-opacity="0"/></linearGradient>');
+    /* VS 徽记:径向底光 + 金属字渐变(theme.vs 四色全部用上) */
+    d.push('<radialGradient id="hl-vsg" cx="0.5" cy="0.5" r="0.5">' +
+      '<stop offset="0" stop-color="' + theme.vs.glow + '" stop-opacity="0.30"/>' +
+      '<stop offset="1" stop-color="' + theme.vs.glow + '" stop-opacity="0"/></radialGradient>');
+    d.push('<linearGradient id="hl-vsgrad" x1="0" y1="0" x2="1" y2="1">' +
+      '<stop offset="0" stop-color="' + theme.vs.from + '"/>' +
+      '<stop offset="0.5" stop-color="#ffffff"/>' +
+      '<stop offset="1" stop-color="' + theme.vs.to + '"/></linearGradient>');
+    /* 中心能量横线 */
+    d.push('<linearGradient id="hl-line" x1="0" y1="0" x2="1" y2="0">' +
+      '<stop offset="0" stop-color="' + theme.accent + '" stop-opacity="0"/>' +
+      '<stop offset="0.5" stop-color="' + theme.accent + '" stop-opacity="0.9"/>' +
+      '<stop offset="1" stop-color="' + theme.accent + '" stop-opacity="0"/></linearGradient>');
+    /* 扫描线 + 暗角 */
+    d.push('<pattern id="hl-scan" width="4" height="4" patternUnits="userSpaceOnUse">' +
+      '<rect width="4" height="1" fill="#ffffff" opacity="0.04"/></pattern>');
+    d.push('<radialGradient id="hl-vig" cx="0.5" cy="0.5" r="0.72">' +
+      '<stop offset="0.55" stop-color="#000000" stop-opacity="0"/>' +
+      '<stop offset="1" stop-color="#000000" stop-opacity="0.5"/></radialGradient>');
+    /* 发光滤镜 */
+    d.push('<filter id="hl-fl" x="-40%" y="-40%" width="180%" height="180%">' +
+      '<feGaussianBlur in="SourceGraphic" stdDeviation="10" result="b"/>' +
+      '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>');
+    d.push('<filter id="hl-fs" x="-40%" y="-40%" width="180%" height="180%">' +
+      '<feGaussianBlur in="SourceGraphic" stdDeviation="14"/></filter>');
+    d.push('<filter id="hl-fvs" x="-40%" y="-40%" width="180%" height="180%">' +
+      '<feDropShadow dx="0" dy="10" stdDeviation="22" flood-color="' + theme.vs.glow + '" flood-opacity="0.85"/></filter>');
+    /* 头像圆形裁剪 */
+    d.push('<clipPath id="hl-clip-l"><circle cx="430" cy="520" r="205"/></clipPath>');
+    d.push('<clipPath id="hl-clip-r"><circle cx="1490" cy="520" r="205"/></clipPath>');
+    d.push("</defs>");
+    parts.push(d.join(""));
+
+    /* ---- 背景 ---- */
+    parts.push('<rect width="1920" height="1080" fill="url(#hl-bg)"/>');
+    if (theme.grid) {
+      var grid = "";
+      for (var gx = 0; gx <= W; gx += 96) grid += '<line x1="' + gx + '" y1="0" x2="' + gx + '" y2="' + H + '" stroke="' + theme.accent + '" opacity="0.06"/>';
+      for (var gy = 0; gy <= H; gy += 96) grid += '<line x1="0" y1="' + gy + '" x2="' + W + '" y2="' + gy + '" stroke="' + theme.accent + '" opacity="0.06"/>';
+      parts.push("<g>" + grid + "</g>");
+    }
+    /* 左右半场辉光(椭圆承接径向渐变,避免圆形边缘裁切感) */
+    parts.push('<ellipse cx="430" cy="500" rx="560" ry="420" fill="url(#hl-glow-l)"/>');
+    parts.push('<ellipse cx="1490" cy="500" rx="560" ry="420" fill="url(#hl-glow-r)"/>');
+
+    /* ---- 顶部追光锥(舞台灯,斜向内收) ---- */
+    parts.push('<polygon points="90,0 770,0 540,760 200,760" fill="url(#hl-beam-l)"/>');
+    parts.push('<polygon points="1150,0 1830,0 1720,760 1380,760" fill="url(#hl-beam-r)"/>');
+
+    /* ---- 中心能量横线 ---- */
+    parts.push('<line x1="300" y1="540" x2="1620" y2="540" stroke="url(#hl-line)" stroke-width="4" opacity="0.6"/>');
+    parts.push('<line x1="300" y1="540" x2="1620" y2="540" stroke="url(#hl-line)" stroke-width="10" opacity="0.25" filter="url(#hl-fs)"/>');
+
+    /* ---- 中央 VS 六边形徽记 ---- */
+    parts.push('<circle cx="960" cy="540" r="330" fill="url(#hl-vsg)"/>');
+    parts.push('<polygon points="' + hexPoints(960, 540, 216, 0) + '" fill="rgba(0,0,0,0.35)" stroke="' + theme.accent + '" stroke-width="3" opacity="0.9"/>');
+    parts.push('<polygon points="' + hexPoints(960, 540, 196, 0) + '" fill="none" stroke="' + theme.accent + '" stroke-width="1" opacity="0.45"/>');
+    parts.push('<circle cx="960" cy="540" r="176" fill="none" stroke="' + theme.accent + '" stroke-width="1" stroke-dasharray="6 10" opacity="0.5"/>');
+    parts.push('<text x="960" y="630" text-anchor="middle" font-family="Impact, Arial Black, sans-serif" font-size="200" font-style="italic" font-weight="900" letter-spacing="10" fill="url(#hl-vsgrad)" stroke="' + theme.vs.stroke + '" stroke-width="8" stroke-linejoin="round" paint-order="stroke" filter="url(#hl-fvs)">VS</text>');
+    parts.push('<text x="960" y="690" text-anchor="middle" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="28" letter-spacing="18" font-weight="700" fill="' + theme.accent + '" opacity="0.9">VERSUS</text>');
+    /* 两侧小闪电 */
+    parts.push('<path d="M700,500 L700,556 L724,556 L704,596" fill="none" stroke="' + theme.accent + '" stroke-width="6" stroke-linejoin="round" class="p-bolt"/>');
+    parts.push('<path d="M1220,556 L1220,500 L1196,500 L1216,460" fill="none" stroke="' + theme.accent + '" stroke-width="6" stroke-linejoin="round" class="p-bolt"/>');
+
+    /* ---- 粒子 ---- */
+    var rnd = mulberry32(42);
+    var particles = "";
+    for (var i = 0; i < 40; i++) {
+      var px = 60 + Math.floor(rnd() * 1800);
+      var py = 90 + Math.floor(rnd() * 900);
+      var pr = 2 + Math.floor(rnd() * 5);
+      var po = (0.2 + rnd() * 0.45).toFixed(2);
+      if (i % 7 === 0) {
+        var sz = 6 + Math.floor(rnd() * 6);
+        particles += '<rect x="' + (px - sz / 2) + '" y="' + (py - sz / 2) + '" width="' + sz + '" height="' + sz + '" fill="' + theme.accent + '" opacity="' + po + '" transform="rotate(45 ' + px + ' ' + py + ')" class="p-sparkle"/>';
+      } else {
+        particles += '<circle cx="' + px + '" cy="' + py + '" r="' + pr + '" fill="' + theme.particles[i % 2] + '" opacity="' + po + '" class="p-particle"/>';
+      }
+    }
+    parts.push("<g>" + particles + "</g>");
+
+    /* ---- 选手侧 ---- */
+    parts.push(haloSide("left", data.left, leftName, leftTag, leftFont, leftImg, 430, L));
+    parts.push(haloSide("right", data.right, rightName, rightTag, rightFont, rightImg, 1490, R));
+
+    /* ---- 顶部比赛信息 ---- */
+    parts.push('<g class="p-title">');
+    parts.push('<line x1="200" y1="96" x2="560" y2="96" stroke="url(#hl-line)" stroke-width="3" opacity="0.9"/>');
+    parts.push('<line x1="1720" y1="96" x2="1360" y2="96" stroke="url(#hl-line)" stroke-width="3" opacity="0.9" transform="scale(-1,1) translate(-1920,0)"/>');
+    parts.push('<rect x="188" y="84" width="16" height="16" fill="' + theme.accent + '" transform="rotate(45 196 92)" opacity="0.95"/>');
+    parts.push('<rect x="1716" y="84" width="16" height="16" fill="' + theme.accent + '" transform="rotate(45 1724 92)" opacity="0.95"/>');
+    parts.push('<text x="960" y="122" text-anchor="middle" font-family="Impact, Arial Black, PingFang SC, Microsoft YaHei, sans-serif" font-size="60" font-weight="900" letter-spacing="8" fill="#ffffff" filter="url(#hl-fl)">' + escapeXml(name) + "</text>");
+    if (stageBo) {
+      parts.push('<text x="960" y="180" text-anchor="middle" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="26" letter-spacing="6" font-weight="600" fill="' + theme.accent + '">' + escapeXml(stageBo) + "</text>");
+    }
+    parts.push("</g>");
+
+    /* ---- 底部信息条 ---- */
+    parts.push('<rect x="0" y="1000" width="1920" height="80" fill="rgba(0,0,0,0.5)"/>');
+    parts.push('<line x1="0" y1="1000" x2="1920" y2="1000" stroke="rgba(255,255,255,0.14)" stroke-width="1"/>');
+    parts.push('<rect x="0" y="1000" width="1920" height="3" fill="' + theme.accent + '" opacity="0.3" class="p-scan"/>');
+    if (whenWhere) {
+      parts.push('<text x="120" y="1048" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="28" font-weight="600" letter-spacing="3" fill="#cdd2e2">' + escapeXml(whenWhere) + "</text>");
+    }
+    if (stageBo) {
+      parts.push('<text x="1800" y="1048" text-anchor="end" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="28" font-weight="600" letter-spacing="3" fill="' + theme.accent + '">' + escapeXml(stageBo) + "</text>");
+    }
+    parts.push('<rect x="930" y="1022" width="60" height="4" fill="' + theme.accent + '" opacity="0.8"/>');
+
+    /* ---- 扫描线 + 暗角 ---- */
+    parts.push('<rect width="1920" height="1080" fill="url(#hl-scan)"/>');
+    parts.push('<rect width="1920" height="1080" fill="url(#hl-vig)"/>');
+
+    parts.push("</svg>");
+    return parts.join("");
+  }
+
+  /** 单个选手组:六边形封环 + 追光头像 + ID 区(队标图优先/文字胶囊/两者空不画)+ 大号名字;col 为选手色或主题侧色 */
+  function haloSide(side, data, displayName, tag, fontSize, img, cx, col) {
+    var parts = [];
+    var cy = 520, r = 205;
+
+    parts.push('<g class="p-side">');
+    /* 六边形封环(外疏内实)+ 辉光环 + 主环 + 虚线光环 */
+    parts.push('<polygon points="' + hexPoints(cx, cy, 300, 0) + '" fill="none" stroke="' + col.main + '" stroke-width="2" opacity="0.35"/>');
+    parts.push('<polygon points="' + hexPoints(cx, cy, 270, 0) + '" fill="none" stroke="' + col.glow + '" stroke-width="7" opacity="0.5" filter="url(#hl-fs)"/>');
+    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="262" fill="none" stroke="' + col.main + '" stroke-width="2" stroke-dasharray="10 18" opacity="0.8" class="p-ring"/>');
+    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="238" fill="none" stroke="' + col.glow + '" stroke-width="9" opacity="0.5" filter="url(#hl-fs)"/>');
+    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="224" fill="none" stroke="' + col.main + '" stroke-width="6"/>');
+    /* 头像(圆形裁剪) */
+    parts.push('<g clip-path="url(#hl-clip-' + (side === "left" ? "l" : "r") + ')">');
+    parts.push('<image href="' + escapeXml(img) + '" x="' + (cx - r) + '" y="' + (cy - r) + '" width="' + r * 2 + '" height="' + r * 2 + '" preserveAspectRatio="xMidYMid slice"/>');
+    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="url(#hl-vig)" opacity="0.5"/>');
+    parts.push("</g>");
+
+    /* ID 区:队标图片优先 —— 高 clamp(24–200,默认 56),宽 = 高 × 比例封顶 420;
+       否则文字胶囊;两者都空则不画 */
+    if (isAllowedImgURL(data.tagImg)) {
+      var tiRatio = Number(data.tagImgRatio) > 0 ? Number(data.tagImgRatio) : 1;
+      var tiH = Math.min(200, Math.max(24, Number(data.tagImgSize) > 0 ? Number(data.tagImgSize) : 56));
+      var tiW = tiH * tiRatio;
+      if (tiW > 420) { tiW = 420; tiH = tiW / tiRatio; }
+      parts.push('<image href="' + escapeXml(data.tagImg) + '" x="' + (cx - tiW / 2).toFixed(1) + '" y="' + (285 - tiH / 2).toFixed(1) + '" width="' + tiW.toFixed(1) + '" height="' + tiH.toFixed(1) + '" preserveAspectRatio="xMidYMid meet"/>');
+    } else if (tag) {
+      var tagW = Math.ceil(textWidth(tag, 26)) + 52;
+      parts.push('<rect x="' + (cx - tagW / 2) + '" y="258" width="' + tagW + '" height="54" rx="27" fill="rgba(0,0,0,0.55)" stroke="' + col.main + '" stroke-width="2"/>');
+      parts.push('<text x="' + cx + '" y="294" text-anchor="middle" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="26" font-weight="700" letter-spacing="3" fill="' + col.glow + '">' + escapeXml(tag) + "</text>");
+    }
+
+    /* 大号名字(发光 + 描边;空名字不渲染) */
+    if (displayName) {
+      parts.push('<text x="' + cx + '" y="810" text-anchor="middle" font-family="Impact, Arial Black, PingFang SC, Microsoft YaHei, sans-serif" font-size="' + fontSize + '" font-style="italic" font-weight="900" letter-spacing="4" fill="#ffffff" stroke="' + col.dark + '" stroke-width="9" stroke-linejoin="round" paint-order="stroke" filter="url(#hl-fl)">' + escapeXml(displayName) + "</text>");
+    }
+
+    /* 赛前垃圾话(名字下方小字) */
+    var title = typeof data.title === "string" ? data.title : ((data.title && data.title.text) || "");
+    if (title) {
+      var titleFont = Math.max(22, Math.round(fontSize * 0.45));
+      parts.push('<text x="' + cx + '" y="876" text-anchor="middle" font-family="PingFang SC, Microsoft YaHei, Noto Sans SC, sans-serif" font-size="' + titleFont + '" font-weight="700" letter-spacing="3" fill="' + col.glow + '">' + escapeXml(title) + "</text>");
+    }
+
+    parts.push("</g>");
     return parts.join("");
   }
 

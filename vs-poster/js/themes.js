@@ -148,6 +148,19 @@
       particles: ["#ff00e5", "#00e5ff"],
       grid: true,
       layout: "cyber"
+    },
+    /* 2026-08-25 版式维度新增:聚光擂台(顶部追光锥+六边形封环+六边形 VS 徽记) */
+    {
+      id: "halo-duel",
+      name: "聚光擂台",
+      left:  { main: "#00d26a", glow: "#6bffb0", dark: "#003c1f" },
+      right: { main: "#ff6a00", glow: "#ffab5c", dark: "#5c2600" },
+      accent: "#ffe27a",
+      bg: { from: "#07070e", to: "#141226" },
+      vs: { from: "#fff3c4", to: "#ff8c00", stroke: "#3a2000", glow: "#ffd23d" },
+      particles: ["#ffe27a", "#6bffb0"],
+      grid: true,
+      layout: "halo"
     }
   ];
 

@@ -73,3 +73,9 @@ html[data-poster-theme="cyber-neon"] {
   --color-accent-2: #ff00e5;
   --color-accent-soft: rgba(183, 255, 0, 0.12);
 }
+
+html[data-poster-theme="halo-duel"] {
+  --color-accent: #ffe27a;
+  --color-accent-2: #00d26a;
+  --color-accent-soft: rgba(255, 226, 122, 0.14);
+}
