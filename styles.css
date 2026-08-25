@@ -1558,6 +1558,9 @@ dialog::backdrop {
 
 .marquee-row {
   overflow: hidden;
+  /* 悬停放大(scale≈1.06)会纵向溢出约 3px:行内预留上下 padding,
+   * 横向裁切(无缝滚动需要)保留,纵向不再裁掉放大的卡片与焦点圈 */
+  padding-block: 0.3rem;
 }
 
 .marquee-track {
