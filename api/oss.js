@@ -214,6 +214,7 @@ module.exports = {
   isOssConfigured,
   readJson,
   writeJson,
+  backupJson,
   uploadImageBuffer,
   publicUrl,
   withRetry,
