@@ -343,7 +343,8 @@
 
   /* 管理端旧快照落盘时,远端记录里选手已提交的 classLinks 不能丢:
    * 逐卡逐侧,胜者侧为"未填"([]/缺省)而败者侧有实际条目 → 保留败者条目。
-   * 显式 null(阻断继承)是有意为之,不做让位。 */
+   * 显式 null(阻断继承)是有意为之,不做让位。
+   * signup.players(报名名单)同理:胜者快照未见过的新报名并回来,open 以胜者为准。 */
   function mergeRecordClassLinks(winner, loser) {
     const loserCards = new Map(((loser && loser.canvas && loser.canvas.cards) || []).map((c) => [c.id, c]));
     for (const card of ((winner && winner.canvas && winner.canvas.cards) || [])) {
@@ -355,6 +356,17 @@
         const theirs = other.classLinks[side];
         const mineEmpty = mine === undefined || (Array.isArray(mine) && mine.length === 0);
         if (mineEmpty && Array.isArray(theirs) && theirs.length > 0) card.classLinks[side] = theirs;
+      }
+    }
+    if (loser && loser.signup && loser.signup.players) {
+      if (!winner.signup) {
+        winner.signup = loser.signup;
+      } else {
+        const merged = Array.isArray(winner.signup.players) ? winner.signup.players.slice() : [];
+        for (const id of loser.signup.players) {
+          if (typeof id === 'string' && !merged.includes(id)) merged.push(id);
+        }
+        winner.signup.players = merged;
       }
     }
     return winner;
@@ -938,6 +950,17 @@
       '      </div>' +
       '      <p class="hint" id="deck-window-hint">开启期间：选手可在「我的对局」修改自己未开始场次的卡组，未开始场次的卡组对其他人隐藏；关闭即全员公示。时段留空则只看手动开关。</p>' +
       '    </div>' +
+      '    <div class="form-field">' +
+      '      <span id="signup-label">比赛报名</span>' +
+      '      <div class="deck-window-controls">' +
+      '        <select id="signup-open" aria-label="报名开关">' +
+      '          <option value="closed">关闭</option>' +
+      '          <option value="open">开放报名</option>' +
+      '        </select>' +
+      '        <span class="hint" id="signup-count"></span>' +
+      '      </div>' +
+      '      <p class="hint">开放期间选手在「我的比赛」页自助报名/取消；已上场的选手不能自助退赛。</p>' +
+      '    </div>' +
       '    <div class="form-field" id="admin-field" hidden>' +
       '      <label for="settings-admin-token">管理口令</label>' +
       '      <div class="admin-controls">' +
@@ -997,6 +1020,13 @@
       }
       if (dw.open || dw.close || dw.manual) record.deckWindow = dw;
       else delete record.deckWindow;
+      /* 报名开关:只改 open,players 名单保留 */
+      const signupSel = settingsDialog.querySelector('#signup-open');
+      if (signupSel) {
+        const players = (record.signup && Array.isArray(record.signup.players)) ? record.signup.players : [];
+        if (signupSel.value === 'open') record.signup = { open: true, players };
+        else if (record.signup) record.signup = { open: false, players };
+      }
       if (pendingBackground !== undefined) {
         record.background = pendingBackground;
       }
@@ -1133,6 +1163,7 @@
       settingsDialog.querySelector('#deck-window-open'),
       settingsDialog.querySelector('#deck-window-close'),
       settingsDialog.querySelector('#deck-window-manual'),
+      settingsDialog.querySelector('#signup-open'),
       settingsDialog.querySelector('#settings-form').querySelector('button[type="submit"]')
     ];
 
@@ -1320,6 +1351,13 @@
     if (dwOpen) dwOpen.value = dw.open || '';
     if (dwClose) dwClose.value = dw.close || '';
     if (dwManual) dwManual.value = dw.manual === 'open' ? 'open' : dw.manual === 'closed' ? 'closed' : 'auto';
+    const signupSel = settingsDialog.querySelector('#signup-open');
+    const signupCount = settingsDialog.querySelector('#signup-count');
+    if (signupSel) signupSel.value = (record.signup && record.signup.open) ? 'open' : 'closed';
+    if (signupCount) {
+      const n = (record.signup && Array.isArray(record.signup.players)) ? record.signup.players.length : 0;
+      signupCount.textContent = n ? ('已报名 ' + n + ' 人') : '暂无报名';
+    }
     pendingBackground = undefined;
     if (record.background) {
       preview.style.backgroundImage = cssUrl(blobUrl(record.background));
@@ -1526,7 +1564,8 @@
       { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' },
       { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' },
       { page: 'stats', href: 'stats.html', icon: 'bar_chart', label: '数据统计' },
-      { page: 'my-decks', href: 'my-decks.html', icon: 'rule', label: '我的对局' }
+      { page: 'my-decks', href: 'my-decks.html', icon: 'rule', label: '我的对局' },
+      { page: 'my-tourneys', href: 'my-tourneys.html', icon: 'add', label: '我的比赛' }
     ];
     const isActive = (page) => {
       if (page === 'match') return active === 'schedule' || active === 'match';
@@ -1664,7 +1703,7 @@
     const header = document.getElementById('app-header');
     if (header && app.current) {
       const active = app.current;
-      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', list: '赛程列表', profile: '个人中心', 'my-decks': '我的对局' };
+      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', list: '赛程列表', profile: '个人中心', 'my-decks': '我的对局', 'my-tourneys': '我的比赛' };
       const headerTitle = pageTitles[app.activePage] || active.name;
 
       const titleEl = header.querySelector('.header-title');
@@ -1713,11 +1752,11 @@
     const manageBtn = document.getElementById('manage-btn');
     if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
 
-    /* 「我的对局」导航项:仅云端+登录+已绑定选手可见(游客/管理员不显示) */
-    const myDecksNav = document.querySelector('#app-sidebar .side-link[data-page="my-decks"]');
-    if (myDecksNav) {
-      myDecksNav.hidden = !(mode === 'cloud' && sessionUser && sessionPlayer);
-    }
+    /* 选手自助页导航项(我的对局/我的比赛):仅云端+登录+已绑定选手可见 */
+    const playerPagesVisible = Boolean(mode === 'cloud' && sessionUser && sessionPlayer);
+    document.querySelectorAll('#app-sidebar .side-link[data-page="my-decks"], #app-sidebar .side-link[data-page="my-tourneys"]').forEach((link) => {
+      link.hidden = !playerPagesVisible;
+    });
 
     /* 登录/账号按钮:本地模式隐藏;登录态显示头像+昵称,点击进资料页 */
     const loginBtn = document.getElementById('header-login-btn');
@@ -1975,7 +2014,7 @@
       notify((isRegister ? '注册成功,欢迎 ' : '欢迎回来,') + ((data.user && data.user.username) || username));
       if (data.user && data.user.role === 'admin') notify('已获得管理员身份');
       /* 资料页/我的对局的空态不随会话变化自动重建,直接刷新整页最稳 */
-      if (appInstance && (appInstance.activePage === 'profile' || appInstance.activePage === 'my-decks')) location.reload();
+      if (appInstance && (appInstance.activePage === 'profile' || appInstance.activePage === 'my-decks' || appInstance.activePage === 'my-tourneys')) location.reload();
     } catch (error) {
       statusEl.textContent = '网络错误,请稍后再试';
     } finally {

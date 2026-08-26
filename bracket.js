@@ -834,7 +834,11 @@
     const app = window.TournamentApp;
     const record = app && app.current;
     if (!record) return;
-    const players = (record.roster || [])
+    /* 名单 = 画布派生 roster ∪ 报名池(signup.players);仅报名未上场者加标注 */
+    const onCanvas = new Set(record.roster || []);
+    const signedUp = (record.signup && Array.isArray(record.signup.players)) ? record.signup.players : [];
+    const ids = [...new Set([...(record.roster || []), ...signedUp])];
+    const players = ids
       .map((id) => (app.players || []).find((p) => p.id === id))
       .filter(Boolean);
     rosterDropdown = document.createElement('div');
@@ -846,6 +850,7 @@
         '<div class="roster-dropdown-item">' +
         avatarMarkup(p, 'avatar-sm') +
         '<span>' + escapeHtml(p.name) + '</span>' +
+        (onCanvas.has(p.id) ? '' : '<em class="roster-signed-only">已报名</em>') +
         '</div>'
       ).join('') +
       '</div>';

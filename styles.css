@@ -3644,3 +3644,23 @@ body[data-page='my-decks'] #bg-layer {
   opacity: 0.65;
   cursor: help;
 }
+
+.roster-signed-only {
+  font-style: normal;
+  font-size: 0.72rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: var(--radius-pill);
+  padding: 0.05rem 0.45rem;
+  margin-inline-start: auto;
+}
+
+/* ========== 我的比赛 ========== */
+body[data-page='my-tourneys'] #bg-layer {
+  display: none;
+}
+
+.mt-card .mt-rules,
+.mt-card .mt-roster {
+  margin-block: 0.25rem;
+}

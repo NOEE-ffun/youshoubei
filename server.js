@@ -53,6 +53,7 @@ const API_ROUTES = {
   '/api/me/player': apiAccount.me,
   '/api/me/password': apiAccount.mePassword,
   '/api/me/classlinks': apiDecks,
+  '/api/me/signup': require('./api/signup'),
   '/api/dev/reset': require('./api/dev-store').resetHandler
 };
 
