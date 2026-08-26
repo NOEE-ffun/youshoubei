@@ -69,11 +69,18 @@
     const layer = document.createElement('div');
     layer.className = 'slideshow-layer';
     layer.style.backgroundImage = cssUrl(url);
+    /* Ken Burns 交替方向:偶数张缓慢推近,奇数张缓慢拉远,避免单调 */
+    const zoomIn = slideIndex % 2 === 0;
+    layer.style.transform = zoomIn ? 'scale(1)' : 'scale(1.1)';
     el.appendChild(layer);
-    requestAnimationFrame(() => layer.classList.add('show'));
+    /* 双 rAF:先把起始 transform 提交渲染,再切目标值才会走过渡而非直接跳变 */
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      layer.classList.add('show');
+      layer.style.transform = zoomIn ? 'scale(1.1)' : 'scale(1.02)';
+    }));
     setTimeout(() => {
       el.querySelectorAll('.slideshow-layer:not(:last-child)').forEach((old) => old.remove());
-    }, 1000);
+    }, 1600);
     slideIndex += 1;
   }
 
