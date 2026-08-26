@@ -29,6 +29,17 @@
   let editingCardId = null;
   let wheelBound = false;
 
+  /* ---------- 撤销/重做(编辑安全感) ----------
+   * 栈语义在 canvas-history.js(纯数据,可单测);此处负责快照/写回/落盘时机。
+   * 覆盖卡片级改动(增删/属性/连线/拖动/微调);比分录入自带确认与连锁重算,不进历史。 */
+  const history = window.CanvasHistory.createHistory(10);
+  let historyRecordId = null;
+  /* 有未落盘的改动:保存完成前关页会被 beforeunload 拦截 */
+  let dirty = false;
+  let dragBeforeSnapshot = null;
+  let nudgeBeforeSnapshot = null;
+  let dialogBeforeSnapshot = null;
+
   function currentRecord() {
     return window.TournamentApp.current;
   }
@@ -39,7 +50,105 @@
 
   function saveCanvas() {
     currentRecord().updatedAt = Date.now();
-    return save();
+    return save().then(
+      (result) => {
+        markClean();
+        return result;
+      },
+      (error) => {
+        dirty = true;
+        refreshToolbarUI();
+        throw error;
+      }
+    );
+  }
+
+  function markClean() {
+    if (!dirty) return;
+    dirty = false;
+    refreshToolbarUI();
+  }
+
+  function isDirty() {
+    return dirty;
+  }
+
+  function saveNow() {
+    return saveCanvas();
+  }
+
+  /* 快照 = 卡片 + 比分 + 每场卡组(删除卡片会连带清理后两者,撤销须整体还原) */
+  function snapshotState() {
+    const record = currentRecord();
+    return {
+      cards: JSON.parse(JSON.stringify((record.canvas && record.canvas.cards) || [])),
+      scores: JSON.parse(JSON.stringify(record.scores || {})),
+      matchDecks: JSON.parse(JSON.stringify(record.matchDecks || {}))
+    };
+  }
+
+  function applySnapshot(snap) {
+    const record = currentRecord();
+    record.canvas = record.canvas || { cards: [] };
+    record.canvas.cards = JSON.parse(JSON.stringify(snap.cards));
+    record.scores = JSON.parse(JSON.stringify(snap.scores));
+    record.matchDecks = JSON.parse(JSON.stringify(snap.matchDecks));
+  }
+
+  /* 切换比赛后历史不再属于当前数据:清栈,按钮随之禁用 */
+  function syncHistoryOwner() {
+    const record = currentRecord();
+    const id = record && record.id;
+    if (id !== historyRecordId) {
+      historyRecordId = id;
+      history.clear();
+    }
+  }
+
+  /* 改动入栈:pre 为改动前快照(拖拽/弹窗这类"发起与落盘分离"的操作在发起时捕获),
+   * 缺省取当前状态(调用点须紧贴改动之前) */
+  function commitHistory(pre) {
+    syncHistoryOwner();
+    history.push(pre || snapshotState());
+    dirty = true;
+    refreshToolbarUI();
+  }
+
+  function restoreHistory(direction) {
+    syncHistoryOwner();
+    const current = snapshotState();
+    const snap = direction === 'undo' ? history.undo(current) : history.redo(current);
+    if (!snap) return false;
+    applySnapshot(snap);
+    /* 还原后的卡片集可能不含当前选择:先清选择再重绘 */
+    batchSelected.clear();
+    selectedCardId = null;
+    dirty = true;
+    refreshToolbarUI();
+    saveCanvas().then(() => {
+      requestRender();
+      refreshToolbarUI();
+    });
+    notify(direction === 'undo' ? '已撤销' : '已重做');
+    return true;
+  }
+
+  function undo() {
+    return restoreHistory('undo');
+  }
+
+  function redo() {
+    return restoreHistory('redo');
+  }
+
+  function canUndo() {
+    syncHistoryOwner();
+    return history.canUndo();
+  }
+
+  function canRedo() {
+    syncHistoryOwner();
+    return history.canRedo();
   }
 
   function board() {
@@ -452,6 +561,8 @@
         startY: event.clientY,
         moved: false
       };
+      /* 拖拽真正移动才入历史:先抓改动前快照,落盘时提交 */
+      dragBeforeSnapshot = snapshotState();
       event.preventDefault();
     }
   }
@@ -510,6 +621,7 @@
       if (input && input.dataset.card && input.dataset.slot !== undefined) {
         const targetCard = findCard(input.dataset.card);
         if (targetCard) {
+          commitHistory();
           targetCard.slots[Number(input.dataset.slot)] = {
             type: 'flow',
             cardId: connectState.sourceCardId,
@@ -536,11 +648,13 @@
     }
     if (dragState) {
       if (dragState.moved) {
+        commitHistory(dragBeforeSnapshot);
         saveCanvas().then(() => {
           requestRender();
           highlightSelected();
         });
       }
+      dragBeforeSnapshot = null;
       dragState = null;
     }
   }
@@ -563,6 +677,13 @@
     if (!active) return;
     if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
     const mod = event.ctrlKey || event.metaKey;
+    if (mod && (event.key === 'z' || event.key === 'Z')) {
+      /* Ctrl/Cmd+Z 撤销,Shift 组合重做;文本输入框里的原生撤销被上方输入守卫放行 */
+      event.preventDefault();
+      if (event.shiftKey) redo();
+      else undo();
+      return;
+    }
     if (mod && (event.key === 'c' || event.key === 'C')) {
       copySelection();
       return;
@@ -617,6 +738,13 @@
   let nudgeCommit = null;
 
   function nudgeSelection(dx, dy) {
+    /* 连按方向键是一串微调:首键抓快照并立刻置脏(防抖窗口内保存钮亮圆点),
+     * 防抖落盘时合并为一步撤销 */
+    if (!nudgeBeforeSnapshot) {
+      nudgeBeforeSnapshot = snapshotState();
+      dirty = true;
+      refreshToolbarUI();
+    }
     for (const id of batchSelected) {
       const card = findCard(id);
       if (!card) continue;
@@ -630,6 +758,10 @@
     }
     if (!nudgeCommit) {
       nudgeCommit = debounce(() => {
+        if (nudgeBeforeSnapshot) {
+          commitHistory(nudgeBeforeSnapshot);
+          nudgeBeforeSnapshot = null;
+        }
         saveCanvas().then(() => {
           requestRender();
           highlightSelected();
@@ -659,7 +791,9 @@
           el.style.top = (card.y * ROW_GAP) + 'px';
         }
       }
+      /* 拖拽被取消:还原原位,快照作废 */
       dragState = null;
+      dragBeforeSnapshot = null;
     }
     highlightSelected();
   }
@@ -688,6 +822,7 @@
   function addCard(x, y) {
     const record = currentRecord();
     const canvas = record.canvas || (record.canvas = { cards: [] });
+    commitHistory();
     const card = {
       id: (typeof CanvasModel !== 'undefined' && CanvasModel.uid) ? CanvasModel.uid('c') : ('c_' + Date.now()),
       label: '新对局',
@@ -712,6 +847,7 @@
 
   /* 连线槽清理 + 删除本体 + 比分/卡组清理;是否确认由调用方决定 */
   function performRemoval(ids) {
+    commitHistory();
     const record = currentRecord();
     const canvas = record.canvas || { cards: [] };
     const idSet = new Set(ids);
@@ -777,6 +913,7 @@
       clones = JSON.parse(JSON.stringify(sources));
     }
     if (!clones.length) return;
+    commitHistory();
     for (const clone of clones) canvas.cards.push(clone);
     if (tool === 'delete') setTool('select');
     batchSelected = new Set(clones.map((c) => c.id));
@@ -827,6 +964,10 @@
     document.body.appendChild(cardDialog);
     cardDialog.querySelectorAll('[data-card-close]').forEach((btn) => btn.addEventListener('click', () => cardDialog.close()));
     cardDialog.querySelector('[data-card-save]').addEventListener('click', saveCardDialog);
+    /* 弹窗无论保存还是取消,关闭时都清掉开窗快照(保存路径已先行消费) */
+    cardDialog.addEventListener('close', () => {
+      dialogBeforeSnapshot = null;
+    });
     /* 行删除走事件委托:renderClassLinkRows 重建行不需要重复绑定 */
     for (const listId of ['#card-cl-a', '#card-cl-b']) {
       cardDialog.querySelector(listId).addEventListener('click', (event) => {
@@ -924,6 +1065,7 @@
     if (!card) return;
     buildCardDialog();
     editingCardId = cardId;
+    dialogBeforeSnapshot = snapshotState();
     cardDialog.querySelector('#card-label').value = card.label || '';
     cardDialog.querySelector('#card-phase').value = card.phase || '';
     cardDialog.querySelector('#card-format').value = card.format || 'BO3';
@@ -995,6 +1137,13 @@
       a: resolveGroup(card.classLinks, 'a', ga),
       b: resolveGroup(card.classLinks, 'b', gb)
     };
+    /* 真有改动才入历史(打开又原样保存不产生空撤销步) */
+    if (dialogBeforeSnapshot) {
+      if (JSON.stringify(snapshotState()) !== JSON.stringify(dialogBeforeSnapshot)) {
+        commitHistory(dialogBeforeSnapshot);
+      }
+      dialogBeforeSnapshot = null;
+    }
     cardDialog.close();
     saveCanvas().then(() => {
       requestRender();
@@ -1117,6 +1266,12 @@
   /* 平移手势查看态也要用,事件绑定放在模块初始化而非仅进入编辑时 */
   bindBoardEvents();
   bindWheel();
+  /* 编辑改动未落盘就关页/刷新:浏览器原生确认框兜底 */
+  window.addEventListener('beforeunload', (event) => {
+    if (!dirty) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
 
   /* ---------- 暴露接口 ---------- */
 
@@ -1145,6 +1300,12 @@
     focusCards,
     centerCard,
     syncZoom,
-    getSelectedCount
+    getSelectedCount,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    isDirty,
+    saveNow
   };
 })();

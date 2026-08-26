@@ -38,6 +38,7 @@
   --text-muted: #5b6577;
   --border: #d9e0ec;
   --border-soft: rgba(128, 128, 128, 0.12);
+  --warning: #b45309;
   --warning-soft: #fff7d6;
   --accent: #3563e9;
   --accent: oklch(55% 0.18 262);
@@ -131,6 +132,7 @@ html {
   --text-muted: #a5b0c6;
   --border: #39496b;
   --border-soft: rgba(148, 163, 184, 0.14);
+  --warning: #e6a23c;
   --warning-soft: #3a3220;
   --warning-soft: oklch(30% 0.04 90);
   --accent: #8fabff;
@@ -2782,6 +2784,51 @@ body[data-page="home"] {
 
 .edit-toolbar[hidden] {
   display: none;
+}
+
+/* 工具分组:撤销 / 编辑操作 / 视图缩放 / 外观与保存,组间细分隔线 */
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.tool-group + .tool-group {
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border);
+}
+
+.tool-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.tool-btn:disabled:hover {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+/* 保存钮未保存圆点:编辑改动尚未落盘时提示(此时关页会被拦截确认) */
+.tool-btn.has-unsaved {
+  position: relative;
+}
+
+.save-dot {
+  display: none;
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 0 2px var(--surface-float);
+}
+
+.tool-btn.has-unsaved .save-dot {
+  display: block;
 }
 
 /* 卡片样式抽屉:palette 按钮唤出,浮在画布右上 */

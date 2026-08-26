@@ -1703,7 +1703,7 @@
     const header = document.getElementById('app-header');
     if (header && app.current) {
       const active = app.current;
-      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', list: '赛程列表', profile: '个人中心', 'my-decks': '我的对局', 'my-tourneys': '我的比赛' };
+      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', profile: '个人中心', 'my-decks': '我的对局', 'my-tourneys': '我的比赛' };
       const headerTitle = pageTitles[app.activePage] || active.name;
 
       const titleEl = header.querySelector('.header-title');
