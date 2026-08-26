@@ -1,0 +1,109 @@
+import { test, expect } from '@playwright/test';
+
+/* 移动端适配:窄屏默认列表视图(会话内可选回画布)、底部 tab 导航、
+ * 44px 触控目标、缩放持久化、双指捏合。视口 390×844 贯穿全组。 */
+
+test.setTimeout(60_000);
+
+test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+});
+
+test('窄屏进比赛页重定向到列表,主动切回画布后会话内不再重定向', async ({ page }) => {
+  await page.goto('/schedule.html');
+  await expect(page).toHaveURL(/list\.html/);
+  await expect(page.locator('#list-body')).toBeVisible();
+
+  // 主动切回画布:设会话偏好后不再重定向
+  await page.locator('.mobile-back-canvas').click();
+  await page.waitForSelector('.canvas-card');
+  await expect(page).toHaveURL(/schedule\.html/);
+
+  await page.reload();
+  await page.waitForSelector('.canvas-card');
+  await expect(page).toHaveURL(/schedule\.html/);
+});
+
+test('窄屏侧栏变底部 tab 栏,触控目标不小于 44px', async ({ page }) => {
+  // 会话偏好画布,避免重定向干扰
+  await page.goto('/list.html');
+  await page.evaluate(() => sessionStorage.setItem('ts:preferCanvas', '1'));
+  await page.goto('/schedule.html');
+  await page.waitForSelector('.canvas-card');
+
+  const sidebar = page.locator('#app-sidebar');
+  const bar = await sidebar.boundingBox();
+  expect(bar).toBeTruthy();
+  // 底栏贴近视口底部(而非左侧竖条)
+  expect(bar.y + bar.height).toBeGreaterThan(844 - 80);
+  expect(bar.x).toBeGreaterThanOrEqual(0);
+  expect(bar.width).toBeGreaterThan(300);
+
+  // 导航项 44px 最小触控
+  const link = page.locator('.side-nav .side-link').first();
+  const linkBox = await link.boundingBox();
+  expect(linkBox.height).toBeGreaterThanOrEqual(44);
+
+  // 缩放按钮 44px 最小触控
+  const zoomBtn = page.locator('.zoom-btn[data-zoom="in"]');
+  const zoomBox = await zoomBtn.boundingBox();
+  expect(zoomBox.height).toBeGreaterThanOrEqual(44);
+
+  // 展开汉堡在底栏形态下隐藏
+  await expect(page.locator('#side-toggle')).toBeHidden();
+});
+
+test('画布缩放持久化:放大后刷新仍保持', async ({ page }) => {
+  await page.goto('/list.html');
+  await page.evaluate(() => sessionStorage.setItem('ts:preferCanvas', '1'));
+  await page.goto('/schedule.html');
+  await page.waitForSelector('.canvas-card');
+  await page.waitForTimeout(400);
+
+  const zoomIn = page.locator('.zoom-btn[data-zoom="in"]');
+  await zoomIn.click();
+  await zoomIn.click();
+  await zoomIn.click();
+  await page.waitForTimeout(300);
+  const zoomed = await page.locator('#zoom-level').textContent();
+  expect(Number.parseInt(zoomed, 10)).toBeGreaterThan(40);
+
+  await page.reload();
+  await page.waitForSelector('.canvas-card');
+  await page.waitForTimeout(500);
+  const afterReload = await page.locator('#zoom-level').textContent();
+  expect(Number.parseInt(afterReload, 10)).toBe(Number.parseInt(zoomed, 10));
+});
+
+test('双指捏合放大画布', async ({ page }) => {
+  await page.goto('/list.html');
+  await page.evaluate(() => sessionStorage.setItem('ts:preferCanvas', '1'));
+  await page.goto('/schedule.html');
+  await page.waitForSelector('.canvas-card');
+  await page.waitForTimeout(400);
+  const before = Number.parseInt(await page.locator('#zoom-level').textContent(), 10);
+
+  await page.evaluate(() => {
+    const el = document.getElementById('canvas-scroll');
+    const fire = (type, id, x, y) => el.dispatchEvent(new PointerEvent(type, {
+      pointerId: id,
+      pointerType: 'touch',
+      isPrimary: id === 1,
+      clientX: x,
+      clientY: y,
+      bubbles: true,
+      cancelable: true
+    }));
+    fire('pointerdown', 1, 150, 300);
+    fire('pointerdown', 2, 240, 300);
+    for (let i = 1; i <= 12; i += 1) {
+      fire('pointermove', 1, 150 - i * 7, 300);
+      fire('pointermove', 2, 240 + i * 7, 300);
+    }
+    fire('pointerup', 1, 66, 300);
+    fire('pointerup', 2, 324, 300);
+  });
+  await page.waitForTimeout(300);
+  const after = Number.parseInt(await page.locator('#zoom-level').textContent(), 10);
+  expect(after).toBeGreaterThan(before);
+});

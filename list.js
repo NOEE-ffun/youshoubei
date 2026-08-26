@@ -106,6 +106,13 @@
   }
 
   document.addEventListener('ts:ready', () => {
+    /* 主动切回画布:写会话偏好,画布页窄屏重定向本会话内放行 */
+    const backCanvas = document.querySelector('.mobile-back-canvas');
+    if (backCanvas) {
+      backCanvas.addEventListener('click', () => {
+        try { sessionStorage.setItem('ts:preferCanvas', '1'); } catch (error) { /* 忽略 */ }
+      });
+    }
     const select = document.getElementById('list-tournament-select');
     if (select) {
       select.addEventListener('change', async () => {

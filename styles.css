@@ -3295,27 +3295,118 @@ body[data-page="home"] {
   }
 }
 
-/* 画布页手机版入口:仅窄屏显示 */
-.mobile-canvas-link {
-  display: none;
-  position: absolute;
-  top: 0.6rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 25;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
-  padding: 0.3rem 0.8rem;
-  text-decoration: none;
-}
-
+/* ========== 移动端:侧栏变底部 tab 栏(拇指区) ==========
+ * 窄屏固定左侧栏吃掉 18% 宽且登录/主题按钮在拇指区外;
+ * 底栏横向排布主导航 + 功能按钮,文字标签沿用注入的 .side-label */
 @media (max-width: 48rem) {
-  .mobile-canvas-link {
-    display: inline-block;
+  body,
+  body.side-expanded {
+    --sidebar-w: 0rem;
+    --tabbar-h: 3.6rem;
+  }
+
+  .app-sidebar {
+    position: fixed;
+    inset-block: auto 0;
+    inset-inline: 0;
+    width: 100%;
+    box-sizing: border-box;
+    flex-direction: row;
+    align-items: stretch;
+    padding: 0.2rem 0.35rem calc(0.2rem + env(safe-area-inset-bottom, 0px));
+    box-shadow: inset 0 1px 0 var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .app-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 展开汉堡在底栏形态无意义 */
+  #side-toggle {
+    display: none;
+  }
+
+  .side-nav {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    width: auto;
+  }
+
+  .side-link {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+    width: auto;
+    min-inline-size: 3.4rem;
+    min-block-size: 2.75rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .side-link .side-label {
+    display: block;
+    font-size: 0.6rem;
+    line-height: 1;
+  }
+
+  .side-actions {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    margin-block-start: 0;
+    margin-inline-start: auto;
+    padding-inline-start: 0.35rem;
+    border-inline-start: 1px solid var(--border);
+  }
+
+  .side-action {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.2rem;
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .side-action .side-label {
+    display: block;
+    font-size: 0.6rem;
+    line-height: 1;
+  }
+
+  /* 主区让位:高度扣除底栏(画布/主页为满高布局同样适用;基础 1rem 内边距已够底部余量) */
+  .layout-body:not(.layout-body-canvas) > main {
+    height: calc(100vh - var(--header-height, 3rem) - var(--tabbar-h, 3.6rem) - env(safe-area-inset-bottom, 0px));
+  }
+
+  .layout-body-canvas {
+    height: calc(100vh - var(--header-height, 3rem) - var(--tabbar-h, 3.6rem) - env(safe-area-inset-bottom, 0px));
+  }
+
+  /* toast 升到 底栏之上,不再压导航 */
+  .toast-region {
+    inset-block-end: calc(var(--tabbar-h, 3.6rem) + 0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* 44px 触控目标 */
+  .zoom-btn {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+
+  .avatar-action {
+    font-size: 0.8rem;
+    padding: 0.45rem 0.7rem;
+    min-block-size: 2.25rem;
+  }
+
+  /* 画布触控手势由脚本接管(单指平移/双指捏合),禁浏览器默认滚动/页面缩放 */
+  .canvas-scroll {
+    touch-action: none;
   }
 }
 

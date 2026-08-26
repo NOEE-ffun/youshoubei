@@ -1,6 +1,16 @@
 (function () {
   'use strict';
 
+  /* 窄屏默认列表视图:双败画布自适应到 ~28% 后文字不可读,手机用户要的
+   * 是"下一场打谁"——直接送去手机列表页。会话内主动选过画布则尊重选择。
+   * 判定用 CSS 同一断点 48rem;放模块顶部,后续绑定全部跳过 */
+  try {
+    if (window.matchMedia('(max-width: 48rem)').matches && !sessionStorage.getItem('ts:preferCanvas')) {
+      window.location.replace('list.html');
+      return;
+    }
+  } catch (error) { /* matchMedia 不可用(极端环境):留在画布页 */ }
+
   /* 共享工具统一来自 common.js;画布几何来自 canvas-model.js(唯一真源) */
   const {
     escapeHtml, canEdit, save, avatarMarkup, notify, uiConfirm, iconMarkup,
@@ -979,9 +989,14 @@
 
   let userZoomed = false;
 
-  /* 查看态且用户未手动缩放时贴合视口，让双败图首屏可见（总决赛不再在视口外） */
+  /* 查看态且用户未手动缩放时贴合视口，让双败图首屏可见（总决赛不再在视口外）;
+   * 有记忆的缩放级别则按记忆恢复(刷新/换机不再归零),并视为用户已接管 */
   function autoFitCanvas() {
     if (editMode || userZoomed) return;
+    if (CanvasEditor.restoreSavedZoom()) {
+      userZoomed = true;
+      return;
+    }
     CanvasEditor.fitCanvas();
   }
 

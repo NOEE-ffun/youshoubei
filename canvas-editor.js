@@ -314,6 +314,40 @@
     scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, next));
     syncZoom();
     refreshToolbarUI();
+    saveZoomPreference(true);
+  }
+
+  /* 缩放持久化:记住用户选择的缩放级别(不记平移,平移随视口/赛事变化),
+   * 「适应画布」清回自动;刷新后由 restoreSavedZoom 按记忆级别居中恢复 */
+  const LS_ZOOM = 'ts:canvasZoom';
+
+  function saveZoomPreference(user) {
+    try {
+      localStorage.setItem(LS_ZOOM, JSON.stringify({
+        scale: Math.round(scale * 1000) / 1000,
+        user: !!user
+      }));
+    } catch (error) { /* 存储不可用:仅本次会话生效 */ }
+  }
+
+  /* 恢复记忆的用户缩放:按该级别对当前内容包围盒居中;无记忆返回 false */
+  function restoreSavedZoom() {
+    let saved = null;
+    try {
+      saved = JSON.parse(localStorage.getItem(LS_ZOOM) || 'null');
+    } catch (error) {
+      saved = null;
+    }
+    if (!saved || !saved.user || !Number.isFinite(saved.scale)) return false;
+    const sc = scrollEl();
+    if (!sc) return false;
+    const extent = contentExtent() || { width: baseWidth, height: baseHeight };
+    scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, saved.scale));
+    const rect = sc.getBoundingClientRect();
+    tx = (rect.width - extent.width * scale) / 2;
+    ty = (rect.height - extent.height * scale) / 2;
+    syncZoom();
+    return true;
   }
 
   /* 以屏幕坐标 (cx, cy) 为锚点缩放:锚下的内容点缩放前后不动 */
@@ -329,6 +363,7 @@
     ty = cy - rect.top - py * scale;
     syncZoom();
     refreshToolbarUI();
+    saveZoomPreference(true);
   }
 
   function zoomAtCenter(factor) {
@@ -369,6 +404,7 @@
     ty = (rect.height - extent.height * scale) / 2;
     syncZoom();
     refreshToolbarUI();
+    saveZoomPreference(false);
   }
 
   /* 查找定位:缩放适配到给定卡片集合并把包围盒居中 */
@@ -433,6 +469,57 @@
   let panState = null;
   let spaceHeld = false;
 
+  /* ---------- 双指捏合(触屏缩放/平移画布) ---------- */
+  const activeTouches = new Map(); /* pointerId -> {x, y} */
+  let pinchState = null; /* { lastDist, lastMid: {x, y} } */
+
+  function touchDist(a, b) {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  function touchMid(a, b) {
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+
+  function onTouchDown(event) {
+    if (event.pointerType !== 'touch') return false;
+    activeTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (activeTouches.size !== 2) return false;
+    /* 第二指落下即切捏合:中断单指平移;拖拽/连线/框选进行中则不打扰 */
+    if (dragState || connectState || marqueeState) return false;
+    if (panState) {
+      panState = null;
+      const sc = scrollEl();
+      if (sc) sc.classList.remove('panning');
+    }
+    const pts = [...activeTouches.values()];
+    pinchState = { lastDist: touchDist(pts[0], pts[1]), lastMid: touchMid(pts[0], pts[1]) };
+    return true;
+  }
+
+  function onTouchMove(event) {
+    if (event.pointerType !== 'touch' || !activeTouches.has(event.pointerId)) return false;
+    activeTouches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (!pinchState || activeTouches.size < 2) return false;
+    const pts = [...activeTouches.values()];
+    const dist = touchDist(pts[0], pts[1]);
+    const mid = touchMid(pts[0], pts[1]);
+    /* 中点位移 = 双指整体平移;距离变化 = 缩放(增量式,避免漂移) */
+    panBy(mid.x - pinchState.lastMid.x, mid.y - pinchState.lastMid.y);
+    if (dist > 0 && pinchState.lastDist > 0) {
+      zoomAtPoint(mid.x, mid.y, dist / pinchState.lastDist);
+    }
+    pinchState.lastDist = dist;
+    pinchState.lastMid = mid;
+    return true;
+  }
+
+  function onTouchEnd(event) {
+    if (event.pointerType !== 'touch') return;
+    activeTouches.delete(event.pointerId);
+    if (activeTouches.size < 2) pinchState = null;
+  }
+
   function onSpaceDown(event) {
     if (event.code !== 'Space') return;
     if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
@@ -483,6 +570,7 @@
     sc.addEventListener('pointerdown', onPointerDown);
     sc.addEventListener('pointermove', onPointerMove);
     sc.addEventListener('pointerup', onPointerUp);
+    sc.addEventListener('pointercancel', onPointerCancel);
     sc.addEventListener('dblclick', onDblClick);
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keydown', onSpaceDown);
@@ -491,6 +579,10 @@
   }
 
   function onPointerDown(event) {
+    if (onTouchDown(event)) {
+      event.preventDefault();
+      return;
+    }
     if (isPanGesture(event)) {
       event.preventDefault();
       const sc = scrollEl();
@@ -568,6 +660,10 @@
   }
 
   function onPointerMove(event) {
+    if (onTouchMove(event)) {
+      event.preventDefault();
+      return;
+    }
     if (panState) {
       panBy(event.clientX - panState.lastX, event.clientY - panState.lastY);
       panState.lastX = event.clientX;
@@ -610,6 +706,7 @@
   }
 
   function onPointerUp(event) {
+    onTouchEnd(event);
     if (panState) {
       panState = null;
       const sc = scrollEl();
@@ -1150,6 +1247,11 @@
     });
   }
 
+  /* 系统打断触摸(来电/手势导航):只清触摸轨迹,不打断可恢复的其它手势 */
+  function onPointerCancel(event) {
+    onTouchEnd(event);
+  }
+
   /* ---------- 框选矩形(挂 body,renderCanvas 重建 board 不会销毁它) ---------- */
 
   function ensureMarqueeRect() {
@@ -1306,6 +1408,7 @@
     canUndo,
     canRedo,
     isDirty,
-    saveNow
+    saveNow,
+    restoreSavedZoom
   };
 })();
