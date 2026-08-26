@@ -62,4 +62,7 @@ test('卡片改名可撤销重做,删除可撤销找回', async ({ page }) => {
   await page.waitForTimeout(400);
   expect(await page.locator('.canvas-card').count()).toBe(cardCount);
   await expect(page.locator('.canvas-card').first()).toContainText('撤销测试卡');
+
+  // 云模式下本用例会把改名写入开发存储:清场,不污染后续用例
+  await page.request.post('/api/dev/reset');
 });

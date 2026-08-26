@@ -4,13 +4,21 @@ import { test, expect } from '@playwright/test';
  * 管理员解锁→建赛→指派选手→开窗 ‖ 选手注册→我的对局提交 ‖ 游客看锁→关窗公示。
  * 这是 2026-08-25 "自助提交一团糟" 事故的回归测试集。 */
 
-test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ browser }) => {
+test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ browser, request }) => {
   const adminCtx = await browser.newContext();
   const playerCtx = await browser.newContext();
   const guestCtx = await browser.newContext();
   const admin = await adminCtx.newPage();
   const player = await playerCtx.newPage();
   const guest = await guestCtx.newPage();
+
+  /* ---- 0. 自举云端状态:本用例依赖云模式(空服务器 GET 500 会退本地、登录钮隐藏),
+   * 不吃先行用例的遗留——用管理口令 PUT 一个空工作区,让 /api/data 可用。
+   * 走口令而非邀请码:开发码共 5 个已被各用例占满,且码是一次性 ---- */
+  await request.put('/api/data', {
+    headers: { Authorization: 'Bearer e2e-admin-token' },
+    data: { tournaments: [], activeId: null, players: [] }
+  });
 
   /* ---- 1. 选手注册(空白码:建号且建选手) ---- */
   await player.goto('/my-decks.html');
