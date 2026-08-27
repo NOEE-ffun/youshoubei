@@ -1,11 +1,13 @@
 (function () {
   'use strict';
 
-  const { escapeHtml, canEdit, avatarMarkup, notify, errMsg, uiConfirm } = window.TournamentUtils;
+  const { escapeHtml, canEdit, avatarMarkup, notify, errMsg, uiConfirm, formatStartTime } = window.TournamentUtils;
 
   let fileInput = null;
   let pendingPlayerId = null;
 
+  /* 数据库式紧凑表格:一行一选手,列=头像/名称(行内改)/队伍ID/垃圾话/颜色/加入/操作。
+   * 头像即上传入口(编辑态,铅笔角标提示);删除收进操作列,不再与内容抢权重 */
   function render() {
     const app = window.TournamentApp;
     const grid = document.getElementById('players-grid');
@@ -14,17 +16,46 @@
     const banner = document.getElementById('players-lock-banner');
     if (banner) banner.hidden = editable;
     const players = app.players || [];
-    grid.innerHTML = players.map((p) =>
-      '<div class="player-card">' +
-      '<div class="player-card-avatar">' +
-      avatarMarkup(p, 'avatar-lg') +
-      (editable ? '<button type="button" class="avatar-action" data-avatar-upload="' + p.id + '">' + (p.avatar ? '更换' : '上传') + '</button>' : '') +
-      '</div>' +
-      '<input class="player-card-name" data-player-name="' + p.id + '" value="' + escapeHtml(p.name) + '"' +
-      (editable ? '' : ' disabled') + ' autocomplete="off">' +
-      (editable ? '<button type="button" class="btn btn-danger btn-sm" data-delete-player="' + p.id + '">删除</button>' : '') +
-      '</div>'
-    ).join('') || '<p class="hint">暂无选手，先新增一位。</p>';
+    if (!players.length) {
+      grid.innerHTML = '<p class="hint">暂无选手，先新增一位。</p>';
+      syncAddFormAccess();
+      return;
+    }
+    const EMPTY = '<span class="td-empty">—</span>';
+    const rows = players.map((p) => {
+      const avatar = avatarMarkup(p, 'avatar avatar-td');
+      const avatarCell = editable
+        ? '<button type="button" class="avatar-btn" data-avatar-upload="' + p.id + '"' +
+          ' title="' + (p.avatar ? '更换' : '上传') + '头像" aria-label="' + (p.avatar ? '更换' : '上传') + escapeHtml(p.name) + '的头像">' +
+          avatar + '<img class="icon avatar-edit" src="icons/edit.svg" alt="" aria-hidden="true"></button>'
+        : avatar;
+      const tagCell = (p.tagImg ? '<img class="tag-img" src="' + escapeHtml(p.tagImg) + '" alt="" aria-hidden="true">' : '') +
+        (p.tag ? escapeHtml(p.tag) : EMPTY);
+      return '<tr>' +
+        '<td class="col-avatar">' + avatarCell + '</td>' +
+        '<td class="col-name"><input class="player-name-input" data-player-name="' + p.id + '"' +
+        ' value="' + escapeHtml(p.name) + '" aria-label="' + escapeHtml(p.name) + ' 的名称"' +
+        (editable ? '' : ' disabled') + ' autocomplete="off"></td>' +
+        '<td class="col-tag">' + tagCell + '</td>' +
+        '<td class="col-title">' + (p.title ? escapeHtml(p.title) : EMPTY) + '</td>' +
+        '<td class="col-color">' + (p.color ? '<span class="color-dot" style="background:' + escapeHtml(p.color) + '" title="' + escapeHtml(p.color) + '"></span>' : EMPTY) + '</td>' +
+        '<td class="col-joined">' + (p.createdAt ? escapeHtml(formatStartTime(p.createdAt)) : EMPTY) + '</td>' +
+        (editable
+          ? '<td class="col-actions"><button type="button" class="row-del" data-delete-player="' + p.id + '" title="删除选手" aria-label="删除选手 ' + escapeHtml(p.name) + '"><img class="icon" src="icons/delete.svg" alt="" aria-hidden="true"></button></td>'
+          : '') +
+        '</tr>';
+    }).join('');
+    grid.innerHTML =
+      '<div class="players-table-wrap"><table class="players-table">' +
+      '<thead><tr>' +
+      '<th class="col-avatar" scope="col">头像</th>' +
+      '<th class="col-name" scope="col">名称</th>' +
+      '<th class="col-tag" scope="col">队伍 ID</th>' +
+      '<th class="col-title" scope="col">垃圾话</th>' +
+      '<th class="col-color" scope="col">颜色</th>' +
+      '<th class="col-joined" scope="col">加入</th>' +
+      (editable ? '<th class="col-actions" scope="col">操作</th>' : '') +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 
     grid.querySelectorAll('[data-player-name]').forEach((input) => {
       input.addEventListener('change', async () => {
@@ -36,6 +67,7 @@
         p.updatedAt = Date.now();
         try {
           await app.storagePutPlayers(app.players);
+          notify('已保存');
         } catch (error) {
           notify(errMsg(error), 'danger');
         }
