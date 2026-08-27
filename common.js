@@ -1018,6 +1018,11 @@
         dw.close = dwClose.value || '';
         dw.manual = dwManual.value === 'open' ? 'open' : dwManual.value === 'closed' ? 'closed' : null;
       }
+      /* 半配置即静默恒关(服务端 parseHHMM 缺一恒 false):成对校验,当次保存拦截 */
+      if ((dw.open ? 1 : 0) !== (dw.close ? 1 : 0)) {
+        notify('卡组提交时段需成对填写:开放与关闭时间都填,或都留空只用手动开关', 'danger');
+        return;
+      }
       if (dw.open || dw.close || dw.manual) record.deckWindow = dw;
       else delete record.deckWindow;
       /* 报名开关:只改 open,players 名单保留 */

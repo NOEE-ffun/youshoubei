@@ -4,6 +4,7 @@ const { sendJson, readBody } = require('./helpers');
 const { DATA_PATH, readJson, writeJson, backupJson, isOssConfigured } = require('./oss');
 const account = require('./account');
 const devStore = require('./dev-store');
+const { withWorkspaceLock } = require('./workspace-lock');
 const { deriveRoster } = require('../canvas-model');
 
 /* 比赛报名(2026-08-26):
@@ -75,45 +76,48 @@ function createHandler(storage, options) {
       return;
     }
 
-    const workspace = await read(DATA_PATH);
-    const record = workspace && (workspace.tournaments || []).find((t) => t && t.id === body.tournamentId);
-    if (!record) {
-      sendJson(res, 404, { error: '比赛不存在' });
-      return;
-    }
-    if (!isSignupOpen(record)) {
-      sendJson(res, 423, { error: '该比赛未开放报名' });
-      return;
-    }
-
-    const onCanvas = deriveRoster(record.canvas || {}).includes(user.playerId);
-    const players = signupPlayers(record);
-    const joined = players.includes(user.playerId);
-
-    if (action === 'join') {
-      if (joined || onCanvas) {
-        sendJson(res, 200, { ok: true, joined: true, players: players.length });
+    /* 读-改-写整段上锁:并发报名/退报互斥(与提交/资料/管理写共用一把锁) */
+    return withWorkspaceLock(async () => {
+      const workspace = await read(DATA_PATH);
+      const record = workspace && (workspace.tournaments || []).find((t) => t && t.id === body.tournamentId);
+      if (!record) {
+        sendJson(res, 404, { error: '比赛不存在' });
         return;
       }
-      players.push(user.playerId);
-    } else {
-      if (!joined) {
-        sendJson(res, 200, { ok: true, joined: false, players: players.length });
+      if (!isSignupOpen(record)) {
+        sendJson(res, 423, { error: '该比赛未开放报名' });
         return;
       }
-      if (onCanvas) {
-        sendJson(res, 409, { error: '你已在该届比赛上场,退赛请联系管理员' });
-        return;
-      }
-      players.splice(players.indexOf(user.playerId), 1);
-    }
 
-    record.signup = { open: true, players };
-    record.updatedAt = now();
-    await backup(DATA_PATH, 'data');
-    await write(DATA_PATH, workspace);
-    audit('signup.' + action, 'user=' + user.username + ' tournament=' + (record.name || record.id) + ' n=' + players.length);
-    sendJson(res, 200, { ok: true, joined: action === 'join', players: players.length });
+      const onCanvas = deriveRoster(record.canvas || {}).includes(user.playerId);
+      const players = signupPlayers(record);
+      const joined = players.includes(user.playerId);
+
+      if (action === 'join') {
+        if (joined || onCanvas) {
+          sendJson(res, 200, { ok: true, joined: true, players: players.length });
+          return;
+        }
+        players.push(user.playerId);
+      } else {
+        if (!joined) {
+          sendJson(res, 200, { ok: true, joined: false, players: players.length });
+          return;
+        }
+        if (onCanvas) {
+          sendJson(res, 409, { error: '你已在该届比赛上场,退赛请联系管理员' });
+          return;
+        }
+        players.splice(players.indexOf(user.playerId), 1);
+      }
+
+      record.signup = { open: true, players };
+      record.updatedAt = now();
+      await backup(DATA_PATH, 'data');
+      await write(DATA_PATH, workspace);
+      audit('signup.' + action, 'user=' + user.username + ' tournament=' + (record.name || record.id) + ' n=' + players.length);
+      sendJson(res, 200, { ok: true, joined: action === 'join', players: players.length });
+    });
   }
 
   return { signup, isSignupOpen };

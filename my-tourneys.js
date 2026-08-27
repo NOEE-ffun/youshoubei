@@ -180,7 +180,10 @@
     const btn = event.target.closest('[data-signup]');
     if (!btn) return;
     btn.disabled = true;
-    act(btn.dataset.signup, btn.dataset.id);
+    /* 失败路径(409/网络错误)不重绘:必须复位按钮,否则永久禁用 */
+    act(btn.dataset.signup, btn.dataset.id).finally(() => {
+      btn.disabled = false;
+    });
   });
 
   $('my-tourneys-login-btn').addEventListener('click', () => {

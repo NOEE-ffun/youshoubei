@@ -320,14 +320,18 @@
   /* 缩放持久化:记住用户选择的缩放级别(不记平移,平移随视口/赛事变化),
    * 「适应画布」清回自动;刷新后由 restoreSavedZoom 按记忆级别居中恢复 */
   const LS_ZOOM = 'ts:canvasZoom';
+  let zoomSaveTimer = null;
 
   function saveZoomPreference(user) {
-    try {
-      localStorage.setItem(LS_ZOOM, JSON.stringify({
-        scale: Math.round(scale * 1000) / 1000,
-        user: !!user
-      }));
-    } catch (error) { /* 存储不可用:仅本次会话生效 */ }
+    /* 捏合/滚轮逐帧调用,同步写 localStorage 会卡主线程:合并为停止 300ms 后一次 */
+    if (zoomSaveTimer) clearTimeout(zoomSaveTimer);
+    const snapshot = { scale: Math.round(scale * 1000) / 1000, user: !!user };
+    zoomSaveTimer = setTimeout(() => {
+      zoomSaveTimer = null;
+      try {
+        localStorage.setItem(LS_ZOOM, JSON.stringify(snapshot));
+      } catch (error) { /* 存储不可用:仅本次会话生效 */ }
+    }, 300);
   }
 
   /* 恢复记忆的用户缩放:按该级别对当前内容包围盒居中;无记忆返回 false */
@@ -773,6 +777,9 @@
   function onKeyDown(event) {
     if (!active) return;
     if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
+    /* 模态弹窗打开时不响应画布快捷键:撤销/删除会在弹窗底下改数据,
+     * 弹窗里再点保存会把旧值写回,造成静默数据错乱 */
+    if (document.querySelector('dialog[open]')) return;
     const mod = event.ctrlKey || event.metaKey;
     if (mod && (event.key === 'z' || event.key === 'Z')) {
       /* Ctrl/Cmd+Z 撤销,Shift 组合重做;文本输入框里的原生撤销被上方输入守卫放行 */
@@ -1368,6 +1375,10 @@
   /* 平移手势查看态也要用,事件绑定放在模块初始化而非仅进入编辑时 */
   bindBoardEvents();
   bindWheel();
+  /* 触摸轨迹清理挂 window:手指在画布外抬起时 pointerup 目标不是画布,
+   * 靠冒泡兜底,防止 activeTouches 残留让后续捏合永久失灵 */
+  window.addEventListener('pointerup', onTouchEnd);
+  window.addEventListener('pointercancel', onTouchEnd);
   /* 编辑改动未落盘就关页/刷新:浏览器原生确认框兜底 */
   window.addEventListener('beforeunload', (event) => {
     if (!dirty) return;

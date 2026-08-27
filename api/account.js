@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { sendJson, readBody } = require('./helpers');
 const { readJson, writeJson, appendAudit, backupData, backupJson, isOssConfigured } = require('./oss');
 const devStore = require('./dev-store');
+const { withWorkspaceLock } = require('./workspace-lock');
 const { sessionOf, setSessionCookie, issueFor } = require('./session');
 
 /* 账号体系(一期):
@@ -420,15 +421,18 @@ function createHandlers(storage, options) {
       }
       if (!Object.keys(patch).length) return sendJson(res, 400, { error: '没有可更新的字段' });
 
-      const workspace = await readWorkspace();
-      const players = (workspace && workspace.players) || [];
-      const idx = players.findIndex((p) => p && p.id === user.playerId);
-      if (idx < 0) return sendJson(res, 404, { error: '绑定的选手不存在' });
-      players[idx] = Object.assign({}, players[idx], patch, { updatedAt: now() });
-      await backup();
-      await write(DATA_KEY, workspace);
-      audit('me.player', 'user=' + user.username + ' player=' + players[idx].name + ' fields=' + Object.keys(patch).join(','));
-      sendJson(res, 200, { player: players[idx] });
+      /* 读-改-写整段上锁:与提交/报名/管理写共用一把锁 */
+      await withWorkspaceLock(async () => {
+        const workspace = await readWorkspace();
+        const players = (workspace && workspace.players) || [];
+        const idx = players.findIndex((p) => p && p.id === user.playerId);
+        if (idx < 0) return sendJson(res, 404, { error: '绑定的选手不存在' });
+        players[idx] = Object.assign({}, players[idx], patch, { updatedAt: now() });
+        await backup();
+        await write(DATA_KEY, workspace);
+        audit('me.player', 'user=' + user.username + ' player=' + players[idx].name + ' fields=' + Object.keys(patch).join(','));
+        sendJson(res, 200, { player: players[idx] });
+      });
       return;
     }
     sendJson(res, 405, { error: 'Method Not Allowed' });

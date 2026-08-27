@@ -990,9 +990,12 @@
   let userZoomed = false;
 
   /* 查看态且用户未手动缩放时贴合视口，让双败图首屏可见（总决赛不再在视口外）;
-   * 有记忆的缩放级别则按记忆恢复(刷新/换机不再归零),并视为用户已接管 */
-  function autoFitCanvas() {
-    if (editMode || userZoomed) return;
+   * 有记忆的缩放级别则按记忆恢复(刷新/换机不再归零),并视为用户已接管。
+   * force(数据变更:切届/刷新)时即使已接管也重新按记忆级别居中——
+   * 否则相机永远停在旧内容的平移位置,新内容可能在视口外 */
+  function autoFitCanvas(force) {
+    if (editMode) return;
+    if (!force && userZoomed) return;
     if (CanvasEditor.restoreSavedZoom()) {
       userZoomed = true;
       return;
@@ -1032,7 +1035,7 @@
   });
   document.addEventListener('ts:changed', () => {
     renderAll();
-    autoFitCanvas();
+    autoFitCanvas(true); /* 数据变更(切届/刷新):按记忆级别重新居中 */
     syncEditUI();
   });
   /* 会话身份就绪(晚于首渲)后重绘:公示锁/图标按"本人视角"重新判定 */

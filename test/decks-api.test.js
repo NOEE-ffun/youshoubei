@@ -123,6 +123,78 @@ async function main() {
     };
   }
 
+  /* ---- 生产注入回归:now=Date.now(函数,返回毫秒数) ---- */
+  {
+    let threw = null;
+    try {
+      const v = isWindowOpen({ deckWindow: { open: '00:00', close: '23:59' } }, Date.now);
+      assert.strictEqual(typeof v, 'boolean', 'now=Date.now 返回布尔');
+    } catch (error) {
+      threw = error;
+    }
+    assert.ok(!threw, 'now=Date.now(生产 data.js/submit 的注入形态)不得抛错: ' + (threw && threw.message));
+    assert.strictEqual(
+      typeof isWindowOpen({ deckWindow: { open: '00:00', close: '23:59' } }, () => 1788000000000),
+      'boolean',
+      'now 为返回毫秒数的函数同样生效'
+    );
+    console.log('✓ isWindowOpen:now=Date.now 函数形态(生产路径回归)');
+
+    const storage = memoryStorage(seedWorld({ open: '00:00', close: '23:59' }));
+    const h = createHandler(storage, { appendAudit: () => {}, currentUser: makeFindUser(storage) });
+    let status = null;
+    let err = null;
+    try {
+      const r = await call(h.submit, mockReq('PUT', {
+        headers: auth,
+        body: json({ tournamentId: 't1', cardId: 'c1', side: 'a', links: [{ cls: '皇家', text: '定时窗' }] })
+      }));
+      status = r.status;
+    } catch (error) {
+      err = error;
+    }
+    assert.ok(!err, '定时窗口提交不得抛错: ' + (err && err.message));
+    assert.strictEqual(status, 200, '定时窗口(全时段开)提交 → 200');
+    console.log('✓ submit:定时窗口 + 生产 now 注入走通');
+  }
+
+  /* ---- 并发提交互斥:两人同时提交同场不同侧,谁都不许丢 ---- */
+  {
+    const seed = seedWorld({ manual: 'open' });
+    seed['users.json'].push({
+      id: 'u2', username: 'bob', usernameLower: 'bob',
+      passHash: PASS, role: 'player', playerId: P2, createdAt: '2026-01-01T00:00:00Z'
+    });
+    const base = memoryStorage(seed);
+    /* 写延迟 25ms:放大读-改-写窗口,复现生产 OSS 往返下的交错 */
+    const storage = {
+      readJson: base.readJson,
+      writeJson: async (key, value) => {
+        await new Promise((r) => setTimeout(r, 25));
+        base.writeJson(key, value);
+      },
+      _map: base._map
+    };
+    const h = createHandler(storage, { appendAudit: () => {}, backupData: async () => {}, currentUser: makeFindUser(storage) });
+    const cookie2 = 'sess=' + session.issueFor('u2', pv, Date.now);
+    const [ra, rb] = await Promise.all([
+      call(h.submit, mockReq('PUT', {
+        headers: { cookie },
+        body: json({ tournamentId: 't1', cardId: 'c1', side: 'a', links: [{ cls: '法师', text: 'A套' }] })
+      })),
+      call(h.submit, mockReq('PUT', {
+        headers: { cookie: cookie2 },
+        body: json({ tournamentId: 't1', cardId: 'c1', side: 'b', links: [{ cls: '龙族', text: 'B套' }] })
+      }))
+    ]);
+    assert.strictEqual(ra.status, 200, 'A 提交 200');
+    assert.strictEqual(rb.status, 200, 'B 提交 200');
+    const links = storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks;
+    assert.deepStrictEqual(links.a.map((l) => l.text), ['A套'], '并发下 A 的提交不丢');
+    assert.deepStrictEqual(links.b.map((l) => l.text), ['B套'], '并发下 B 的提交不丢');
+    console.log('✓ 并发提交互斥:双方提交均落盘');
+  }
+
   {
     const storage = memoryStorage(seedWorld({ manual: 'open' }));
     const h = createHandler(storage, { appendAudit: (a, d) => audits.push(a + ' ' + d), currentUser: makeFindUser(storage) });

@@ -7,6 +7,7 @@ const { resolveCanvas, getResult } = require('../canvas-model');
 const { sendJson, readBody } = require('./helpers');
 const { DATA_PATH, readJson, writeJson, backupData, appendAudit, isOssConfigured } = require('./oss');
 const devStore = require('./dev-store');
+const { withWorkspaceLock } = require('./workspace-lock');
 
 /* data.json 只含文本数据（图片存 OSS 为 URL），1MB 上限绰绰有余，防内存被打爆 */
 const MAX_BODY = 1024 * 1024;
@@ -110,9 +111,12 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-      /* 覆盖前备份当前版本(best-effort,失败不阻塞) */
-      await backupData();
-      await persistWorkspace(workspace);
+      /* 写入段上锁:与选手提交/报名/资料的读-改-写互斥,避免交错覆盖 */
+      await withWorkspaceLock(async () => {
+        /* 覆盖前备份当前版本(best-effort,失败不阻塞) */
+        await backupData();
+        await persistWorkspace(workspace);
+      });
       /* 审计:记录届数与当前届名,不落具体内容 */
       appendAudit('data.put', (workspace.tournaments || []).length + ' 届 / active=' + ((workspace.tournaments || []).find((t) => t.id === workspace.activeId) || {}).name);
       sendJson(res, 200, { ok: true });

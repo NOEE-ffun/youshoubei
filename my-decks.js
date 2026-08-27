@@ -105,11 +105,12 @@
       '<option value="' + c + '"' + (entry && entry.cls === c ? ' selected' : '') + '>' + c + '</option>'
     ).join('');
     if (!editable) {
-      const text = entry && (entry.text || entry.cls) || '—';
+      /* 协议白名单与 list.js/bracket.js 同策:非 http(s) 的外链只显示纯文本,不渲染可点链接 */
+      const safeUrl = entry && entry.url && /^https?:\/\//i.test(entry.url) ? entry.url : '';
       return '<div class="md-deck-row readonly">' +
         '<img class="icon" src="icons/classes/' + encodeURIComponent(entry ? entry.cls : '') + '.svg" alt="" aria-hidden="true">' +
         '<span class="md-deck-name">' + (entry && entry.text ? escape(entry.text) : '未命名') + '</span>' +
-        (entry && entry.url ? '<a href="' + escape(entry.url) + '" target="_blank" rel="noopener">外链 ↗</a>' : '') +
+        (safeUrl ? '<a href="' + escape(safeUrl) + '" target="_blank" rel="noopener">外链 ↗</a>' : '') +
         '</div>';
     }
     return '<div class="md-deck-row" data-slot="' + idx + '">' +

@@ -4,6 +4,7 @@ const { sendJson, readBody } = require('./helpers');
 const { DATA_PATH, readJson, writeJson, backupData, appendAudit, isOssConfigured } = require('./oss');
 const account = require('./account');
 const devStore = require('./dev-store');
+const { withWorkspaceLock } = require('./workspace-lock');
 const { CLASS_LIST, resolveCanvas, getResult } = require('../canvas-model');
 
 /* 卡组提交窗口(二期):
@@ -24,7 +25,8 @@ function parseHHMM(value) {
   return h * 60 + min;
 }
 
-/* 生效状态:true=开(可提交+隐藏),false=关(锁定+公示)。now 可注入供测试 */
+/* 生效状态:true=开(可提交+隐藏),false=关(锁定+公示)。now 可注入供测试:
+ * Date 实例 / 毫秒数 / 返回任一者的函数均可(生产注入的是 Date.now 本身) */
 function isWindowOpen(record, now) {
   const w = record && record.deckWindow;
   if (!w || typeof w !== 'object') return false;
@@ -33,7 +35,8 @@ function isWindowOpen(record, now) {
   const openMin = parseHHMM(w.open);
   const closeMin = parseHHMM(w.close);
   if (openMin === null || closeMin === null || openMin === closeMin) return false;
-  const t = typeof now === 'function' ? now() : (now instanceof Date ? now : new Date());
+  const raw = typeof now === 'function' ? now() : now;
+  const t = raw instanceof Date ? raw : new Date(Number.isFinite(raw) ? raw : Date.now());
   const cur = t.getHours() * 60 + t.getMinutes();
   /* 每日循环:支持跨零点时段(如 20:00-02:00) */
   return openMin < closeMin ? (cur >= openMin && cur < closeMin) : (cur >= openMin || cur < closeMin);
@@ -114,45 +117,48 @@ function createHandler(storage, options) {
       return;
     }
 
-    const workspace = await read(DATA_PATH);
-    const record = workspace && (workspace.tournaments || []).find((t) => t && t.id === tournamentId);
-    if (!record || !record.canvas) {
-      sendJson(res, 404, { error: '比赛不存在' });
-      return;
-    }
-    const card = (record.canvas.cards || []).find((c) => c.id === cardId);
-    if (!card) {
-      sendJson(res, 404, { error: '卡片不存在' });
-      return;
-    }
+    /* 读-改-写整段上锁:并发提交互斥,防止后写者的旧快照覆盖前者的提交 */
+    return withWorkspaceLock(async () => {
+      const workspace = await read(DATA_PATH);
+      const record = workspace && (workspace.tournaments || []).find((t) => t && t.id === tournamentId);
+      if (!record || !record.canvas) {
+        sendJson(res, 404, { error: '比赛不存在' });
+        return;
+      }
+      const card = (record.canvas.cards || []).find((c) => c.id === cardId);
+      if (!card) {
+        sendJson(res, 404, { error: '卡片不存在' });
+        return;
+      }
 
-    /* 归属判定:resolveCanvas 解析该侧选手(含 flow 继承)必须 === 登录选手 */
-    const resolved = resolveCanvas(record.canvas, record.roster || [], record.scores || {});
-    const resolvedCard = resolved.cards.find((c) => c.id === cardId);
-    const sidePlayer = resolvedCard ? (side === 'a' ? resolvedCard.a : resolvedCard.b) : null;
-    if (sidePlayer !== user.playerId) {
-      sendJson(res, 403, { error: '该场次这一侧不是你的比赛' });
-      return;
-    }
+      /* 归属判定:resolveCanvas 解析该侧选手(含 flow 继承)必须 === 登录选手 */
+      const resolved = resolveCanvas(record.canvas, record.roster || [], record.scores || {});
+      const resolvedCard = resolved.cards.find((c) => c.id === cardId);
+      const sidePlayer = resolvedCard ? (side === 'a' ? resolvedCard.a : resolvedCard.b) : null;
+      if (sidePlayer !== user.playerId) {
+        sendJson(res, 403, { error: '该场次这一侧不是你的比赛' });
+        return;
+      }
 
-    /* 比赛已开始(有合法比分)即锁定 */
-    const result = getResult((record.scores || {})[cardId]);
-    if (result && result.valid && !result.draw) {
-      sendJson(res, 423, { error: '比赛已开始,卡组已锁定' });
-      return;
-    }
-    if (!isWindowOpen(record, now)) {
-      sendJson(res, 423, { error: '卡组提交窗口已关闭,等待公示' });
-      return;
-    }
+      /* 比赛已开始(有合法比分)即锁定 */
+      const result = getResult((record.scores || {})[cardId]);
+      if (result && result.valid && !result.draw) {
+        sendJson(res, 423, { error: '比赛已开始,卡组已锁定' });
+        return;
+      }
+      if (!isWindowOpen(record, now)) {
+        sendJson(res, 423, { error: '卡组提交窗口已关闭,等待公示' });
+        return;
+      }
 
-    if (!card.classLinks || typeof card.classLinks !== 'object') card.classLinks = { a: [], b: [] };
-    card.classLinks[side] = links;
-    record.updatedAt = now();
-    await backup();
-    await write(DATA_PATH, workspace);
-    audit('deck.submit', 'user=' + user.username + ' card=' + cardId + ' side=' + side + ' n=' + links.length);
-    sendJson(res, 200, { ok: true, links });
+      if (!card.classLinks || typeof card.classLinks !== 'object') card.classLinks = { a: [], b: [] };
+      card.classLinks[side] = links;
+      record.updatedAt = now();
+      await backup();
+      await write(DATA_PATH, workspace);
+      audit('deck.submit', 'user=' + user.username + ' card=' + cardId + ' side=' + side + ' n=' + links.length);
+      sendJson(res, 200, { ok: true, links });
+    });
   }
 
   return { submit, isWindowOpen };
