@@ -153,7 +153,7 @@
       const app = window.TournamentApp;
       if (!app.players) app.players = [];
       const player = {
-        id: (window.CanvasModel && CanvasModel.uid) ? CanvasModel.uid('p') : ('p_' + Date.now()),
+        id: CanvasModel.uid('p'),
         name,
         title: '',
         tag: '',

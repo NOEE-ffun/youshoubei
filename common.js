@@ -12,9 +12,6 @@
   const EVT_CHANGED = 'ts:changed';
   const EVT_READY = 'ts:ready';
   const pad2 = (n) => String(n).padStart(2, '0');
-  /* Vercel Blob 额度耗尽/暂停的错误识别,写数据与传图片共用 */
-  const BLOB_QUOTA_RE = /suspended|quota|exceed|满额|额度/i;
-  const BLOB_QUOTA_MESSAGE = 'Vercel Blob 存储额度已用尽或已暂停，请在 Vercel 控制台恢复 / 升级 Blob 后重试。';
   const LS_THEME = 'ts:theme';
 
   const DEFAULT_RULES = [
@@ -200,12 +197,9 @@
   async function probeCloud() {
     let timer = null;
     try {
-      const hasAbort = typeof AbortController !== 'undefined';
-      const controller = hasAbort ? new AbortController() : null;
-      timer = controller ? setTimeout(() => controller.abort(), 2000) : null;
-      const response = await fetch('/api/data', controller
-        ? { signal: controller.signal, headers: cloudGetHeaders() }
-        : { headers: cloudGetHeaders() });
+      const controller = new AbortController();
+      timer = setTimeout(() => controller.abort(), 2000);
+      const response = await fetch('/api/data', { signal: controller.signal, headers: cloudGetHeaders() });
       clearTimeout(timer);
       timer = null;
       if (!response.ok) {
@@ -401,11 +395,7 @@
         body: JSON.stringify(payload)
       });
       if (response.status === 401) throw new Error('管理口令错误');
-      if (!response.ok) {
-        const message = (await apiErrorMessage(response)) || fallbackMessage;
-        if (BLOB_QUOTA_RE.test(message)) throw new Error(BLOB_QUOTA_MESSAGE);
-        throw new Error(message);
-      }
+      if (!response.ok) throw new Error((await apiErrorMessage(response)) || '保存云端数据失败');
       /* 上传成功后本地快照与上传内容对齐 */
       setCloudWorkspace(payload);
     };
@@ -421,11 +411,7 @@
     const response = await fetch('/api/upload', { method: 'POST', headers, body: blob });
     if (response.status === 401) throw new Error('需要管理员权限或登录后上传');
     if (response.status === 403) throw new Error('上传功能未配置');
-    if (!response.ok) {
-      const message = (await apiErrorMessage(response)) || '图片上传失败';
-      if (BLOB_QUOTA_RE.test(message)) throw new Error(BLOB_QUOTA_MESSAGE);
-      throw new Error(message);
-    }
+    if (!response.ok) throw new Error((await apiErrorMessage(response)) || '图片上传失败');
     const data = await response.json();
     return data.url;
   }
@@ -546,9 +532,7 @@
     }
     for (const record of local) {
       const copy = structuredClone(record);
-      if (CanvasModel.migrateLegacyTournament) {
-        CanvasModel.migrateLegacyTournament(copy, playerMap);
-      }
+      CanvasModel.migrateLegacyTournament(copy, playerMap);
       for (const matchId of Object.keys(copy.matchDecks || {})) {
         for (const playerId of Object.keys(copy.matchDecks[matchId])) {
           for (const deck of copy.matchDecks[matchId][playerId]) {
@@ -1393,8 +1377,7 @@
         ' alt="' + escapeHtml(player.name || '') + ' 的头像">';
     }
     const initial = String((player && player.name) || '?').trim().charAt(0) || '?';
-    const color = CanvasModel.avatarColor      ? CanvasModel.avatarColor(player ? player.id : '')
-      : '#3563e9';
+    const color = CanvasModel.avatarColor(player ? player.id : '');
     return '<span class="' + cls + ' avatar-fallback" style="background:' + color + '">' +
       escapeHtml(initial) + '</span>';
   }
@@ -1436,8 +1419,7 @@
   function medalMap(record) {
     const map = new Map();
     if (!record || !record.canvas || !Array.isArray(record.roster)) return map;
-    const standings = CanvasModel.deriveStandings      ? CanvasModel.deriveStandings(record)
-      : { champion: null, runnerUp: null, thirdPlace: null };
+    const standings = CanvasModel.deriveStandings(record);
     if (!standings.champion) return map;
     if (standings.champion) map.set(standings.champion, { type: 'gold', emoji: '🥇' });
     if (standings.runnerUp) map.set(standings.runnerUp, { type: 'silver', emoji: '🥈' });
@@ -1480,6 +1462,27 @@
     }, 200));
   }
 
+  /* 选手自助页启动守卫(my-decks/my-tourneys 共用):
+   * 云模式+登录+绑定选手才放行,返回选手对象;不可用时应答空态并返回 null */
+  async function requirePlayerSession(pageNoun, showEmpty) {
+    const app = window.TournamentApp;
+    if (app.mode !== 'cloud') {
+      showEmpty(pageNoun + '需要连接服务器(当前为本机数据模式)。', false);
+      return null;
+    }
+    await app.refreshSession();
+    const { user, player } = app.getSession();
+    if (!user) {
+      showEmpty('未登录。', true);
+      return null;
+    }
+    if (!player) {
+      showEmpty('当前是管理员账号(未绑定选手),' + pageNoun + '仅选手账号可用。', false);
+      return null;
+    }
+    return player;
+  }
+
   window.TournamentUtils = {
     escapeHtml,
     iconMarkup,
@@ -1496,7 +1499,8 @@
     notify,
     uiConfirm,
     bindZoomDock,
-    bindZoomFitOnResize
+    bindZoomFitOnResize,
+    requirePlayerSession
   };
 
   function applyBackground(record) {
@@ -2118,12 +2122,10 @@
       const needsMigration = record.schemaVersion !== SCHEMA_VERSION;
       const before = needsMigration ? JSON.stringify(record) : JSON.stringify(record.roster || null);
       if (needsMigration) {
-        if (CanvasModel.migrateLegacyTournament) {
-          CanvasModel.migrateLegacyTournament(record, playerMap);
-        }
+        CanvasModel.migrateLegacyTournament(record, playerMap);
         record.schemaVersion = SCHEMA_VERSION;
       }
-      if (CanvasModel.deriveRoster && record.canvas) {
+      if (record.canvas) {
         record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => playerMap.has(id));
       }
       const after = needsMigration ? JSON.stringify(record) : JSON.stringify(record.roster || null);

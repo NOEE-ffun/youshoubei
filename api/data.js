@@ -4,23 +4,15 @@ const { isAuthorized, adminGate } = require('./auth');
 const { sessionOf } = require('./session');
 const { isWindowOpen } = require('./decks');
 const { resolveCanvas, getResult } = require('../canvas-model');
-const { sendJson, readBody } = require('./helpers');
-const { DATA_PATH, readJson, writeJson, backupData, appendAudit, isOssConfigured } = require('./oss');
-const devStore = require('./dev-store');
+const { sendJson, readBody, createStorage } = require('./helpers');
+const { DATA_PATH, backupData, appendAudit, isOssConfigured } = require('./oss');
 const { withWorkspaceLock } = require('./workspace-lock');
 
 /* data.json 只含文本数据（图片存 OSS 为 URL），1MB 上限绰绰有余，防内存被打爆 */
 const MAX_BODY = 1024 * 1024;
 
-/* 开发降级:无 OSS 环境(E2E/本地联调)用进程内存承载 workspace,行为与云端一致。
- * 生产(OSS 已配置)完全不经过此路径。 */
-function readWorkspace() {
-  return isOssConfigured() ? readJson(DATA_PATH) : devStore.readJson(DATA_PATH);
-}
-
-function persistWorkspace(value) {
-  return isOssConfigured() ? writeJson(DATA_PATH, value) : devStore.writeJson(DATA_PATH, value);
-}
+/* 读-改-写走三态存储(无 OSS 环境降级开发内存,行为与云端一致) */
+const storage = createStorage();
 
 /* 未公示卡组剥离:开关开启期间,该届未录比分的卡,某侧已提交的 own classLinks
  * 对"非该侧所属选手"的请求者置 [](继承链自动回退到已公示数据,不泄露)。
@@ -67,7 +59,7 @@ function stripHiddenDecks(workspace, viewerPlayerId) {
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const workspace = await readWorkspace();
+      const workspace = await storage.read(DATA_PATH);
       /* 开发存储为空时按"云端不可用"处理(500),页面回落本地模式——
        * 与旧无 OSS 行为一致,避免 E2E 各用例间状态串扰 */
       if (workspace === null && !isOssConfigured()) {
@@ -115,7 +107,7 @@ module.exports = async function handler(req, res) {
       await withWorkspaceLock(async () => {
         /* 覆盖前备份当前版本(best-effort,失败不阻塞) */
         await backupData();
-        await persistWorkspace(workspace);
+        await storage.write(DATA_PATH, workspace);
       });
       /* 审计:记录届数与当前届名,不落具体内容 */
       appendAudit('data.put', (workspace.tournaments || []).length + ' 届 / active=' + ((workspace.tournaments || []).find((t) => t.id === workspace.activeId) || {}).name);

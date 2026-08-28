@@ -1,46 +1,17 @@
 'use strict';
 
-const { sendJson, readBody } = require('./helpers');
-const { DATA_PATH, readJson, writeJson, backupData, appendAudit, isOssConfigured } = require('./oss');
+const { sendJson, readJsonBody, createStorage } = require('./helpers');
+const { DATA_PATH, backupData, appendAudit } = require('./oss');
 const account = require('./account');
-const devStore = require('./dev-store');
 const { withWorkspaceLock } = require('./workspace-lock');
-const { CLASS_LIST, resolveCanvas, getResult } = require('../canvas-model');
+const { CLASS_LIST, resolveCanvas, getResult, isWindowOpen } = require('../canvas-model');
 
 /* 卡组提交窗口(二期):
  *   PUT /api/me/classlinks  选手在开关开启期间,为自己参与且未录比分的卡提交卡组
- * 开关语义(与 api/data.js GET 剥离逻辑共用 isWindowOpen):
- *   record.deckWindow = { open:"HH:MM", close:"HH:MM", manual: null|'open'|'closed' }
- *   manual 优先;无 manual 且时段齐全时按服务器本地时间每日循环判定;否则恒关。
+ * 开关语义见 canvas-model.js isWindowOpen(与前端展示共用同一份判定)。
  * 开=可改+对非所属者隐藏未开始卡;关=公示(全员可见)。 */
 const MAX_BODY = 64 * 1024;
 const MAX_LINKS = 12;
-
-function parseHHMM(value) {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 23 || min > 59) return null;
-  return h * 60 + min;
-}
-
-/* 生效状态:true=开(可提交+隐藏),false=关(锁定+公示)。now 可注入供测试:
- * Date 实例 / 毫秒数 / 返回任一者的函数均可(生产注入的是 Date.now 本身) */
-function isWindowOpen(record, now) {
-  const w = record && record.deckWindow;
-  if (!w || typeof w !== 'object') return false;
-  if (w.manual === 'open') return true;
-  if (w.manual === 'closed') return false;
-  const openMin = parseHHMM(w.open);
-  const closeMin = parseHHMM(w.close);
-  if (openMin === null || closeMin === null || openMin === closeMin) return false;
-  const raw = typeof now === 'function' ? now() : now;
-  const t = raw instanceof Date ? raw : new Date(Number.isFinite(raw) ? raw : Date.now());
-  const cur = t.getHours() * 60 + t.getMinutes();
-  /* 每日循环:支持跨零点时段(如 20:00-02:00) */
-  return openMin < closeMin ? (cur >= openMin && cur < closeMin) : (cur >= openMin || cur < closeMin);
-}
 
 /* links 白名单归一化:与 canvas-model.normalizeClassLink 同规则,空数组=恢复继承 */
 function normalizeLinks(links) {
@@ -64,18 +35,7 @@ function createHandler(storage, options) {
   const backup = typeof o.backupData === 'function' ? o.backupData : backupData;
   /* 会话→用户解析默认走全局 account(共用其存储降级);测试可注入 */
   const currentUser = typeof o.currentUser === 'function' ? o.currentUser : (req) => account.currentUser(req);
-
-  async function read(key) {
-    if (storage && storage.readJson) return storage.readJson(key);
-    if (!isOssConfigured()) return devStore.readJson(key);
-    return readJson(key);
-  }
-
-  async function write(key, value) {
-    if (storage && storage.writeJson) return storage.writeJson(key, value);
-    if (!isOssConfigured()) return devStore.writeJson(key, value);
-    return writeJson(key, value);
-  }
+  const { read, write } = createStorage(storage);
 
   async function submit(req, res) {
     if (req.method !== 'PUT') {
@@ -89,22 +49,8 @@ function createHandler(storage, options) {
       return;
     }
 
-    const buffer = await readBody(req, MAX_BODY);
-    if (buffer === null) {
-      sendJson(res, 413, { error: '数据过大' });
-      return;
-    }
-    let body;
-    try {
-      body = JSON.parse(buffer.toString('utf8'));
-    } catch {
-      sendJson(res, 400, { error: '请求体不是合法 JSON' });
-      return;
-    }
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      sendJson(res, 400, { error: '请求体必须是 JSON 对象' });
-      return;
-    }
+    const body = await readJsonBody(req, res, MAX_BODY);
+    if (body === undefined) return;
     const { tournamentId, cardId } = body;
     const side = body.side === 'a' ? 'a' : body.side === 'b' ? 'b' : null;
     if (!tournamentId || !cardId || !side) {
@@ -169,4 +115,3 @@ module.exports = handler.submit;
 module.exports.createHandler = createHandler;
 module.exports.isWindowOpen = isWindowOpen;
 module.exports.normalizeLinks = normalizeLinks;
-module.exports.parseHHMM = parseHHMM;

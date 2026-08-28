@@ -154,18 +154,10 @@
     }).join('');
   }
 
-  function renderPlayerTable(stats, players) {
+  function renderPlayerTable(rows) {
     const tbody = document.querySelector('#stats-player-table tbody');
     if (!tbody) return;
-    const byPlayer = [...stats.players.entries()]
-      .map(([pid, s]) => {
-        const player = (players || []).find((p) => p.id === pid) || { id: pid, name: '?' };
-        const total = s.wins + s.losses;
-        const winRate = total ? Math.round(s.wins / total * 100) : null;
-        return { player, s, total, winRate, best: bestRank(s.ranks) };
-      })
-      .sort((x, y) => y.s.wins - x.s.wins || (x.best ?? 99) - (y.best ?? 99));
-    tbody.innerHTML = byPlayer.map((row) => (
+    tbody.innerHTML = rows.map((row) => (
       '<tr class="stats-player-row' + (selectedPlayerId === row.player.id ? ' selected' : '') + '"' +
       ' data-player="' + row.player.id + '" tabindex="0" role="button" aria-label="查看 ' + escapeHtml(row.player.name) + ' 的职业使用率">' +
       '<td class="stats-player-cell">' + avatarMarkup(row.player, 'avatar-sm') + '<span>' + escapeHtml(row.player.name) + '</span></td>' +
@@ -185,6 +177,18 @@
 
   let lastStats = null;
   let lastPlayers = null;
+  let lastRows = [];
+
+  /* 行数据一次推导:表格渲染与图片/文本导出共用,胜率/名次/排序不再算两遍 */
+  function computeRows(stats, players) {
+    return [...stats.players.entries()]
+      .map(([pid, s]) => {
+        const player = (players || []).find((p) => p.id === pid) || { id: pid, name: '?' };
+        const total = s.wins + s.losses;
+        return { player, s, total, winRate: total ? Math.round(s.wins / total * 100) : null, best: bestRank(s.ranks) };
+      })
+      .sort((x, y) => y.s.wins - x.s.wins || (x.best ?? 99) - (y.best ?? 99));
+  }
 
   async function render() {
     const app = window.TournamentApp;
@@ -203,18 +207,19 @@
     }
     lastStats = computeStats(records, app.players);
     lastPlayers = app.players;
+    lastRows = computeRows(lastStats, lastPlayers);
     /* 范围变化后选中选手可能不在数据里,清掉 */
     if (selectedPlayerId && !lastStats.players.has(selectedPlayerId)) selectedPlayerId = null;
     renderPodium(lastStats.podiums);
     renderClasses(lastStats, lastPlayers);
-    renderPlayerTable(lastStats, lastPlayers);
+    renderPlayerTable(lastRows);
   }
 
   function selectPlayer(pid) {
     selectedPlayerId = selectedPlayerId === pid ? null : pid;
     if (lastStats) {
       renderClasses(lastStats, lastPlayers);
-      renderPlayerTable(lastStats, lastPlayers);
+      renderPlayerTable(lastRows);
     }
   }
 
@@ -229,21 +234,14 @@
   }
 
   function playerRows() {
-    if (!lastStats) return [];
-    return [...lastStats.players.entries()]
-      .map(([pid, s]) => {
-        const player = (lastPlayers || []).find((p) => p.id === pid) || { id: pid, name: '?' };
-        const total = s.wins + s.losses;
-        return {
-          name: player.name || '?',
-          wins: s.wins,
-          losses: s.losses,
-          winRate: total ? Math.round(s.wins / total * 100) : null,
-          games: (s.gameWins || s.gameLosses) ? s.gameWins + '-' + s.gameLosses : null,
-          best: s.ranks && s.ranks.length ? Math.min(...s.ranks) : null
-        };
-      })
-      .sort((x, y) => y.wins - x.wins || (x.best ?? 99) - (y.best ?? 99));
+    return lastRows.map(({ player, s, winRate, best }) => ({
+      name: player.name || '?',
+      wins: s.wins,
+      losses: s.losses,
+      winRate,
+      games: (s.gameWins || s.gameLosses) ? s.gameWins + '-' + s.gameLosses : null,
+      best
+    }));
   }
 
   function classRows() {
@@ -344,7 +342,7 @@
       ctx.fillText(selectedPlayerId ? '职业使用率' : '职业登场', PAD, y);
       y += 26;
       const barW = W - PAD * 2 - 100;
-      cls.filter((c) => c.count || true).forEach((c, i) => {
+      cls.forEach((c, i) => {
         const cy = y + i * 26;
         ctx.fillStyle = '#c8d2ec';
         ctx.font = '400 18px ' + FONT;

@@ -48,19 +48,20 @@ npm start
 
 ## 代码结构
 
-- `canvas-model.js`:赛程画布的数据模型(卡片坐标、晋级流向解析、比分与名次派生、卡组继承),浏览器/Node 双端可用,有单元测试
+- `canvas-model.js`:赛程画布的数据模型(卡片坐标、晋级流向解析、比分与名次派生、卡组继承、卡组提交窗口判定),浏览器/Node 双端可用,有单元测试
 - `canvas-history.js`:画布编辑的撤销/重做历史栈(纯数据双栈,上限 10 步),浏览器/Node 双端可用,有单元测试
 - `common.js`:存储层(IndexedDB/云端适配、写前合并)、页头/侧栏(桌面侧栏/移动端底部 tab 栏)/弹窗/灯箱/toast、登录会话与邀请码注册弹窗,跨文件共享工具(`window.TournamentUtils`)
 - `bracket.js` + `canvas-editor.js`:比赛页渲染与画布交互(卡片拖拽、滚轮与双指捏合缩放、撤销/重做、查找定位、公示锁、窄屏重定向手机列表)
 - `home.js`:主页跑马灯与幻灯
 - `players.js`:选手库页面逻辑
-- `profile.js` + `my-decks.js`:个人中心与我的对局(选手自助)
+- `profile.js` + `my-decks.js` + `my-tourneys.js`:个人中心、我的对局、我的比赛(选手自助,共用启动守卫)
 - `stats.js`:数据统计页
 - `list.js`:手机版赛程列表(窄屏下为比赛页默认视图)
+- `score-stage.js`:OBS 比分舞台(公开数据 10 秒轮询)
 - `vs-poster/`:海报生成器(状态管理、选手选择器、5 版式 SVG 生成、PNG 导出、OBS 舞台)
 - `server.js`:静态站点 + `/api/*` 一体化服务
-- `api/`:`data`(workspace 读写)、`upload`(图片)、`poster-stage`(OBS 舞台)、`session` + `account`(签名会话与账号体系)、`decks`(选手卡组提交)、`oss`(存储/备份/审计)、`dev-store`(无 OSS 时的开发内存)
-- `scripts/`:`gen-invite`(邀请码生成/绑定/查询)、`restore-data`(备份恢复)、`read-audit`(审计查看)
+- `api/`:`data`(workspace 读写)、`upload`(图片)、`poster-stage`(OBS 舞台)、`session` + `account`(签名会话与账号体系)、`decks`(选手卡组提交)、`signup`(报名)、`helpers`(三态存储与请求体解析)、`workspace-lock`(读-改-写互斥)、`oss`(存储/备份/审计)、`dev-store`(无 OSS 时的开发内存)
+- `scripts/`:`gen-invite`(邀请码生成/绑定/查询)、`restore-data`(备份恢复)、`read-audit`(审计查看)、`backfill-oss-cache`(存量图片补缓存头)
 
 ## 测试
 

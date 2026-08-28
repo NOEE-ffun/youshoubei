@@ -114,8 +114,6 @@ function setSessionCookie(res, value, req, maxAgeMs) {
 }
 
 module.exports = {
-  COOKIE_NAME,
-  SESSION_TTL_MS,
   issueFor,
   signSession,
   verifySession,

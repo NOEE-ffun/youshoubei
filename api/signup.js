@@ -1,9 +1,8 @@
 'use strict';
 
-const { sendJson, readBody } = require('./helpers');
-const { DATA_PATH, readJson, writeJson, backupJson, isOssConfigured } = require('./oss');
+const { sendJson, readJsonBody, createStorage } = require('./helpers');
+const { DATA_PATH, backupJson } = require('./oss');
 const account = require('./account');
-const devStore = require('./dev-store');
 const { withWorkspaceLock } = require('./workspace-lock');
 const { deriveRoster } = require('../canvas-model');
 
@@ -31,18 +30,7 @@ function createHandler(storage, options) {
   const audit = typeof o.appendAudit === 'function' ? o.appendAudit : require('./oss').appendAudit;
   const backup = typeof o.backupJson === 'function' ? o.backupJson : backupJson;
   const currentUser = typeof o.currentUser === 'function' ? o.currentUser : (req) => account.currentUser(req);
-
-  async function read(key) {
-    if (storage && storage.readJson) return storage.readJson(key);
-    if (!isOssConfigured()) return devStore.readJson(key);
-    return readJson(key);
-  }
-
-  async function write(key, value) {
-    if (storage && storage.writeJson) return storage.writeJson(key, value);
-    if (!isOssConfigured()) return devStore.writeJson(key, value);
-    return writeJson(key, value);
-  }
+  const { read, write } = createStorage(storage);
 
   async function signup(req, res) {
     if (req.method !== 'PUT') {
@@ -54,22 +42,8 @@ function createHandler(storage, options) {
       sendJson(res, 401, { error: '需要登录选手账号' });
       return;
     }
-    const buffer = await readBody(req, MAX_BODY);
-    if (buffer === null) {
-      sendJson(res, 413, { error: '数据过大' });
-      return;
-    }
-    let body;
-    try {
-      body = JSON.parse(buffer.toString('utf8'));
-    } catch {
-      sendJson(res, 400, { error: '请求体不是合法 JSON' });
-      return;
-    }
-    if (!body || typeof body !== 'object' || Array.isArray(body)) {
-      sendJson(res, 400, { error: '请求体必须是 JSON 对象' });
-      return;
-    }
+    const body = await readJsonBody(req, res, MAX_BODY);
+    if (body === undefined) return;
     const action = body.action === 'join' ? 'join' : body.action === 'leave' ? 'leave' : null;
     if (!body.tournamentId || !action) {
       sendJson(res, 400, { error: '缺少 tournamentId / action' });

@@ -629,26 +629,6 @@ main > h1 {
   font-size: 1.5rem;
 }
 
-.deck-name-input {
-  font: inherit;
-  color: var(--text);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  padding: 0.35rem 0.5rem;
-  min-inline-size: 0;
-  inline-size: 100%;
-}
-
-.deck-name-input:hover {
-  border-color: var(--border);
-}
-
-.deck-name-input:focus {
-  border-color: var(--accent);
-  background: var(--surface);
-}
-
 /* 对局卡片:玻璃不透明度走 --card-glass(画布内联可调),染色卡走 color-mix 混入 */
 .match-card {
   border-radius: var(--radius);
@@ -937,174 +917,6 @@ main > h1 {
   padding: 0.4rem 0.6rem;
   font-size: 0.82rem;
   font-weight: 600;
-}
-
-.form-error[hidden] {
-  display: none;
-}
-
-/* 卡组 */
-.deck {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  padding: 0.75rem;
-  display: grid;
-  gap: 0.625rem;
-}
-
-.deck-dialog-body {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-@media (min-width: 48rem) {
-  .deck-dialog-body {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-.deck-player {
-  display: grid;
-  gap: 0.75rem;
-  align-content: start;
-  min-inline-size: 0;
-}
-
-.deck-player h3 {
-  margin: 0;
-  font-size: 1.05rem;
-}
-
-.deck-name-input {
-  font-weight: 700;
-}
-
-.deck-images {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.625rem;
-}
-
-.image-slot-wrap {
-  position: relative;
-  min-inline-size: 0;
-}
-
-.image-slot {
-  position: relative;
-  inline-size: 100%;
-  aspect-ratio: 16 / 9;
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  background-color: var(--surface-2);
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-  border: 1px solid var(--border);
-  padding: 0;
-}
-
-button.image-slot {
-  cursor: pointer;
-}
-
-.image-slot.empty {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  flex-direction: column;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--surface-2),
-    var(--surface-2) 8px,
-    var(--surface-3) 8px,
-    var(--surface-3) 16px
-  );
-  transition:
-    border-color var(--dur-ui) var(--ease-out),
-    color var(--dur-ui) var(--ease-out);
-}
-
-.image-slot.empty:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.image-slot.empty.drag-over {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: repeating-linear-gradient(
-    -45deg,
-    var(--accent-soft),
-    var(--accent-soft) 8px,
-    var(--accent-stripe) 8px,
-    var(--accent-stripe) 16px
-  );
-  box-shadow: 0 0 0 3px rgba(53, 99, 233, 0.3);
-  box-shadow: 0 0 0 3px oklch(from var(--accent) l c h / 0.3);
-  transform: scale(1.02);
-}
-
-.image-slot .slot-plus {
-  display: grid;
-  place-items: center;
-}
-
-.image-slot .slot-plus .icon {
-  width: 1.4rem;
-  height: 1.4rem;
-}
-
-.image-slot .slot-actions {
-  position: absolute;
-  inset-block-end: 0.375rem;
-  inset-inline-end: 0.375rem;
-  display: flex;
-  gap: 0.25rem;
-  opacity: 0;
-  transform: translateY(3px);
-  transition:
-    opacity var(--dur-ui) var(--ease-out),
-    transform var(--dur-ui) var(--ease-out);
-}
-
-.image-slot-wrap:hover .slot-actions,
-.image-slot-wrap:focus-within .slot-actions {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.slot-action {
-  font: inherit;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #fff;
-  background: var(--scrim);
-  border: 0;
-  border-radius: var(--radius-pill);
-  padding: 0.2rem 0.5rem;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-}
-
-.slot-action:hover {
-  background: var(--scrim-strong);
-}
-
-.slot-action.danger {
-  background: var(--danger-strong);
-}
-
-.slot-action.danger:hover {
-  background: var(--danger);
 }
 
 /* 弹窗：modal 保持 transform-origin center；入场从 0.96 起步（不从 0） */
@@ -1472,12 +1284,6 @@ dialog::backdrop {
   }
 }
 
-@media (max-width: 30rem) {
-  .deck-images {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* 头像 */
 .avatar {
   display: inline-block;
@@ -1503,22 +1309,10 @@ dialog::backdrop {
   font-size: 1.25rem;
 }
 
-.avatar-md {
-  inline-size: 1.75rem;
-  block-size: 1.75rem;
-  font-size: 0.8125rem;
-}
-
 .avatar-sm {
   inline-size: 1.5rem;
   block-size: 1.5rem;
   font-size: 0.75rem;
-}
-
-.deck-player-head {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
 }
 
 /* ========== 主页（右手杯 · 跑马灯主视觉） ========== */
@@ -3237,16 +3031,6 @@ body[data-page="home"] {
   gap: 0.45rem;
 }
 
-.stats-phase {
-  display: inline-block;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-radius: var(--radius-pill);
-  padding: 0.1rem 0.45rem;
-  margin-inline-end: 0.35rem;
-}
 
 .stats-empty {
   text-align: center;
@@ -3778,7 +3562,7 @@ body[data-page='my-decks'] #bg-layer {
   gap: 0.75rem;
 }
 
-/* 场次卡:与选手库 .player-card 同语言(实色卡面+细边框+圆角) */
+/* 场次卡:实色卡面+细边框+圆角,与选手库表格同视觉语言 */
 .md-card {
   padding: 0.9rem 1rem;
   border: 1px solid var(--border);

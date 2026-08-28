@@ -21,8 +21,6 @@
   let editMode = false;
   let scoreDialog = null;
   let currentScoreCardId = null;
-  let rosterDropdown = null;
-  let rulesDropdown = null;
 
   function currentRecord() {
     return window.TournamentApp.current;
@@ -131,12 +129,11 @@
   function renderAll() {
     const app = window.TournamentApp;
     if (!app || !app.current) return;
-    closeRosterDropdown();
-    closeRulesDropdown();
+    for (const d of topDropdowns) d.close();
     const record = app.current;
     if (!record.scores) record.scores = {};
     if (!record.canvas) record.canvas = { cards: [] };
-    if (CanvasModel.deriveRoster && record.canvas) {
+    if (record.canvas) {
       const known = new Set((window.TournamentApp.players || []).map((p) => p.id));
       record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => known.has(id));
     }
@@ -259,8 +256,7 @@
     const app = window.TournamentApp;
     const record = app.current;
     const names = new Map((app.players || []).map((p) => [p.id, p.name]));
-    const standings = CanvasModel.deriveStandings      ? CanvasModel.deriveStandings(record)
-      : { champion: null, runnerUp: null, thirdPlace: null };
+    const standings = CanvasModel.deriveStandings(record);
     const banner = document.getElementById('champion-banner');
     const text = document.getElementById('champion-text');
     if (standings.champion) {
@@ -337,26 +333,11 @@
   }
 
   /* 卡组公示锁:开关开启 + 该卡未打 + 该侧选手已定 + 观看者非该侧选手/非管理员。
-   * 数据侧服务端已剥离 own 条目,这里补占位避免"看起来没交卡"。 */
-  function deckWindowOpenClient(record) {
-    const w = record && record.deckWindow;
-    if (!w) return false;
-    if (w.manual === 'open') return true;
-    if (w.manual === 'closed') return false;
-    const parse = (v) => {
-      const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim());
-      return m && Number(m[1]) <= 23 && Number(m[2]) <= 59 ? Number(m[1]) * 60 + Number(m[2]) : null;
-    };
-    const o = parse(w.open);
-    const c = parse(w.close);
-    if (o === null || c === null || o === c) return false;
-    const cur = new Date().getHours() * 60 + new Date().getMinutes();
-    return o < c ? (cur >= o && cur < c) : (cur >= o || cur < c);
-  }
-
+   * 数据侧服务端已剥离 own 条目,这里补占位避免"看起来没交卡"。
+   * 窗口判定与 api/decks.js 共用 canvas-model.js isWindowOpen */
   function sideDeckHidden(match, side) {
     if (editMode) return false;
-    if (!deckWindowOpenClient(currentRecord())) return false;
+    if (!CanvasModel.isWindowOpen(currentRecord())) return false;
     if (match.played || !match[side]) return false;
     const app = window.TournamentApp;
     if (app && app.isAdmin && app.isAdmin()) return false;
@@ -455,7 +436,7 @@
     const record = currentRecord();
     const board = document.getElementById('canvas-board');
     if (!board) return;
-    if (record && record.canvas && CanvasModel.deriveRoster) {
+    if (record && record.canvas) {
       const known = new Set((window.TournamentApp.players || []).map((p) => p.id));
       record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => known.has(id));
     }
@@ -803,9 +784,8 @@
   function openScoreDialog(cardId) {
     buildScoreDialog();
     const record = currentRecord();
-    const resolved = CanvasModel.resolveCanvas      ? CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {})
-      : null;
-    const match = resolved && resolved.cards.find((c) => c.id === cardId);
+    const resolved = CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {});
+    const match = resolved.cards.find((c) => c.id === cardId);
     const title = match ? (match.label || cardId) : cardId;
     scoreDialog.querySelector('#score-dialog-title').textContent = title + ' · 比分';
     const labelA = scoreDialog.querySelector('#score-label-a');
@@ -842,19 +822,50 @@
     });
   }
 
-  function openRoster() {
-    toggleRosterDropdown();
+  /* ---------- 顶栏下拉(选手名单/赛制规则共用一个实现) ----------
+   * fill 返回下拉 innerHTML;返回 null(无数据)不展开。
+   * 互斥:开一个自动关另一个;点外部/再点按钮关闭 */
+  const topDropdowns = [];
+
+  function createTopDropdown(btnId, className, fill) {
+    let el = null;
+    function close() {
+      if (el) el.remove();
+      el = null;
+      document.removeEventListener('click', onOutside);
+    }
+    function onOutside(event) {
+      const target = event.target;
+      if (!target || !target.closest || !el) return;
+      if (!el.contains(target) && !target.closest('#' + btnId)) close();
+    }
+    function toggle() {
+      if (el) {
+        close();
+        return;
+      }
+      const html = fill();
+      if (!html) return;
+      for (const other of topDropdowns) other.close();
+      el = document.createElement('div');
+      el.className = className;
+      el.innerHTML = html;
+      document.body.appendChild(el);
+      const header = document.getElementById('app-header');
+      const rect = header ? header.getBoundingClientRect() : { bottom: 0, right: 0 };
+      el.style.top = (rect.bottom + 6) + 'px';
+      el.style.right = '1rem';
+      document.addEventListener('click', onOutside);
+    }
+    const api = { toggle, close };
+    topDropdowns.push(api);
+    return api;
   }
 
-  function toggleRosterDropdown() {
-    closeRulesDropdown();
-    if (rosterDropdown && rosterDropdown.parentNode) {
-      closeRosterDropdown();
-      return;
-    }
+  const rosterDropdown = createTopDropdown('header-roster-btn', 'roster-dropdown', () => {
     const app = window.TournamentApp;
     const record = app && app.current;
-    if (!record) return;
+    if (!record) return null;
     /* 名单 = 画布派生 roster ∪ 报名池(signup.players);仅报名未上场者加标注 */
     const onCanvas = new Set(record.roster || []);
     const signedUp = (record.signup && Array.isArray(record.signup.players)) ? record.signup.players : [];
@@ -862,9 +873,7 @@
     const players = ids
       .map((id) => (app.players || []).find((p) => p.id === id))
       .filter(Boolean);
-    rosterDropdown = document.createElement('div');
-    rosterDropdown.className = 'roster-dropdown';
-    rosterDropdown.innerHTML =
+    return (
       '<div class="roster-dropdown-head">选手名单</div>' +
       '<div class="roster-dropdown-list">' +
       players.map((p) =>
@@ -874,73 +883,18 @@
         (onCanvas.has(p.id) ? '' : '<em class="roster-signed-only">已报名</em>') +
         '</div>'
       ).join('') +
-      '</div>';
-    document.body.appendChild(rosterDropdown);
-    const header = document.getElementById('app-header');
-    const rect = header ? header.getBoundingClientRect() : { bottom: 0, right: 0 };
-    rosterDropdown.style.top = (rect.bottom + 6) + 'px';
-    rosterDropdown.style.right = '1rem';
-    document.addEventListener('click', closeRosterDropdownOutside);
-  }
+      '</div>'
+    );
+  });
 
-  function closeRosterDropdown() {
-    if (rosterDropdown && rosterDropdown.parentNode) rosterDropdown.remove();
-    rosterDropdown = null;
-    document.removeEventListener('click', closeRosterDropdownOutside);
-  }
-
-  function closeRosterDropdownOutside(event) {
-    if (!rosterDropdown) return;
-    const target = event.target;
-    if (!target || !target.closest) return;
-    if (!rosterDropdown.contains(target) && !target.closest('#header-roster-btn')) {
-      closeRosterDropdown();
-    }
-  }
-
-  /* ---------- 赛制规则下拉 ---------- */
-
-  function openRules() {
-    toggleRulesDropdown();
-  }
-
-  function toggleRulesDropdown() {
-    if (rulesDropdown && rulesDropdown.parentNode) {
-      closeRulesDropdown();
-      return;
-    }
-    const app = window.TournamentApp;
-    const record = app && app.current;
-    if (!record) return;
-    closeRosterDropdown();
-    rulesDropdown = document.createElement('div');
-    rulesDropdown.className = 'rules-dropdown';
-    rulesDropdown.innerHTML =
+  const rulesDropdown = createTopDropdown('header-rules-btn', 'rules-dropdown', () => {
+    const record = window.TournamentApp && window.TournamentApp.current;
+    if (!record) return null;
+    return (
       '<div class="rules-dropdown-head">赛制规则</div>' +
-      '<div class="rules-dropdown-body"></div>';
-    rulesDropdown.querySelector('.rules-dropdown-body').textContent = record.rules || '暂无赛制规则';
-    document.body.appendChild(rulesDropdown);
-    const header = document.getElementById('app-header');
-    const rect = header ? header.getBoundingClientRect() : { bottom: 0, right: 0 };
-    rulesDropdown.style.top = (rect.bottom + 6) + 'px';
-    rulesDropdown.style.right = '1rem';
-    document.addEventListener('click', closeRulesDropdownOutside);
-  }
-
-  function closeRulesDropdown() {
-    if (rulesDropdown && rulesDropdown.parentNode) rulesDropdown.remove();
-    rulesDropdown = null;
-    document.removeEventListener('click', closeRulesDropdownOutside);
-  }
-
-  function closeRulesDropdownOutside(event) {
-    if (!rulesDropdown) return;
-    const target = event.target;
-    if (!target || !target.closest) return;
-    if (!rulesDropdown.contains(target) && !target.closest('#header-rules-btn')) {
-      closeRulesDropdown();
-    }
-  }
+      '<div class="rules-dropdown-body">' + escapeHtml(record.rules || '暂无赛制规则') + '</div>'
+    );
+  });
 
   function bindEditToolbar() {
     const toolbar = document.getElementById('edit-toolbar');
@@ -979,7 +933,7 @@
       else if (kind === 'style') toggleStyleDrawer();
       else if (kind === 'delete') editor.setTool('delete');
       else if (kind === 'save') {
-        editor.saveNow().then(() => notify('已保存'));
+        editor.saveCanvas().then(() => notify('已保存'));
       }
       updateToolbarState();
     });
@@ -1016,8 +970,8 @@
 
   window.BracketActions = {
     requestEdit,
-    openRoster,
-    openRules
+    openRoster: () => rosterDropdown.toggle(),
+    openRules: () => rulesDropdown.toggle()
   };
 
   document.addEventListener('ts:ready', () => {

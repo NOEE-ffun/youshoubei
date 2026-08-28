@@ -22,19 +22,7 @@
     }
   }
 
-  /* 客户端窗口判定(展示用;写权限以服务端为准)。与 api/decks.js isWindowOpen 同式 */
-  function windowOpen(record) {
-    const w = record && record.deckWindow;
-    if (!w) return false;
-    if (w.manual === 'open') return true;
-    if (w.manual === 'closed') return false;
-    const parse = (v) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(v || '').trim()); return m && Number(m[1]) <= 23 && Number(m[2]) <= 59 ? Number(m[1]) * 60 + Number(m[2]) : null; };
-    const o = parse(w.open);
-    const c = parse(w.close);
-    if (o === null || c === null || o === c) return false;
-    const cur = new Date().getHours() * 60 + new Date().getMinutes();
-    return o < c ? (cur >= o && cur < c) : (cur >= o || cur < c);
-  }
+  /* 窗口判定与 api/decks.js 共用 canvas-model.js isWindowOpen(展示用;写权限以服务端为准) */
 
   function isStarted(record, cardId) {
     const r = CM.getResult((record.scores || {})[cardId]);
@@ -59,20 +47,8 @@
 
   async function boot() {
     const app = window.TournamentApp;
-    if (app.mode !== 'cloud') {
-      showEmpty('我的对局需要连接服务器(当前为本机数据模式)。', false);
-      return;
-    }
-    await app.refreshSession();
-    const { user, player } = app.getSession();
-    if (!user) {
-      showEmpty('未登录。', true);
-      return;
-    }
-    if (!player) {
-      showEmpty('当前是管理员账号(未绑定选手),选手账号才能提交卡组。', false);
-      return;
-    }
+    const player = await window.TournamentUtils.requirePlayerSession('我的对局', showEmpty);
+    if (!player) return;
     state.myId = player.id;
     $('my-decks-empty').hidden = true;
     $('my-decks-body').hidden = false;
@@ -173,7 +149,7 @@
       listEl.innerHTML = '<p class="hint">该比赛暂无画布数据。</p>';
       return;
     }
-    const open = windowOpen(record);
+    const open = CM.isWindowOpen(record);
     chip.textContent = open ? '提交窗口:开放中' : '提交窗口:关闭';
     chip.className = 'my-decks-window-chip ' + (open ? 'md-chip-open' : 'md-chip-wait');
 

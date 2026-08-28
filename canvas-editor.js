@@ -73,10 +73,6 @@
     return dirty;
   }
 
-  function saveNow() {
-    return saveCanvas();
-  }
-
   /* 快照 = 卡片 + 比分 + 每场卡组(删除卡片会连带清理后两者,撤销须整体还原) */
   function snapshotState() {
     const record = currentRecord();
@@ -928,7 +924,7 @@
     const canvas = record.canvas || (record.canvas = { cards: [] });
     commitHistory();
     const card = {
-      id: (typeof CanvasModel !== 'undefined' && CanvasModel.uid) ? CanvasModel.uid('c') : ('c_' + Date.now()),
+      id: CanvasModel.uid('c'),
       label: '新对局',
       phase: '',
       format: 'BO3',
@@ -1010,12 +1006,7 @@
   function pasteCards(sources) {
     const record = currentRecord();
     const canvas = record.canvas || (record.canvas = { cards: [] });
-    let clones;
-    if (typeof CanvasModel !== 'undefined' && CanvasModel.cloneCardsForPaste) {
-      clones = CanvasModel.cloneCardsForPaste(sources, 1, 1);
-    } else {
-      clones = JSON.parse(JSON.stringify(sources));
-    }
+    const clones = CanvasModel.cloneCardsForPaste(sources, 1, 1);
     if (!clones.length) return;
     commitHistory();
     for (const clone of clones) canvas.cards.push(clone);
@@ -1419,7 +1410,7 @@
     canUndo,
     canRedo,
     isDirty,
-    saveNow,
+    saveCanvas,
     restoreSavedZoom
   };
 })();

@@ -28,12 +28,10 @@
 
   function render(payload) {
     clearError();
-    var theme = (window.VSThemes && VSThemes.byId(payload.themeId)) || (window.VSThemes && VSThemes[0]);
+    var theme = VSThemes.byId(payload.themeId) || VSThemes[0];
     if (theme && payload.data) {
       document.documentElement.setAttribute("data-poster-theme", theme.id);
-      slot.innerHTML = (window.VSPoster && VSPoster.build)
-        ? VSPoster.build(payload.data, theme)
-        : "";
+      slot.innerHTML = VSPoster.build(payload.data, theme);
     } else {
       showError("舞台数据不完整");
     }

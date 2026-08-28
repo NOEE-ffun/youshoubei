@@ -53,20 +53,8 @@
 
   async function boot() {
     const app = window.TournamentApp;
-    if (app.mode !== 'cloud') {
-      showEmpty('我的比赛需要连接服务器(当前为本机数据模式)。', false);
-      return;
-    }
-    await app.refreshSession();
-    const { user, player } = app.getSession();
-    if (!user) {
-      showEmpty('未登录。', true);
-      return;
-    }
-    if (!player) {
-      showEmpty('当前是管理员账号(未绑定选手),选手账号才能报名。', false);
-      return;
-    }
+    const player = await window.TournamentUtils.requirePlayerSession('我的比赛', showEmpty);
+    if (!player) return;
     state.myId = player.id;
     $('my-tourneys-empty').hidden = true;
     $('my-tourneys-body').hidden = false;

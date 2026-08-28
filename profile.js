@@ -16,16 +16,6 @@
     pendingTagImgRatio: null
   };
 
-  function dataUrlToBlob(dataUrl) {
-    const comma = dataUrl.indexOf(',');
-    const meta = dataUrl.slice(0, comma);
-    const bin = atob(dataUrl.slice(comma + 1));
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const mime = /data:([^;]+)/.exec(meta);
-    return new Blob([bytes], { type: mime ? mime[1] : 'application/octet-stream' });
-  }
-
   function measureRatio(dataUrl) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -178,7 +168,7 @@
     if (state.pendingTagImgData !== null) {
       if (state.pendingTagImgData) {
         try {
-          const url = await app.uploadImage(dataUrlToBlob(state.pendingTagImgData));
+          const url = await app.uploadImage(await fetch(state.pendingTagImgData).blob());
           body.tagImg = url;
           body.tagImgRatio = state.pendingTagImgRatio;
         } catch (error) {

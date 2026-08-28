@@ -1,9 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { sendJson, readBody } = require('./helpers');
-const { readJson, writeJson, appendAudit, backupData, backupJson, isOssConfigured } = require('./oss');
-const devStore = require('./dev-store');
+const { sendJson, readJsonBody, createStorage } = require('./helpers');
+const { appendAudit, backupData, backupJson } = require('./oss');
 const { withWorkspaceLock } = require('./workspace-lock');
 const { sessionOf, setSessionCookie, issueFor } = require('./session');
 
@@ -132,28 +131,6 @@ function pvOf(user) {
   return String(user.passHash || '').slice(-8);
 }
 
-/* ---------- 请求体 ---------- */
-
-async function readJsonBody(req, res) {
-  const buffer = await readBody(req, MAX_BODY);
-  if (buffer === null) {
-    sendJson(res, 413, { error: '数据过大' });
-    return undefined;
-  }
-  let parsed;
-  try {
-    parsed = JSON.parse(buffer.toString('utf8'));
-  } catch {
-    sendJson(res, 400, { error: '请求体不是合法 JSON' });
-    return undefined;
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    sendJson(res, 400, { error: '请求体必须是 JSON 对象' });
-    return undefined;
-  }
-  return parsed;
-}
-
 /* ---------- 处理器工厂(storage 注入 + options.now 时钟注入) ---------- */
 
 function createHandlers(storage, options) {
@@ -162,19 +139,7 @@ function createHandlers(storage, options) {
   const audit = typeof o.appendAudit === 'function' ? o.appendAudit : appendAudit;
   const backup = typeof o.backupData === 'function' ? o.backupData : backupData;
   const rate = o.rateLimiter || createRateLimiter(now);
-
-  /* 注入存储 > 开发共享内存(dev-store,与 data/decks 一致)> OSS */
-  async function read(key) {
-    if (storage && storage.readJson) return storage.readJson(key);
-    if (!isOssConfigured()) return devStore.readJson(key);
-    return readJson(key);
-  }
-
-  async function write(key, value) {
-    if (storage && storage.writeJson) return storage.writeJson(key, value);
-    if (!isOssConfigured()) return devStore.writeJson(key, value);
-    return writeJson(key, value);
-  }
+  const { read, write } = createStorage(storage);
 
   /* 开发测试码核销记录(模块级,随进程) */
   const devUsed = new Set();
@@ -243,7 +208,7 @@ function createHandlers(storage, options) {
     if (wait > 0) {
       return sendJson(res, 429, { error: '尝试过于频繁,请 ' + wait + ' 秒后再试' });
     }
-    const body = await readJsonBody(req, res);
+    const body = await readJsonBody(req, res, MAX_BODY);
     if (body === undefined) return;
 
     const code = String(body.code || '').trim();
@@ -338,7 +303,7 @@ function createHandlers(storage, options) {
     if (wait > 0) {
       return sendJson(res, 429, { error: '尝试过于频繁,请 ' + wait + ' 秒后再试' });
     }
-    const body = await readJsonBody(req, res);
+    const body = await readJsonBody(req, res, MAX_BODY);
     if (body === undefined) return;
 
     const username = String(body.username || '').trim().toLowerCase();
@@ -380,7 +345,7 @@ function createHandlers(storage, options) {
       if (!user) return sendJson(res, 401, { error: '未登录' });
       if (!user.playerId) return sendJson(res, 400, { error: '该账号未绑定选手,无法编辑资料' });
 
-      const body = await readJsonBody(req, res);
+      const body = await readJsonBody(req, res, MAX_BODY);
       if (body === undefined) return;
       const patch = {};
       if ('name' in body) {
@@ -445,7 +410,7 @@ function createHandlers(storage, options) {
     }
     const user = await currentUser(req);
     if (!user) return sendJson(res, 401, { error: '未登录' });
-    const body = await readJsonBody(req, res);
+    const body = await readJsonBody(req, res, MAX_BODY);
     if (body === undefined) return;
     if (!verifyPassword(String(body.current || ''), user.passHash)) {
       return sendJson(res, 400, { error: '当前密码错误' });

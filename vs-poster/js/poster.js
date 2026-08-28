@@ -45,12 +45,7 @@
 
   /** 名字字号自适应:不超 maxWidth,保底 minFont */
   function fitFontSize(s, maxWidth, maxFont, minFont) {
-    var per = 0;
-    for (var i = 0; i < s.length; i++) {
-      var c = s.charCodeAt(i);
-      per += (c >= 0x2e80 && c <= 0x9fff) || (c >= 0xf900 && c <= 0xfaff) || c >= 0x20000 ? 1.05 : 0.56;
-    }
-    var size = Math.floor(maxWidth / Math.max(per, 0.1));
+    var size = Math.floor(maxWidth / Math.max(textWidth(s, 1), 0.1));
     return Math.max(minFont, Math.min(maxFont, size));
   }
 

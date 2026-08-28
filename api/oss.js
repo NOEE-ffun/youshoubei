@@ -212,6 +212,7 @@ function publicUrl(key) {
 module.exports = {
   DATA_PATH,
   isOssConfigured,
+  getClient,
   readJson,
   writeJson,
   backupJson,

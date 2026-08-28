@@ -229,6 +229,35 @@
     return 2;
   }
 
+  /* ========== 卡组提交窗口(服务端判定与客户端展示共用一份) ========== */
+
+  function parseHHMM(value) {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+    if (!m) return null;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h > 23 || min > 59) return null;
+    return h * 60 + min;
+  }
+
+  /* 生效状态:true=开(可提交+隐藏),false=关(锁定+公示)。now 可注入供测试:
+   * Date 实例 / 毫秒数 / 返回任一者的函数均可(生产注入的是 Date.now 本身)。
+   * 开关语义:record.deckWindow = { open:"HH:MM", close:"HH:MM", manual: null|'open'|'closed' }
+   * manual 优先;无 manual 且时段齐全时按本地时间每日循环判定(支持跨零点);否则恒关 */
+  function isWindowOpen(record, now) {
+    const w = record && record.deckWindow;
+    if (!w || typeof w !== 'object') return false;
+    if (w.manual === 'open') return true;
+    if (w.manual === 'closed') return false;
+    const openMin = parseHHMM(w.open);
+    const closeMin = parseHHMM(w.close);
+    if (openMin === null || closeMin === null || openMin === closeMin) return false;
+    const raw = typeof now === 'function' ? now() : now;
+    const t = raw instanceof Date ? raw : new Date(Number.isFinite(raw) ? raw : Date.now());
+    const cur = t.getHours() * 60 + t.getMinutes();
+    return openMin < closeMin ? (cur >= openMin && cur < closeMin) : (cur >= openMin || cur < closeMin);
+  }
+
   /* ========== 画布解析 ========== */
 
   function buildResolved(card, a, b, result) {
@@ -603,6 +632,8 @@
     clampCanvasSize,
     getResult,
     getDeckCount,
+    isWindowOpen,
+    parseHHMM,
     resolveCanvas,
     resolveCardById,
     deriveStandings,
