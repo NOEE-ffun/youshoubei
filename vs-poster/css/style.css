@@ -1,6 +1,7 @@
 /**
- * 页面布局 + 控制面板(深色电竞工具台)
- * 风格:结构优先 —— 1px 边框、方角、mono 技术标签、克制的强调色
+ * 海报页 chrome:全面扁平化/紧凑化(2026-08-29)
+ * 直接复用主站 styles.css 令牌(先加载),无独立令牌体系;
+ * 分组用细分隔线,条目为无盒行,预览框只留细边框。
  */
 /* ---------- 基础 ---------- */
 #poster-app *,
@@ -22,303 +23,285 @@
   white-space: nowrap;
   border: 0;
 }
-/* UI 焦点/选中与海报主题色解耦:统一用主站 --accent/--focus-ring(styles.css 先加载),
- * --color-accent 只留给海报主题自身的装饰(legend、按钮 hover 等) */
 #poster-app :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
-/* hidden 属性必须压过任何 display 声明(GUI 测试发现:.avatar__remove 的 display:flex 曾覆盖 hidden) */
 #poster-app [hidden] {
   display: none !important;
 }
-/* ---------- 浏览器表面细节(主题化默认行为) ---------- */
 #poster-app ::selection {
   background: var(--accent);
   color: #fff;
 }
 #poster-app input,
-#poster-app select,
-#poster-app textarea {
+#poster-app select {
   caret-color: var(--accent);
 }
 #poster-app ::placeholder {
-  color: var(--color-text-muted);
+  color: var(--text-muted);
   opacity: 1;
 }
 #poster-app .panel {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border-strong) transparent;
+  scrollbar-color: var(--border) transparent;
 }
 #poster-app .panel::-webkit-scrollbar {
-  inline-size: 8px;
+  inline-size: 6px;
 }
 #poster-app .panel::-webkit-scrollbar-thumb {
-  background: var(--color-border-strong);
-  border-radius: 4px;
+  background: var(--border);
 }
-#poster-app .panel::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-faint);
-}
-/* ---------- 主题选择器(单按钮 + 下拉菜单) ---------- */
-/* 按钮与下拉 ul 由主站 common.js renderHeader 生成(poster-theme-btn / poster-theme-menu),
- * 样式在主站 styles.css;本文件只保留 JS 动态生成的菜单子元素覆盖样式 */
+/* ---------- 顶栏主题菜单子元素(common.js 生成外壳) ---------- */
 #poster-app .picker {
   position: relative;
 }
 #poster-app .theme-menu__dot {
   inline-size: 12px;
   block-size: 12px;
-  border-radius: var(--radius-full);
+  border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 0 5px;
 }
 #poster-app .theme-menu__name {
   flex: 1;
 }
-/* ---------- OBS 舞台模式(隐藏界面,仅渲染海报) ---------- */
-/* ---------- 按钮 ---------- */
+/* ---------- 按钮:对齐主站 .btn 语言 ---------- */
 #poster-app .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--size-8);
-  block-size: 34px;
-  padding-inline: var(--size-16);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-semibold);
+  gap: 0.375rem;
+  block-size: 30px;
+  padding-inline: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast),
-    background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 #poster-app .btn:active {
-  transform: translateY(1px);
-}
-#poster-app .btn--ghost {
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  transform: scale(0.97);
 }
 #poster-app .btn--ghost:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 #poster-app .btn--danger:hover {
-  border-color: var(--color-error);
-  color: var(--color-error);
+  border-color: var(--danger);
+  color: var(--danger);
 }
-/* 二次确认状态:重置按钮(2026-08-12 审计护栏) */
+/* 重置二次确认态(审计护栏) */
 #poster-app .btn--confirm {
-  border-color: var(--color-error);
-  background: var(--color-error);
+  border-color: var(--danger);
+  background: var(--danger);
   color: #fff;
 }
-#poster-app .btn--confirm:hover {
-  border-color: var(--color-error);
-  background: var(--color-error);
-  color: #fff;
+#poster-app .btn--sm {
+  block-size: 26px;
+  padding-inline: 0.55rem;
+  font-size: 0.75rem;
 }
-/* ---------- 布局 ---------- */
+/* ---------- 布局:左窄面板 + 右预览,紧凑间距 ---------- */
 #poster-app .layout {
   display: grid;
-  grid-template-columns: var(--panel-width) minmax(0, 1fr);
-  gap: var(--size-20);
+  grid-template-columns: 19rem minmax(0, 1fr);
+  gap: 1.25rem;
   align-items: start;
-  padding: var(--size-20);
-  max-inline-size: 1600px;
+  padding: 0.75rem 1rem 2rem;
+  max-inline-size: 100rem;
   margin-inline: auto;
 }
-/* ---------- 控制面板 ---------- */
+/* ---------- 控制面板:无盒列布局,sticky 跟随 ---------- */
 #poster-app .panel {
   display: flex;
   flex-direction: column;
-  gap: var(--size-16);
-  padding: var(--size-16);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  gap: 0.9rem;
   position: sticky;
-  inset-block-start: calc(var(--header-height, var(--topbar-height)) + var(--size-16));
-  max-block-size: calc(100dvh - var(--header-height, var(--topbar-height)) - var(--size-32));
+  inset-block-start: calc(var(--header-height, 3rem) + 0.75rem);
+  max-block-size: calc(100dvh - var(--header-height, 3rem) - 1.5rem);
   overflow-y: auto;
+  padding-inline-end: 0.5rem;
 }
+/* 分组:细分隔线 + eyebrow 标题,无凹底盒 */
 #poster-app .group {
   margin: 0;
-  padding: var(--size-12);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-sunken);
+  padding: 0;
+  border: 0;
+  border-block-start: 1px solid var(--border);
+  padding-block-start: 0.75rem;
+}
+#poster-app .group:first-of-type {
+  border-block-start: 0;
+  padding-block-start: 0;
 }
 #poster-app .group__legend {
-  padding-inline: var(--size-8);
-  font-family: var(--font-family-mono);
-  font-size: var(--text-xs);
-  letter-spacing: 0.16em;
-  color: var(--color-text-faint);
-}
-#poster-app .group__legend--left::before {
-  content: "◤ ";
-  color: var(--color-accent);
-}
-#poster-app .group__legend--right::before {
-  content: "◥ ";
-  color: var(--color-accent-2);
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
 }
 #poster-app .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin-block-end: var(--size-12);
-}
-#poster-app .field:last-child {
-  margin-block-end: 0;
+  gap: 4px;
+  margin-block: 0.6rem;
 }
 #poster-app .field-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--size-12);
+  gap: 0.6rem;
 }
 #poster-app .field__label {
-  font-size: var(--text-xs);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 #poster-app .field__control {
   inline-size: 100%;
-  block-size: 34px;
-  padding-inline: var(--size-12);
-  border: 1px solid var(--color-border-strong);
+  block-size: 30px;
+  padding-inline: 0.55rem;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  background: var(--surface);
+  color: var(--text);
   font-family: inherit;
-  font-size: var(--text-sm);
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  font-size: 0.82rem;
+  transition: border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
 }
 #poster-app .field__control:hover {
-  border-color: var(--color-text-faint);
+  border-color: var(--text-muted);
 }
 #poster-app .field__control:focus-visible {
   outline: none;
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
 }
+#poster-app .field__control:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 #poster-app .field--inline {
   flex-direction: row;
   align-items: center;
-  gap: var(--size-8);
+  gap: 0.5rem;
   margin: 0;
 }
-#poster-app .field--url {
-  flex-direction: row;
-  align-items: center;
-  gap: var(--size-8);
-  margin-block-start: var(--size-12);
-  margin-block-end: 0;
-}
-/* ---------- 头像上传 ---------- */
-#poster-app .avatar {
-  position: relative;
-}
-#poster-app .avatar__drop {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 100%;
-  block-size: 170px;
-  padding: var(--size-12);
-  border: 1.5px dashed var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
-  color: var(--color-text-faint);
-  cursor: pointer;
-  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
-}
-#poster-app .avatar__drop:hover,
-#poster-app .avatar__drop--over {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
-  color: var(--color-text);
-}
-#poster-app .avatar__hint {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--size-8);
-  font-size: var(--text-sm);
-  text-align: center;
-  pointer-events: none;
-}
-#poster-app .avatar__img {
-  inline-size: 146px;
-  block-size: 146px;
-  border-radius: var(--radius-full);
-  object-fit: cover;
-  border: 2px solid var(--color-accent);
-  box-shadow: 0 0 14px var(--color-accent-soft);
-  pointer-events: none;
-}
-#poster-app .avatar__remove {
-  position: absolute;
-  inset-block-start: var(--size-8);
-  inset-inline-end: var(--size-8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 26px;
-  block-size: 26px;
-  border-radius: var(--radius-full);
-  background: rgba(0, 0, 0, 0.7);
-  border: 1px solid var(--color-border-strong);
-  color: var(--color-text-muted);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-#poster-app .avatar__remove:hover {
-  color: var(--color-error);
-  border-color: var(--color-error);
-}
+/* ---------- 工具行 ---------- */
 #poster-app .panel__tools {
   display: flex;
-  gap: var(--size-12);
+  gap: 0.6rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--border);
 }
 #poster-app .panel__tools .btn {
   flex: 1;
 }
-/* ---------- 选手库 ---------- */
-#poster-app .roster__hint {
-  margin: 0 0 var(--size-8);
-  font-size: var(--text-sm);
-  color: var(--color-text-faint);
+/* ---------- 选手选择器 ---------- */
+#poster-app .picker-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
+#poster-app .picker-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  inline-size: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+#poster-app .picker-empty:hover,
+#poster-app .picker-empty:focus-visible {
+  border-color: var(--accent);
+  color: var(--text);
+  outline: none;
+}
+#poster-app .picker-card {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-inline-start: 2px solid var(--accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: var(--accent-soft);
+}
+#poster-app .picker-card .roster__meta {
+  flex: 1;
+  min-width: 0;
+}
+#poster-app .picker__tagimg {
+  font-style: normal;
+  font-size: 12px;
+  opacity: 0.7;
+}
+#poster-app .picker__gone {
+  display: block;
+  font-size: 12px;
+}
+#poster-app .picker-list {
+  margin-top: 8px;
+}
+#poster-app .picker-list .roster__list {
+  max-block-size: 240px;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+#poster-app .picker-search-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+#poster-app .picker-search-row .field__control {
+  flex: 1;
+  min-width: 0;
+}
+/* ---------- 选手条目:无盒行,分隔线 ---------- */
 #poster-app .roster__list {
   margin: 0;
   padding: 0;
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--size-8);
 }
 #poster-app .roster__card {
   display: flex;
   align-items: center;
-  gap: var(--size-12);
-  padding: var(--size-8) var(--size-12);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
+  gap: 0.5rem;
+  padding: 0.3rem 0.35rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
 }
-#poster-app .roster__card:hover {
-  border-color: var(--color-border-strong);
+#poster-app .picker-list .roster__card {
+  cursor: pointer;
+}
+#poster-app .picker-list .roster__card + .roster__card {
+  border-block-start: 1px solid var(--border-soft);
+}
+#poster-app .roster__card:hover,
+#poster-app .picker-list .roster__card:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
 }
 #poster-app .roster__avatar {
-  inline-size: 34px;
-  block-size: 34px;
-  border-radius: var(--radius-full);
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
 }
@@ -326,22 +309,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-surface-sunken);
-  border: 1px solid var(--color-border-strong);
-  color: var(--color-text-muted);
-  font-weight: var(--font-weight-bold);
-  font-size: var(--text-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.75rem;
 }
 #poster-app .roster__dot {
-  inline-size: 10px;
-  block-size: 10px;
-  border-radius: var(--radius-full);
+  inline-size: 9px;
+  block-size: 9px;
+  border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 0 6px currentColor;
 }
 #poster-app .roster__dot--none {
-  border: 1.5px dashed var(--color-text-faint);
-  box-shadow: none;
+  border: 1.5px dashed var(--text-muted);
 }
 #poster-app .roster__meta {
   min-inline-size: 0;
@@ -351,310 +332,138 @@
   line-height: 1.3;
 }
 #poster-app .roster__name {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--text-sm);
+  font-weight: 600;
+  font-size: 0.82rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 #poster-app .roster__tag {
-  font-family: var(--font-family-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text-faint);
+  font-size: 0.72rem;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 选手卡上的 ID/队名小徽标(与选手绑定的 tag) */
 #poster-app .roster__id {
   font-style: normal;
-  font-family: var(--font-family-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text-faint);
-  background: var(--color-surface-sunken, rgba(127, 127, 127, 0.15));
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--surface-2);
   border-radius: 4px;
   padding: 0 4px;
   margin-inline-start: 4px;
 }
-#poster-app .roster__ops {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-}
 #poster-app .roster__empty {
   margin: 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-faint);
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
-/* ---------- ID / 队标行 ---------- */
-#poster-app .tag-row {
-  display: flex;
-  align-items: center;
-  gap: var(--size-8);
-}
-#poster-app .tag-row .field__control {
-  flex: 1;
-  min-inline-size: 0;
-}
-/* 队标图已设置:上传按钮高亮提示当前为图片模式 */
-#poster-app .btn--tag-on {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
-/* 队标大小滑杆(仅在设置了队标图后显示) */
-#poster-app .tag-size-row {
-  display: flex;
-  align-items: center;
-  gap: var(--size-12);
-}
-#poster-app .field__control--range {
-  flex: 1;
-  min-inline-size: 0;
-  block-size: auto;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-#poster-app .tag-size-val {
-  font-family: var(--font-family-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  min-inline-size: 3.5ch;
-  text-align: right;
-}
-/* ---------- 颜色选择行 ---------- */
+/* ---------- 颜色行 ---------- */
 #poster-app .color-row {
   display: flex;
   align-items: center;
-  gap: var(--size-12);
+  gap: 0.6rem;
 }
 #poster-app .color-dot {
-  inline-size: 26px;
-  block-size: 26px;
-  border-radius: var(--radius-full);
-  border: 2px solid var(--color-border-strong);
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
   flex-shrink: 0;
-  transition: box-shadow var(--transition-fast);
 }
 #poster-app .color-dot--custom {
   border-style: dashed;
-  box-shadow: 0 0 8px var(--color-accent-soft);
 }
 #poster-app .field__control--color {
-  inline-size: 56px;
-  padding: 3px;
-  block-size: 34px;
+  inline-size: 48px;
+  padding: 2px;
+  block-size: 28px;
   cursor: pointer;
 }
-#poster-app .btn--sm {
-  block-size: 28px;
-  padding-inline: var(--size-12);
-  font-size: var(--text-xs);
-}
-#poster-app .btn--block {
-  inline-size: 100%;
-  margin-block-start: var(--size-12);
-}
-/* ---------- 预览区 ---------- */
+/* ---------- 预览区:细边框,无发光 ---------- */
 #poster-app .stage {
   min-inline-size: 0;
 }
 #poster-app .stage__frame {
   position: relative;
   margin: 0;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface-sunken);
-  aspect-ratio: var(--poster-aspect);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  aspect-ratio: 16 / 9;
   overflow: hidden;
-  box-shadow: 0 0 0 1px var(--color-bg), 0 18px 50px rgba(0, 0, 0, 0.55),
-    0 0 60px var(--color-accent-soft);
-  transition: box-shadow var(--transition-base);
+  transition: border-color var(--dur-ui) var(--ease-out);
 }
 #poster-app .stage__frame--over {
-  box-shadow: 0 0 0 2px var(--color-accent), 0 0 46px var(--color-accent-soft);
+  border-color: var(--accent);
 }
-/* 导出成功反馈(2026-08-12 审计:peak-end) */
+/* 导出成功反馈:边框绿闪(审计:peak-end) */
 #poster-app .stage__frame--exported {
-  animation: export-flash 1.4s ease-out;
+  animation: export-flash 1.2s var(--ease-out);
 }
-@keyframes export-flash{
-  0% {
-    box-shadow: 0 0 0 1px var(--color-bg), 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 60px var(--color-accent-soft);
-  }
-  30% {
-    box-shadow: 0 0 0 3px var(--color-success), 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 90px rgba(61, 220, 151, 0.45);
-  }
-  100% {
-    box-shadow: 0 0 0 1px var(--color-bg), 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 60px var(--color-accent-soft);
-  }
+@keyframes export-flash {
+  0% { border-color: var(--border); }
+  30% { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+  100% { border-color: var(--border); }
 }
-@media (prefers-reduced-motion: reduce){#poster-app .stage__frame--exported {
+@media (prefers-reduced-motion: reduce) {
+  #poster-app .stage__frame--exported {
     animation: none;
-    box-shadow: 0 0 0 2px var(--color-success), 0 18px 50px rgba(0, 0, 0, 0.55);
-  }}
+    border-color: var(--success);
+  }
+}
 #poster-app .stage__slot svg {
   display: block;
   inline-size: 100%;
   block-size: auto;
 }
-#poster-app .stage__hint {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--size-12);
-  background: rgba(7, 8, 13, 0.72);
-  color: var(--color-text-muted);
-  font-size: var(--text-lg);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 0.08em;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--transition-fast);
-}
-#poster-app .stage__frame--over .stage__hint {
-  opacity: 1;
-}
 #poster-app .stage__note {
-  margin: var(--size-12) 0 0;
-  font-size: var(--text-sm);
-  color: var(--color-text-faint);
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
   text-align: center;
 }
-/* ---------- Toast ---------- */
+/* ---------- Toast:对齐主站风格 ---------- */
 #poster-app .toast {
   position: fixed;
-  inset-block-end: var(--size-24);
+  inset-block-end: 1.5rem;
   left: 50%;
-  transform: translateX(-50%) translateY(14px);
-  z-index: var(--layer-toast);
-  max-inline-size: min(90vw, 480px);
-  padding: var(--size-12) var(--size-20);
-  border: 1px solid var(--color-border-strong);
-  border-inline-start: 3px solid var(--color-success);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  font-size: var(--text-sm);
+  transform: translateX(-50%) translateY(10px);
+  z-index: 400;
+  max-inline-size: min(90vw, 30rem);
+  padding: 0.55rem 1rem;
+  border: 0;
+  border-inline-start: 3px solid var(--success);
+  border-radius: var(--radius-sm);
+  background: var(--text);
+  color: var(--bg);
+  font-size: 0.85rem;
+  font-weight: 600;
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--transition-base), transform var(--transition-base);
+  transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out);
 }
 #poster-app .toast--show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
 #poster-app .toast--error {
-  border-inline-start-color: var(--color-error);
+  border-inline-start-color: var(--danger);
 }
 /* ---------- 响应式 ---------- */
-@media (width < 60rem){#poster-app .layout {
+@media (width < 60rem) {
+  #poster-app .layout {
     grid-template-columns: 1fr;
+    padding: 0.5rem 0.75rem 1.5rem;
   }
-/* 2026-08-12 审计:移动端海报置前(开屏即见成品,实时反馈成立) */
-#poster-app .stage {
+  /* 移动端海报置前:开屏即见成品 */
+  #poster-app .stage {
     order: -1;
   }
-#poster-app .panel {
+  #poster-app .panel {
     position: static;
     max-block-size: none;
-  }}
-#poster-app .field__control:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* ---------- 选手选择器(选手库驱动) ---------- */
-#poster-app .picker-slot {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-#poster-app .picker-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--size-8);
-  inline-size: 100%;
-  padding: var(--size-16) var(--size-12);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted, inherit);
-  font-size: 14px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-#poster-app .picker-empty:hover,
-#poster-app .picker-empty:focus-visible {
-  border-color: var(--color-border-strong);
-  color: var(--color-text, inherit);
-  outline: none;
-}
-
-#poster-app .picker-card {
-  display: flex;
-  align-items: center;
-  gap: var(--size-12);
-  padding: var(--size-8) var(--size-12);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-raised);
-}
-
-#poster-app .picker-card .roster__meta {
-  flex: 1;
-  min-width: 0;
-}
-
-#poster-app .picker-card--selected {
-  border-color: var(--accent, #4a7dff);
-}
-
-#poster-app .picker__tagimg {
-  font-style: normal;
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-#poster-app .picker__gone {
-  display: block;
-  font-size: 12px;
-}
-
-#poster-app .picker-list {
-  margin-top: 10px;
-}
-
-#poster-app .picker-list .roster__list {
-  max-block-size: 260px;
-  overflow-y: auto;
-  margin-top: 8px;
-}
-
-#poster-app .picker-list .roster__card {
-  cursor: pointer;
-}
-
-#poster-app .picker-list .roster__card:hover,
-#poster-app .picker-list .roster__card:focus-visible {
-  border-color: var(--accent, #4a7dff);
-  outline: none;
-}
-
-#poster-app .picker-search-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-#poster-app .picker-search-row .field__control {
-  flex: 1;
-  min-width: 0;
+    padding-inline-end: 0;
+  }
 }
