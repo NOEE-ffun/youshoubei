@@ -1,55 +1,55 @@
 /* ============================================================
    右手杯 · 信息工作台视觉系统(2026-08 重做)
-   语言:暖中性底 + 琥珀金单一强调(奖杯语义),系统字体 +
-   tabular 数字,8/12/16px 圆角,克制的 tinted 阴影。
-   双主题:浅色为纸白,深色为暖黑;令牌双写不做,直接 hex。
+   语言:Things 风——浅冷灰/白底 + 标志性蓝单一强调,系统字体 +
+   tabular 数字,8/12/16px 圆角,克制的冷灰 tinted 阴影。
+   双主题:浅色为冷灰白,深色为深灰蓝;令牌双写不做,直接 hex。
    ============================================================ */
 
 :root {
-  /* 表面(gruvbox light:hard/soft/bg1/bg2) */
-  --bg: #f9f5d7;
-  --surface: #fbf1c7;
-  --surface-2: #ebdbb2;
-  --surface-3: #d5c4a1;
-  --surface-float: rgba(251, 241, 199, 0.94);
+  /* 表面(Things 风:浅冷灰底 + 纯白面板) */
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #edeff2;
+  --surface-3: #e2e5ea;
+  --surface-float: rgba(255, 255, 255, 0.94);
   /* 画布玻璃卡族:透明度/模糊可由编辑工具栏内联调节 */
-  --card-glass-base: 251 241 199;
-  --surface-glass: rgba(251, 241, 199, 0.72);
-  --surface-glass-hover: rgba(251, 241, 199, 0.86);
+  --card-glass-base: 255 255 255;
+  --surface-glass: rgba(255, 255, 255, 0.72);
+  --surface-glass-hover: rgba(255, 255, 255, 0.86);
   /* 遮罩 */
-  --overlay: rgba(60, 56, 54, 0.45);
-  --scrim: rgba(60, 56, 54, 0.82);
-  --scrim-strong: rgba(60, 56, 54, 0.94);
-  --scrim-heavy: rgba(29, 32, 33, 0.9);
+  --overlay: rgba(28, 32, 38, 0.45);
+  --scrim: rgba(28, 32, 38, 0.82);
+  --scrim-strong: rgba(28, 32, 38, 0.94);
+  --scrim-heavy: rgba(16, 18, 22, 0.9);
   /* 文字与线条 */
-  --text: #3c3836;
-  --text-muted: #665c54;
-  --border: #d5c4a1;
-  --border-soft: rgba(60, 56, 54, 0.12);
-  /* 强调:gruvbox yellow(natural,浅底上达文字对比) */
-  --accent: #b57614;
-  --accent-strong: #8f6410;
-  --accent-soft: #efdfad;
-  --accent-stripe: #e4d297;
-  /* 语义色(gruvbox light 档) */
-  --danger: #cc2414;
-  --danger-strong: #9d1c10;
-  --danger-soft: #f0d7d2;
-  --success: #98971a;
-  --success-strong: #7a790f;
-  --success-soft: #e7e6c3;
-  --warning: #d65d0e;
-  --warning-soft: #f0dcc8;
+  --text: #24292e;
+  --text-muted: #6c727a;
+  --border: #e2e5ea;
+  --border-soft: rgba(36, 41, 46, 0.1);
+  /* 强调:Things 蓝(加深一档保证白底文字/按钮对比) */
+  --accent: #2f6be3;
+  --accent-strong: #2657bc;
+  --accent-soft: #e8effc;
+  --accent-stripe: #d9e5f9;
+  /* 语义色 */
+  --danger: #cc3a2b;
+  --danger-strong: #a82d20;
+  --danger-soft: #f9e2de;
+  --success: #3b7e3e;
+  --success-strong: #2f6632;
+  --success-soft: #e2efdf;
+  --warning: #c97a1b;
+  --warning-soft: #f7ebdb;
   /* 圆角系统:控件 8 / 卡片 12 / 大容器 16 / chip 胶囊 */
   --radius-sm: 8px;
   --radius: 12px;
   --radius-lg: 16px;
   --radius-pill: 999px;
-  /* 阴影:暖褐 tint */
-  --shadow-sm: 0 1px 2px rgb(80 73 69 / 0.08);
-  --shadow: 0 1px 2px rgb(80 73 69 / 0.07), 0 10px 28px rgb(80 73 69 / 0.11);
-  --shadow-lg: 0 24px 80px rgb(60 56 54 / 0.28);
-  --focus-ring: 0 0 0 3px rgb(181 118 20 / 0.42);
+  /* 阴影:冷灰 tint */
+  --shadow-sm: 0 1px 2px rgb(36 41 46 / 0.06);
+  --shadow: 0 1px 2px rgb(36 41 46 / 0.05), 0 10px 28px rgb(36 41 46 / 0.08);
+  --shadow-lg: 0 24px 80px rgb(28 32 38 / 0.24);
+  --focus-ring: 0 0 0 3px rgb(59 122 235 / 0.4);
   /* 字体:系统栈;数字一律 tabular(见各数字类) */
   --font:
     system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB",
@@ -73,43 +73,44 @@ body.side-expanded {
   --sidebar-w: 10.5rem;
 }
 
-/* ---------- 暗色主题(gruvbox dark:bg0_h 底 + bg0 面板)---------- */
+/* ---------- 暗色主题(Things dark:深灰蓝底 + 亮蓝强调)---------- */
 
 [data-theme='dark'] {
   color-scheme: dark;
-  --bg: #1d2021;
-  --surface: #282828;
-  --surface-2: #3c3836;
-  --surface-3: #504945;
-  --surface-float: rgba(40, 40, 40, 0.94);
-  --card-glass-base: 40 40 40;
-  --surface-glass: rgba(40, 40, 40, 0.72);
-  --surface-glass-hover: rgba(60, 56, 54, 0.86);
+  --bg: #1b1f24;
+  --surface: #242930;
+  --surface-2: #2e343c;
+  --surface-3: #3a414a;
+  --surface-float: rgba(36, 41, 48, 0.94);
+  --card-glass-base: 36 41 48;
+  --surface-glass: rgba(36, 41, 48, 0.72);
+  --surface-glass-hover: rgba(46, 52, 60, 0.86);
   --overlay: rgba(0, 0, 0 / 0.6);
   --scrim: rgba(0, 0, 0 / 0.82);
   --scrim-strong: rgba(0, 0, 0 / 0.94);
   --scrim-heavy: rgba(0, 0, 0 / 0.9);
-  --text: #ebdbb2;
-  --text-muted: #a89984;
-  --border: #504945;
-  --border-soft: rgba(235, 219, 178, 0.12);
-  /* 强调:gruvbox yellow(natural 主 / bright 加亮) */
-  --accent: #d79921;
-  --accent-strong: #fabd2f;
-  --accent-soft: #3c3418;
-  --accent-stripe: #4a3f1c;
-  --danger: #fb4934;
-  --danger-strong: #cc2414;
-  --danger-soft: #40241f;
-  --success: #b8bb26;
-  --success-strong: #d4d75a;
-  --success-soft: #2e3118;
-  --warning: #fe8019;
-  --warning-soft: #453010;
+  --text: #e9ebee;
+  --text-muted: #9ba1a9;
+  --border: #3b4149;
+  --border-soft: rgba(233, 235, 238, 0.1);
+  /* 强调:Things 亮蓝 */
+  --accent: #5e97f7;
+  --accent-strong: #7fb0ff;
+  --accent-soft: #26344d;
+  --accent-stripe: #2d3f60;
+  --danger: #f26d5f;
+  --danger-strong: #f58376;
+  --danger-soft: #432b28;
+  --success: #6bc26e;
+  --success-strong: #8ad38c;
+  --success-soft: #243524;
+  --warning: #f0a75a;
+  --warning-soft: #3e2f1e;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.45);
   --shadow-lg: 0 24px 80px rgb(0 0 0 / 0.6);
-  --focus-ring: 0 0 0 3px rgb(250 189 47 / 0.45);
+  --focus-ring: 0 0 0 3px rgb(94 151 247 / 0.45);
+}
 }
 
 /* 暗色下单色 SVG 图标反白(img 引用无法继承 color,只能滤镜) */
@@ -134,7 +135,7 @@ body.side-expanded {
 }
 
 [data-theme='dark'] ::selection {
-  color: #282828;
+  color: #1b1f24;
 }
 
 /* ---------- 基础 ---------- */
@@ -164,8 +165,8 @@ body {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(circle at 12% 8%, rgb(215 153 33 / 0.07), transparent 40%),
-    radial-gradient(circle at 88% 92%, rgb(215 153 33 / 0.05), transparent 44%),
+    radial-gradient(circle at 12% 8%, rgb(94 151 247 / 0.07), transparent 40%),
+    radial-gradient(circle at 88% 92%, rgb(94 151 247 / 0.05), transparent 44%),
     var(--bg);
   background-position: center;
   background-size: cover;
@@ -173,8 +174,8 @@ body {
 
 [data-theme='dark'] #bg-layer {
   background-image:
-    radial-gradient(circle at 12% 8%, rgb(215 153 33 / 0.06), transparent 40%),
-    radial-gradient(circle at 88% 92%, rgb(215 153 33 / 0.04), transparent 44%);
+    radial-gradient(circle at 12% 8%, rgb(94 151 247 / 0.06), transparent 40%),
+    radial-gradient(circle at 88% 92%, rgb(94 151 247 / 0.04), transparent 44%);
   background-color: var(--bg);
 }
 
@@ -212,7 +213,7 @@ body {
 }
 
 [data-theme='dark'] .skip-link {
-  color: #282828;
+  color: #1b1f24;
 }
 
 .init-error {
@@ -290,7 +291,7 @@ main > h1 {
 }
 
 [data-theme='dark'] .btn-primary {
-  color: #282828;
+  color: #1b1f24;
 }
 
 .btn-primary:hover {
@@ -324,7 +325,7 @@ main > h1 {
 }
 
 .btn-danger:hover {
-  background: rgb(204 36 20 / 0.16);
+  background: rgb(204 58 43 / 0.16);
 }
 
 .btn-sm {
@@ -528,7 +529,7 @@ main > h1 {
 }
 
 [data-theme='dark'] #app-header .btn.btn-primary {
-  color: #282828;
+  color: #1b1f24;
 }
 
 [data-theme='dark'] #app-header .btn.btn-primary .icon {
@@ -871,7 +872,7 @@ dialog::backdrop {
   margin: 0.35rem 0 0;
   color: var(--danger-strong);
   background: var(--danger-soft);
-  border: 1px solid rgb(204 36 20 / 0.35);
+  border: 1px solid rgb(204 58 43 / 0.35);
   border-radius: var(--radius-sm);
   padding: 0.4rem 0.6rem;
   font-size: 0.82rem;
@@ -913,7 +914,7 @@ dialog::backdrop {
 }
 
 .manage-item.is-active {
-  border-color: rgb(181 118 20 / 0.55);
+  border-color: rgb(47 107 227 / 0.55);
   background: var(--accent-soft);
 }
 
@@ -1229,12 +1230,12 @@ dialog::backdrop {
 
 /* 已结束:金色描边沉淀感 */
 .match-card.played {
-  border-color: rgb(181 118 20 / 0.4);
+  border-color: rgb(47 107 227 / 0.4);
   box-shadow: var(--shadow);
 }
 
 [data-theme='dark'] .match-card.played {
-  border-color: rgb(215 153 33 / 0.35);
+  border-color: rgb(94 151 247 / 0.35);
 }
 
 /* 进行中:红呼吸描边 + LIVE 章 */
@@ -1253,7 +1254,7 @@ dialog::backdrop {
 
 @keyframes match-live-breathe {
   0%, 100% { outline-color: var(--danger-strong); }
-  50% { outline-color: rgb(204 36 20 / 0.25); }
+  50% { outline-color: rgb(204 58 43 / 0.25); }
 }
 
 .match-card,
@@ -1344,12 +1345,12 @@ dialog::backdrop {
 
 .match-player.winner {
   background: var(--accent-soft);
-  border-color: rgb(181 118 20 / 0.4);
+  border-color: rgb(47 107 227 / 0.4);
   font-weight: 700;
 }
 
 [data-theme='dark'] .match-player.winner {
-  border-color: rgb(215 153 33 / 0.4);
+  border-color: rgb(94 151 247 / 0.4);
 }
 
 .match-player.loser {
@@ -1519,7 +1520,7 @@ dialog::backdrop {
 }
 
 [data-theme='dark'] .score-btn.active {
-  color: #282828;
+  color: #1b1f24;
 }
 
 .score-btn:disabled {
@@ -1571,7 +1572,7 @@ dialog::backdrop {
 
 .score-form input[aria-invalid="true"] {
   border-color: var(--danger);
-  box-shadow: 0 0 0 3px rgb(204 36 20 / 0.18);
+  box-shadow: 0 0 0 3px rgb(204 58 43 / 0.18);
 }
 
 .score-colon {
@@ -1587,10 +1588,10 @@ dialog::backdrop {
   flex-wrap: wrap;
   align-items: center;
   gap: 1rem;
-  background: linear-gradient(120deg, rgb(181 118 20 / 0.1), rgb(181 118 20 / 0.04));
+  background: linear-gradient(120deg, rgb(47 107 227 / 0.1), rgb(47 107 227 / 0.04));
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  border: 1px solid rgb(181 118 20 / 0.35);
+  border: 1px solid rgb(47 107 227 / 0.35);
   border-radius: var(--radius);
   padding: 0.875rem 1.25rem;
   margin-block-end: 1.25rem;
@@ -1599,8 +1600,8 @@ dialog::backdrop {
 }
 
 [data-theme='dark'] .champion-banner {
-  background: linear-gradient(120deg, rgb(215 153 33 / 0.12), rgb(215 153 33 / 0.05));
-  border-color: rgb(215 153 33 / 0.35);
+  background: linear-gradient(120deg, rgb(94 151 247 / 0.12), rgb(94 151 247 / 0.05));
+  border-color: rgb(94 151 247 / 0.35);
 }
 
 .champion-banner[hidden] {
@@ -1624,16 +1625,16 @@ dialog::backdrop {
 
 /* 奖牌色 */
 .medal-gold {
-  background: rgb(215 153 33 / 0.12);
-  border-color: rgb(215 153 33 / 0.65);
+  background: rgb(217 166 46 / 0.14);
+  border-color: rgb(217 166 46 / 0.65);
 }
 .medal-silver {
-  background: rgb(146 135 116 / 0.1);
-  border-color: rgb(168 153 132 / 0.6);
+  background: rgb(148 152 158 / 0.1);
+  border-color: rgb(158 162 168 / 0.6);
 }
 .medal-bronze {
-  background: rgb(214 93 14 / 0.12);
-  border-color: rgb(214 93 14 / 0.6);
+  background: rgb(189 108 52 / 0.12);
+  border-color: rgb(189 108 52 / 0.6);
 }
 
 .medal-badge {
@@ -1740,18 +1741,18 @@ dialog::backdrop {
 }
 
 .canvas-edge.winner {
-  stroke: #98971a;
+  stroke: #3b7e3e;
 }
 
 .canvas-edge.loser {
-  stroke: #cc2414;
+  stroke: #cc3a2b;
 }
 
-[data-theme='dark'] .canvas-edge.winner { stroke: #b8bb26; }
-[data-theme='dark'] .canvas-edge.loser { stroke: #fb4934; }
+[data-theme='dark'] .canvas-edge.winner { stroke: #6bc26e; }
+[data-theme='dark'] .canvas-edge.loser { stroke: #f26d5f; }
 
-.canvas-edge.temp.winner { stroke: #98971a; }
-.canvas-edge.temp.loser { stroke: #cc2414; }
+.canvas-edge.temp.winner { stroke: #3b7e3e; }
+.canvas-edge.temp.loser { stroke: #cc3a2b; }
 
 .canvas-edges {
   position: absolute;
@@ -1774,7 +1775,7 @@ dialog::backdrop {
   pointer-events: none;
   z-index: 9998;
   border: 1px dashed var(--accent);
-  background: rgb(181 118 20 / 0.08);
+  background: rgb(47 107 227 / 0.08);
 }
 
 .canvas-board.editing.tool-select {
@@ -2055,12 +2056,12 @@ dialog::backdrop {
 /* 激活工具:柔金底 + 金字(与侧栏 active 同语言) */
 .tool-btn.is-active {
   background: var(--accent-soft);
-  border-color: rgb(181 118 20 / 0.4);
+  border-color: rgb(47 107 227 / 0.4);
   color: var(--accent);
 }
 
 [data-theme='dark'] .tool-btn.is-active {
-  border-color: rgb(215 153 33 / 0.4);
+  border-color: rgb(94 151 247 / 0.4);
 }
 
 .tool-btn.danger {
@@ -2377,7 +2378,7 @@ body[data-page="me"] #bg-layer {
 .lock-banner {
   margin-block-end: 1rem;
   padding: 0.65rem 1rem;
-  border: 1px solid rgb(181 118 20 / 0.35);
+  border: 1px solid rgb(47 107 227 / 0.35);
   border-radius: var(--radius);
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -2745,7 +2746,7 @@ body[data-view='canvas'] .list-view {
 }
 
 .list-row:hover {
-  border-color: rgb(181 118 20 / 0.45);
+  border-color: rgb(47 107 227 / 0.45);
 }
 
 .list-row summary {
@@ -3587,8 +3588,8 @@ body[data-view='canvas'] .list-view {
   margin: 0;
   padding: 4vh 6vw;
   box-sizing: border-box;
-  background: #1d2021;
-  color: #ebdbb2;
+  background: #1b1f24;
+  color: #e9ebee;
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   display: flex;
   flex-direction: column;
@@ -3606,13 +3607,13 @@ body[data-view='canvas'] .list-view {
   font-size: 3.2vh;
   font-weight: 800;
   letter-spacing: 0.06em;
-  color: #83a598;
+  color: #6ba0ff;
 }
 
 .ss-state {
   font-size: 2vh;
   font-weight: 800;
-  color: #fb4934;
+  color: #f26d5f;
   letter-spacing: 0.12em;
 }
 
@@ -3646,18 +3647,18 @@ body[data-view='canvas'] .list-view {
   font-size: 11vh;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  color: #fabd2f;
+  color: #6ba0ff;
 }
 
 .ss-bo {
   font-size: 2.4vh;
   font-weight: 700;
-  color: #a89984;
+  color: #9ba1a9;
   letter-spacing: 0.15em;
 }
 
 .ss-next {
-  border-top: 1px solid rgba(131, 165, 152, 0.25);
+  border-top: 1px solid rgba(110, 160, 255, 0.25);
   padding-top: 2vh;
 }
 
@@ -3665,7 +3666,7 @@ body[data-view='canvas'] .list-view {
   margin: 0 0 1vh;
   font-size: 2vh;
   font-weight: 700;
-  color: #a89984;
+  color: #9ba1a9;
   letter-spacing: 0.1em;
 }
 
@@ -3685,7 +3686,7 @@ body[data-view='canvas'] .list-view {
 
 .ss-next-label {
   font-size: 1.8vh;
-  color: #83a598;
+  color: #6ba0ff;
   font-weight: 700;
 }
 
@@ -3700,5 +3701,5 @@ body[data-view='canvas'] .list-view {
   align-items: center;
   justify-content: center;
   font-size: 4vh;
-  color: #a89984;
+  color: #9ba1a9;
 }
