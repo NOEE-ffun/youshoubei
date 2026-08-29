@@ -59,6 +59,12 @@
   for (const t of TABS) {
     $(t.btn).addEventListener('click', () => showTab(t.id));
   }
+  /* 已在本页时点导航链接是 fragment 导航(不重载),监听 hash 变化切换 tab */
+  window.addEventListener('hashchange', () => {
+    if ($('me-shell').hidden) return;
+    const hash = (location.hash || '').slice(1);
+    if (TABS.some((t) => t.id === hash)) showTab(hash);
+  });
   $('me-login-btn').addEventListener('click', () => {
     window.TournamentApp.openLoginDialog();
   });
