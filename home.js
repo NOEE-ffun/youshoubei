@@ -5,7 +5,7 @@
  * 不引入新的数据源。布局与入场动效见 styles.css 的 ov-* 段。
  */
 (function () {
-  const { escapeHtml, avatarMarkup, formatStartTime } = window.TournamentUtils;
+  const { escapeHtml, avatarMarkup, formatStartTime, notify, errMsg } = window.TournamentUtils;
 
   const STATUS = {
     upcoming: { text: '未开始', cls: 'status-upcoming' },
@@ -47,9 +47,20 @@
     if (total) parts.push(playedTotal + '/' + total + ' 场已结束');
     if (record.startTime) parts.push('开赛 ' + formatStartTime(record.startTime));
     if (!parts.length) parts.push('画布可自由编排对阵');
+    /* 多于一届才显示切换下拉;选中即全局切换(与比赛页顶栏一致) */
+    const list = (window.TournamentApp.list || []).filter((t) => t && t.id);
+    const switcher = list.length > 1
+      ? '<select id="ov-tournament" class="header-select" aria-label="切换比赛">' +
+        list.map((t) =>
+          '<option value="' + escapeHtml(t.id) + '"' + (t.id === record.id ? ' selected' : '') + '>' +
+          escapeHtml(t.name || t.id) + '</option>'
+        ).join('') +
+        '</select>'
+      : '';
     $('ov-head').innerHTML =
       '<div class="ov-title-group">' +
       '<h2 class="ov-title">' + escapeHtml(record.name || '未命名赛事') + '</h2>' +
+      switcher +
       '<span class="status-badge ' + status.cls + '"><span class="status-dot" aria-hidden="true"></span>' + status.text + '</span>' +
       '</div>' +
       '<div class="ov-head-meta">' + escapeHtml(parts.join(' · ')) + '</div>' +
@@ -134,6 +145,14 @@
     renderHead(record, played.length, total);
     renderGrid(record);
   }
+
+  /* 届切换下拉(renderHead 每次重建 innerHTML,用委托一次绑定) */
+  document.addEventListener('change', (event) => {
+    if (event.target.id !== 'ov-tournament') return;
+    window.TournamentApp.setActiveId(event.target.value)
+      .then(() => document.dispatchEvent(new CustomEvent('ts:changed')))
+      .catch((error) => notify('切换比赛失败：' + errMsg(error), 'danger'));
+  });
 
   document.addEventListener('ts:ready', render);
   document.addEventListener('ts:changed', render);
