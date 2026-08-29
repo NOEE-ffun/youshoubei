@@ -2388,10 +2388,7 @@ body[data-page="me"] #bg-layer {
 }
 
 .players-table-wrap {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .players-table {
