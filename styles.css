@@ -2841,17 +2841,15 @@ body[data-view='canvas'] .list-view {
   animation: rise var(--dur-ui) var(--ease-out);
 }
 
-/* 我的对局 */
+/* 我的对局工具条:扁平行,底部分隔线(无卡片盒) */
 .my-decks-toolbar {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
-  margin-block-end: 1rem;
-  padding: 0.6rem 0.9rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  margin-block-end: 1.25rem;
+  padding-block-end: 0.75rem;
+  border-block-end: 1px solid var(--border);
 }
 
 .my-decks-toolbar select {
@@ -2905,15 +2903,18 @@ body[data-view='canvas'] .list-view {
 .my-decks-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0;
 }
 
+/* 场次条目:分组列表行,细分隔线(卡片视图仅限比赛页) */
 .md-card {
-  padding: 0.9rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  padding: 0.9rem 0;
+  border-block-start: 1px solid var(--border-soft);
+}
+
+.my-decks-list > .md-card:first-child,
+.my-decks-list > .md-group-title:first-child {
+  border-block-start: 0;
 }
 
 .md-card-started {
@@ -3006,9 +3007,14 @@ body[data-view='canvas'] .list-view {
   margin-block-start: 0.6rem;
 }
 
+/* 分组标题(已开始的场次/开放报名等):eyebrow 式小标题+顶部分隔 */
 .md-group-title {
-  margin-block-start: 0.5rem;
-  font-size: 0.95rem;
+  margin-block: 0.9rem 0;
+  padding-block-start: 0.6rem;
+  border-block-start: 1px solid var(--border);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
 }
 
@@ -3098,22 +3104,31 @@ body[data-view='canvas'] .list-view {
   gap: 0.5rem;
 }
 
-/* 不对称网格:当前对阵大卡居左跨两行,战报/接下来叠右 */
+/* 不对称网格:当前对阵居左跨两行,战报/接下来叠右;无卡片盒,
+ * 分区靠竖/横细分隔线(工具规格:卡片视图仅限比赛页) */
 .ov-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   grid-template-rows: auto auto;
-  gap: 0.9rem;
+  gap: 0.9rem 1.5rem;
 }
 
 .ov-card {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-  padding: 1rem 1.1rem;
+  min-inline-size: 0;
   animation: rise var(--dur-slow) var(--ease-out) both;
   animation-delay: calc(var(--ov-i, 0) * 70ms);
+}
+
+/* 右列:与左列竖线分隔;两块之间横向分隔 */
+.ov-grid > .ov-card:nth-child(2),
+.ov-grid > .ov-card:nth-child(3) {
+  padding-inline-start: 1.5rem;
+  border-inline-start: 1px solid var(--border);
+}
+
+.ov-grid > .ov-card:nth-child(3) {
+  padding-block-start: 0.9rem;
+  border-block-start: 1px solid var(--border);
 }
 
 .ov-card h2 {
@@ -3254,44 +3269,34 @@ body[data-view='canvas'] .list-view {
   margin-block-start: 0.5rem;
 }
 
-/* 快捷入口 */
+/* 快捷入口:内联文字链接,无卡片盒 */
 .ov-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.6rem;
-  margin-block-start: 1.25rem;
+  gap: 0.35rem 1.5rem;
+  margin-block-start: 1.5rem;
+  padding-block-start: 1.25rem;
+  border-block-start: 1px solid var(--border);
 }
 
 .ov-links a {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.55rem 0.95rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
+  gap: 0.45rem;
+  color: var(--text-muted);
   text-decoration: none;
   font-weight: 600;
   font-size: 0.88rem;
-  transition:
-    border-color var(--dur-ui) var(--ease-out),
-    background var(--dur-ui) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+  transition: color var(--dur-ui) var(--ease-out);
 }
 
 .ov-links a:hover {
-  border-color: rgb(154 107 0 / 0.5);
-  background: var(--accent-soft);
-}
-
-.ov-links a:active {
-  transform: scale(0.97);
+  color: var(--accent);
 }
 
 .ov-links .icon {
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 @media (max-width: 48rem) {
@@ -3301,6 +3306,20 @@ body[data-view='canvas'] .list-view {
 
   .ov-now {
     grid-row: auto;
+  }
+
+  /* 窄屏单列:竖线改横向分隔 */
+  .ov-grid > .ov-card:nth-child(2),
+  .ov-grid > .ov-card:nth-child(3) {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+    padding-block-start: 0.9rem;
+    border-block-start: 1px solid var(--border);
+  }
+
+  .ov-grid > .ov-card:nth-child(2) {
+    padding-block-start: 0;
+    border-block-start: 0;
   }
 
   .ov-head {
