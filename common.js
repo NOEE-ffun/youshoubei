@@ -1610,6 +1610,7 @@
     if (!placeholder) return false;
     const isSchedule = app.activePage === 'schedule';
     const isPoster = app.activePage === 'poster';
+    const isPlayers = app.activePage === 'players';
     const showTournamentSwitch = app.activePage === 'schedule';
     /* 这些页 main 不再放 h1(避免与页头重复),顶栏标题承担 h1 */
     const headerAsH1 = ['schedule', 'players', 'stats', 'me'].includes(app.activePage);
@@ -1638,6 +1639,18 @@
         '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>' +
         '<button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="赛事设置" aria-label="赛事设置">' + iconMarkup('settings', '赛事设置') + '</button>'
       : '';
+    /* 选手库页头:搜索(全员) + 新增(仅管理员,显隐由 syncHeaderState 同步) */
+    const playersControls = isPlayers
+      ? '<div class="header-search" id="players-search-box">' +
+        iconMarkup('search', '搜索选手') +
+        '<input type="search" id="players-search" placeholder="搜索选手" autocomplete="off" aria-label="搜索选手">' +
+        '</div>' +
+        '<form id="add-player-form" class="header-add">' +
+        '<input type="text" id="new-player-name" placeholder="新增选手名" required autocomplete="off" aria-label="新增选手名">' +
+        '<button type="submit" class="btn btn-primary btn-sm">新增</button>' +
+        '</form>'
+      : '';
+
     /* 海报页页头专属控制（主题选择/分辨率/导出/OBS），仅海报页渲染 */
     const posterControls = isPoster
       ? '<div class="header-poster-controls" id="header-poster-controls">' +
@@ -1660,6 +1673,7 @@
       '  <div class="header-actions">' +
       tournamentSwitch +
       scheduleActions +
+      playersControls +
       posterControls +
       '  </div>' +
       '</div>';
@@ -1754,6 +1768,10 @@
       /* 海报 OBS 推送按钮仅管理员可见（访客只读渲染） */
       const posterObs = header.querySelector('#poster-obs');
       if (posterObs) posterObs.hidden = !canEdit();
+
+      /* 选手库新增表单仅管理员可见;搜索全员可用 */
+      const playersAdd = header.querySelector('#add-player-form');
+      if (playersAdd) playersAdd.hidden = !canEdit();
 
       syncHeaderHeight();
     }

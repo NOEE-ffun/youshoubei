@@ -5,6 +5,31 @@
 
   let fileInput = null;
   let pendingPlayerId = null;
+  let filterText = '';
+
+  /* 页头搜索:按名称/队伍 ID 过滤行(不区分大小写);render 后重放 */
+  function applyFilter() {
+    const grid = document.getElementById('players-grid');
+    if (!grid || !filterText) return;
+    const needle = filterText;
+    grid.querySelectorAll('tbody tr').forEach((tr) => {
+      const nameInput = tr.querySelector('.col-name input');
+      const name = nameInput ? nameInput.value : '';
+      const tag = (tr.querySelector('.col-tag') || {}).textContent || '';
+      tr.hidden = !(name.toLowerCase().includes(needle) || tag.toLowerCase().includes(needle));
+    });
+  }
+
+  function bindSearch() {
+    const input = document.getElementById('players-search');
+    if (!input) return;
+    input.addEventListener('input', () => {
+      filterText = input.value.trim().toLowerCase();
+      const grid = document.getElementById('players-grid');
+      grid.querySelectorAll('tbody tr').forEach((tr) => { tr.hidden = false; });
+      applyFilter();
+    });
+  }
 
   /* 数据库式紧凑表格:一行一选手,列=头像/名称(行内改)/队伍ID/垃圾话/颜色/加入/操作。
    * 头像即上传入口(编辑态,铅笔角标提示);删除收进操作列,不再与内容抢权重 */
@@ -17,7 +42,7 @@
     if (banner) banner.hidden = editable;
     const players = app.players || [];
     if (!players.length) {
-      grid.innerHTML = '<p class="hint">暂无选手，先新增一位。</p>';
+      grid.innerHTML = '<p class="hint">' + (editable ? '暂无选手，先新增一位。' : '暂无选手。') + '</p>';
       syncAddFormAccess();
       return;
     }
@@ -95,6 +120,7 @@
       });
     });
 
+    applyFilter();
     syncAddFormAccess();
   }
 
@@ -179,6 +205,7 @@
   document.addEventListener('ts:ready', () => {
     render();
     bindAddForm();
+    bindSearch();
     document.addEventListener('ts:changed', render);
   });
 

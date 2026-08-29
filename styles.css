@@ -2336,43 +2336,49 @@ dialog::backdrop {
   min-block-size: 2.1rem;
 }
 
-/* ---------- 选手库 ---------- */
+
+/* 选手库页头新增表单(仅管理员可见):与搜索框同风格的紧凑行 */
+.header-add {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.header-add input {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.6rem;
+  min-block-size: 2.1rem;
+  min-inline-size: 8.5rem;
+  max-inline-size: 12rem;
+}
+
+.header-add input::placeholder {
+  color: var(--text-muted);
+}
+
+.header-add input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.header-add input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- 选手库(表格无外盒,结构靠表头底色与行分隔) ---------- */
 
 body[data-page="home"] #bg-layer,
 body[data-page="players"] #bg-layer,
 body[data-page="stats"] #bg-layer,
 body[data-page="me"] #bg-layer {
   display: none;
-}
-
-.players-toolbar {
-  margin-block-end: 1rem;
-}
-
-.players-toolbar input[type="text"] {
-  flex: 1 1 auto;
-  min-inline-size: 10rem;
-  max-inline-size: 20rem;
-  font: inherit;
-  color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 0.45rem 0.8rem;
-  min-block-size: 2rem;
-  transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
-}
-
-.players-toolbar input[type="text"]::placeholder {
-  color: var(--text-muted);
-}
-
-.players-toolbar input[type="text"]:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: var(--focus-ring);
 }
 
 .lock-banner {
@@ -3463,6 +3469,57 @@ body[data-view='canvas'] .list-view {
   :root {
     --border: #6b6350;
     --text-muted: #4c4738;
+  }
+}
+
+/* ---------- 移动端:顶栏压缩(控件多页挤爆换行的修复) ---------- */
+
+@media (max-width: 48rem) {
+  #app-header .header-inner {
+    padding-block: 0.3rem;
+    gap: 0.35rem;
+  }
+
+  /* 搜索框弹性占满剩余宽,不再被 min-width 顶出去 */
+  .header-search {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+  }
+
+  .header-search input {
+    min-inline-size: 0;
+    inline-size: 100%;
+  }
+
+  .header-select {
+    max-inline-size: 8.5rem;
+  }
+
+  /* 低频入口窄屏隐藏(桌面不变):赛程页的规则/名单弹层 */
+  #header-rules-btn,
+  #header-roster-btn {
+    display: none;
+  }
+
+  #app-header .btn {
+    min-block-size: 2.35rem;
+    padding-inline: 0.5rem;
+  }
+
+  /* 选手库新增表单同排弹性 */
+  .header-add {
+    flex: 1 1 100%;
+  }
+
+  .header-add input {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    max-inline-size: none;
+  }
+
+  /* 海报页头:分辨率文字标签隐藏,只留选择器 */
+  .poster-resolution .field__label {
+    display: none;
   }
 }
 
