@@ -111,7 +111,6 @@ body.side-expanded {
   --shadow-lg: 0 24px 80px rgb(0 0 0 / 0.6);
   --focus-ring: 0 0 0 3px rgb(94 151 247 / 0.45);
 }
-}
 
 /* 暗色下单色 SVG 图标反白(img 引用无法继承 color,只能滤镜) */
 [data-theme='dark'] .icon {
@@ -3572,9 +3571,13 @@ body[data-view='canvas'] .list-view {
   }
 
   /* 底栏形态:指示条移到顶部 */
+  /* 底栏形态:指示条移到项顶部,横条,避开图标区 */
   .side-link::before {
     inset-inline: 20%;
-    inset-block: 0 auto 0;
+    inset-block-start: 0;
+    inset-block-end: auto;
+    top: 0;
+    bottom: auto;
     inline-size: auto;
     block-size: 3px;
     border-radius: 0 0 3px 3px;
