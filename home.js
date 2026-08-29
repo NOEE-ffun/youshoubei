@@ -47,12 +47,14 @@
     if (total) parts.push(playedTotal + '/' + total + ' 场已结束');
     if (record.startTime) parts.push('开赛 ' + formatStartTime(record.startTime));
     if (!parts.length) parts.push('画布可自由编排对阵');
-    /* 多于一届才显示切换下拉;选中即全局切换(与比赛页顶栏一致) */
+    /* 多于一届才显示切换下拉;占位项固定显示「切换比赛」——
+     * 选中后 setActiveId → ts:changed → 本函数重写 innerHTML,下拉复位占位文字 */
     const list = (window.TournamentApp.list || []).filter((t) => t && t.id);
     const switcher = list.length > 1
       ? '<select id="ov-tournament" class="header-select" aria-label="切换比赛">' +
+        '<option value="" disabled selected hidden>切换比赛</option>' +
         list.map((t) =>
-          '<option value="' + escapeHtml(t.id) + '"' + (t.id === record.id ? ' selected' : '') + '>' +
+          '<option value="' + escapeHtml(t.id) + '">' +
           escapeHtml(t.name || t.id) + '</option>'
         ).join('') +
         '</select>'
@@ -134,24 +136,67 @@
     $('ov-grid').hidden = false;
   }
 
+  /* 比赛总览:全部届的行式列表(状况 + 进度),点击行切换 */
+  function renderTournaments(currentId) {
+    const list = (window.TournamentApp.list || []).filter((t) => t && t.id);
+    const box = $('ov-tournaments');
+    if (!list.length) {
+      box.hidden = true;
+      return;
+    }
+    box.innerHTML =
+      '<h2>比赛总览</h2>' +
+      list.map((t) => {
+        const st = STATUS[t.status] || STATUS.upcoming;
+        const meta = [];
+        if (t.canvas && t.canvas.cards && t.canvas.cards.length) {
+          const { played, total } = splitCards(t);
+          meta.push(played.length + '/' + total + ' 场已结束');
+        } else {
+          meta.push('未编排');
+        }
+        if (t.startTime) meta.push('开赛 ' + formatStartTime(t.startTime));
+        const cur = t.id === currentId;
+        return '<button type="button" class="ov-t-row' + (cur ? ' is-current' : '') + '" data-id="' + escapeHtml(t.id) + '"' +
+          (cur ? ' aria-current="true"' : '') + ' title="' + (cur ? '当前比赛' : '点击切换到该比赛') + '">' +
+          '<span class="ov-t-name">' + escapeHtml(t.name || t.id) + '</span>' +
+          '<span class="status-badge ' + st.cls + '"><span class="status-dot" aria-hidden="true"></span>' + st.text + '</span>' +
+          '<span class="ov-t-meta">' + escapeHtml(meta.join(' · ')) + '</span>' +
+          '</button>';
+      }).join('');
+    box.hidden = false;
+  }
+
   function render() {
-    const record = window.TournamentApp && window.TournamentApp.current;
+    const app = window.TournamentApp;
+    const record = app && app.current;
+    const list = (app && app.list ? app.list : []).filter((t) => t && t.id);
     const hasData = Boolean(record && record.canvas && record.canvas.cards && record.canvas.cards.length);
     $('ov-head').hidden = !hasData;
     $('ov-grid').hidden = !hasData;
-    $('ov-blank').hidden = hasData;
+    $('ov-blank').hidden = list.length > 0;
+    renderTournaments(record && record.id);
     if (!hasData) return;
     const { played, total } = splitCards(record);
     renderHead(record, played.length, total);
     renderGrid(record);
   }
 
-  /* 届切换下拉(renderHead 每次重建 innerHTML,用委托一次绑定) */
-  document.addEventListener('change', (event) => {
-    if (event.target.id !== 'ov-tournament') return;
-    window.TournamentApp.setActiveId(event.target.value)
+  /* 届切换:下拉与总览行共用一套切换逻辑(事件委托,适配重渲染) */
+  function switchTo(id) {
+    window.TournamentApp.setActiveId(id)
       .then(() => document.dispatchEvent(new CustomEvent('ts:changed')))
       .catch((error) => notify('切换比赛失败：' + errMsg(error), 'danger'));
+  }
+
+  document.addEventListener('change', (event) => {
+    if (event.target.id === 'ov-tournament' && event.target.value) switchTo(event.target.value);
+  });
+
+  document.addEventListener('click', (event) => {
+    const row = event.target.closest('.ov-t-row');
+    if (!row || row.classList.contains('is-current')) return;
+    switchTo(row.dataset.id);
   });
 
   document.addEventListener('ts:ready', render);

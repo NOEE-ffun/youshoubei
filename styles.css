@@ -3271,6 +3271,93 @@ body[data-view='canvas'] .list-view {
   margin-block-start: 0.5rem;
 }
 
+/* 比赛总览:全部届的行式列表(无卡片,分隔线行) */
+.ov-tournaments {
+  margin-block-start: 1.75rem;
+}
+
+.ov-tournaments h2 {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+.ov-t-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  inline-size: 100%;
+  text-align: start;
+  background: none;
+  border: 0;
+  border-block-start: 1px solid var(--border-soft);
+  border-radius: 0;
+  padding: 0.55rem 0.5rem;
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.ov-t-row:first-of-type {
+  border-block-start: 0;
+}
+
+.ov-t-row:hover {
+  background: var(--accent-soft);
+}
+
+/* 当前届:左侧金色指示条(与侧栏 active 同语言),不再可点 */
+.ov-t-row::before {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  top: 22%;
+  bottom: 22%;
+  inline-size: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+  transform: scaleY(0);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+.ov-t-row.is-current {
+  cursor: default;
+}
+
+.ov-t-row.is-current::before {
+  transform: scaleY(1);
+}
+
+.ov-t-name {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ov-t-row.is-current .ov-t-name {
+  color: var(--accent);
+}
+
+.ov-t-meta {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 48rem) {
+  .ov-t-meta {
+    display: none;
+  }
+}
+
 /* 快捷入口:内联文字链接,无卡片盒 */
 .ov-links {
   display: flex;
