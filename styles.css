@@ -3698,3 +3698,56 @@ body[data-page='my-tourneys'] #bg-layer {
 .mt-card .mt-roster {
   margin-block: 0.25rem;
 }
+
+/* ========== 比赛页:画布/列表双视图(P1 功能态,P2 视觉重做统一收编) ========== */
+
+body[data-view='list'] .canvas-wrap-full,
+body[data-view='list'] .zoom-dock,
+body[data-view='list'] .style-drawer {
+  display: none;
+}
+
+body[data-view='canvas'] .list-view {
+  display: none;
+}
+
+.list-view {
+  max-width: 46rem;
+  margin-inline: auto;
+  padding: 1rem;
+}
+
+/* ========== 选手中心:三 tab ========== */
+
+.me-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-block-end: 1px solid var(--border);
+  margin-block-end: 1.25rem;
+}
+
+.me-tab {
+  appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+}
+
+.me-tab:hover {
+  color: var(--text);
+}
+
+.me-tab.is-active {
+  color: var(--accent);
+  border-block-end-color: var(--accent);
+}
+
+.me-panel[hidden] {
+  display: none;
+}

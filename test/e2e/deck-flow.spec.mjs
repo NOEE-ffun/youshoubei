@@ -21,9 +21,9 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
   });
 
   /* ---- 1. 选手注册(空白码:建号且建选手) ---- */
-  await player.goto('/my-decks.html');
-  await player.waitForSelector('#my-decks-login-btn', { state: 'visible' });
-  await player.locator('#my-decks-login-btn').click();
+  await player.goto('/me.html#decks');
+  await player.waitForSelector('#me-login-btn', { state: 'visible' });
+  await player.locator('#me-login-btn').click();
   await player.locator('[data-login-tab="register"]').click();
   await player.fill('#login-code', 'e2e-dev-4');
   await player.fill('#login-username', 'e2e提交者');
@@ -69,7 +69,8 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
   await admin.waitForTimeout(800);
 
   /* ---- 5. 选手在我的对局提交卡组 ---- */
-  await player.goto('/my-decks.html');
+  await player.goto('/me.html#decks');
+  await player.reload(); /* 同 URL 含 hash 的 goto 不重载,显式刷新拿新数据 */
   await player.waitForSelector('#my-decks-body', { state: 'visible' });
   await expect(player.locator('#my-decks-window-state')).toContainText('开放中');
   const form = player.locator('.md-form').first();
@@ -115,7 +116,8 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
   expect(await guest.locator('.canvas-card .class-slot img').count()).toBeGreaterThanOrEqual(1);
 
   /* ---- 9. 关窗后选手再提交 → 423 且界面回到锁定态 ---- */
-  await player.goto('/my-decks.html');
+  await player.goto('/me.html#decks');
+  await player.reload(); /* 同 URL 含 hash 的 goto 不重载,显式刷新拿新数据 */
   await player.waitForSelector('#my-decks-body', { state: 'visible' });
   await expect(player.locator('#my-decks-window-state')).toContainText('关闭');
   await expect(player.locator('.md-chip-wait').first()).toBeVisible();

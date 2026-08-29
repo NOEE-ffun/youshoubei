@@ -1,15 +1,50 @@
 (function () {
   'use strict';
 
-  /* 窄屏默认列表视图:双败画布自适应到 ~28% 后文字不可读,手机用户要的
-   * 是"下一场打谁"——直接送去手机列表页。会话内主动选过画布则尊重选择。
-   * 判定用 CSS 同一断点 48rem;放模块顶部,后续绑定全部跳过 */
-  try {
-    if (window.matchMedia('(max-width: 48rem)').matches && !sessionStorage.getItem('ts:preferCanvas')) {
-      window.location.replace('list.html');
-      return;
+  /* 画布/列表双视图:窄屏默认列表(双败画布自适应到 ~28% 后文字不可读,
+   * 手机用户要的是"下一场打谁"),桌面默认画布;顶栏按钮可切,选择记入会话。
+   * 判定用 CSS 同一断点 48rem;data-view 写在 body,defer 阶段同步执行无首帧闪烁 */
+  const VIEW_KEY = 'ts:preferCanvas';
+
+  function initialView() {
+    try {
+      const prefer = sessionStorage.getItem(VIEW_KEY);
+      if (prefer === '1') return 'canvas';
+      if (prefer === '0') return 'list';
+      return window.matchMedia('(max-width: 48rem)').matches ? 'list' : 'canvas';
+    } catch (error) { return 'canvas'; }
+  }
+
+  function currentView() {
+    return document.body.dataset.view === 'list' ? 'list' : 'canvas';
+  }
+
+  function syncViewToggle() {
+    const btn = document.getElementById('view-toggle');
+    if (!btn) return;
+    const toList = currentView() === 'canvas';
+    const label = toList ? '切换到列表视图' : '切换到画布视图';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-pressed', String(!toList));
+  }
+
+  function setView(view, remember) {
+    document.body.dataset.view = view;
+    if (remember) {
+      try { sessionStorage.setItem(VIEW_KEY, view === 'canvas' ? '1' : '0'); } catch (error) { /* 忽略 */ }
     }
-  } catch (error) { /* matchMedia 不可用(极端环境):留在画布页 */ }
+    syncViewToggle();
+  }
+
+  function bindViewToggle() {
+    const btn = document.getElementById('view-toggle');
+    if (!btn) return;
+    btn.addEventListener('click', () => setView(currentView() === 'canvas' ? 'list' : 'canvas', true));
+    syncViewToggle();
+  }
+
+  setView(initialView(), false);
 
   /* 共享工具统一来自 common.js;画布几何来自 canvas-model.js(唯一真源) */
   const {
@@ -55,6 +90,7 @@
 
   function enterEditMode() {
     if (editMode) return;
+    setView('canvas', false); /* 编辑只在画布上进行 */
     editMode = true;
     renderAll();
     CanvasEditor.enter();
@@ -986,6 +1022,7 @@
     bindCardStylePanel();
     bindMatchSearch();
     bindZoomDock();
+    bindViewToggle();
   });
   document.addEventListener('ts:changed', () => {
     renderAll();

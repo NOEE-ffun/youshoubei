@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-/* 移动端适配:窄屏默认列表视图(会话内可选回画布)、底部 tab 导航、
- * 44px 触控目标、缩放持久化、双指捏合。视口 390×844 贯穿全组。 */
+/* 移动端适配:窄屏默认列表视图(同页画布/列表双视图,会话内可切)、
+ * 底部 tab 导航、44px 触控目标、缩放持久化、双指捏合。视口 390×844 贯穿全组。 */
 
 test.setTimeout(60_000);
 
@@ -9,24 +9,24 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
 });
 
-test('窄屏进比赛页重定向到列表,主动切回画布后会话内不再重定向', async ({ page }) => {
+test('窄屏进比赛页默认列表视图,切回画布后会话内保持', async ({ page }) => {
   await page.goto('/schedule.html');
-  await expect(page).toHaveURL(/list\.html/);
   await expect(page.locator('#list-body')).toBeVisible();
+  await expect(page.locator('#canvas-wrap')).toBeHidden();
 
-  // 主动切回画布:设会话偏好后不再重定向
-  await page.locator('.mobile-back-canvas').click();
+  // 主动切回画布:视图切换按钮,会话偏好写入
+  await page.locator('#view-toggle').click();
   await page.waitForSelector('.canvas-card');
-  await expect(page).toHaveURL(/schedule\.html/);
+  await expect(page.locator('#list-view')).toBeHidden();
 
   await page.reload();
   await page.waitForSelector('.canvas-card');
-  await expect(page).toHaveURL(/schedule\.html/);
+  await expect(page.locator('#list-view')).toBeHidden();
 });
 
 test('窄屏侧栏变底部 tab 栏,触控目标不小于 44px', async ({ page }) => {
-  // 会话偏好画布,避免重定向干扰
-  await page.goto('/list.html');
+  // 会话偏好画布,避免默认列表视图干扰
+  await page.goto('/schedule.html');
   await page.evaluate(() => sessionStorage.setItem('ts:preferCanvas', '1'));
   await page.goto('/schedule.html');
   await page.waitForSelector('.canvas-card');
@@ -54,7 +54,7 @@ test('窄屏侧栏变底部 tab 栏,触控目标不小于 44px', async ({ page }
 });
 
 test('画布缩放持久化:放大后刷新仍保持', async ({ page }) => {
-  await page.goto('/list.html');
+  await page.goto('/schedule.html');
   await page.evaluate(() => sessionStorage.setItem('ts:preferCanvas', '1'));
   await page.goto('/schedule.html');
   await page.waitForSelector('.canvas-card');
@@ -76,7 +76,7 @@ test('画布缩放持久化:放大后刷新仍保持', async ({ page }) => {
 });
 
 test('双指捏合放大画布', async ({ page }) => {
-  await page.goto('/list.html');
+  await page.goto('/schedule.html');
   await page.evaluate(() => sessionStorage.setItem('ts:preferCanvas', '1'));
   await page.goto('/schedule.html');
   await page.waitForSelector('.canvas-card');

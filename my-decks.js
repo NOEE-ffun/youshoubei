@@ -255,7 +255,5 @@
     render();
   });
 
-  window.TournamentAppInit('my-decks').catch((error) => {
-    if (window.TournamentApp) window.TournamentApp.fatalError(error);
-  });
+  /* 页面初始化与登录守卫由 me.js 统一驱动(选手中心合并页) */
 })();

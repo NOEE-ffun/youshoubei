@@ -2,14 +2,14 @@ import { test, expect } from '@playwright/test';
 
 /* 二期冒烟:我的对局页游客/管理员空态、卡组公示锁渲染(本地模式设置手动开) */
 
-test('我的对局页:游客与管理员的空态、导航项隐藏', async ({ page }) => {
-  await page.goto('/my-decks.html');
-  await page.waitForSelector('#my-decks-empty');
+test('选手中心:游客空态、导航项隐藏', async ({ page }) => {
+  await page.goto('/me.html');
+  await page.waitForSelector('#me-empty');
   /* E2E 环境无 OSS → 本地模式空态(云端环境为「未登录」,逻辑同一入口) */
-  await expect(page.locator('#my-decks-empty-text')).toContainText('本机数据模式');
-  await expect(page.locator('#my-decks-login-btn')).toBeHidden();
-  /* 游客:侧栏「我的对局」入口隐藏 */
-  await expect(page.locator('#app-sidebar .side-link[data-page="my-decks"]')).toBeHidden();
+  await expect(page.locator('#me-empty-text')).toContainText('本机数据模式');
+  await expect(page.locator('#me-login-btn')).toBeHidden();
+  /* 游客:侧栏「选手中心」入口隐藏 */
+  await expect(page.locator('#app-sidebar .side-link[data-page="me"]')).toBeHidden();
 });
 
 test('我的对局 API:未登录提交 401', async ({ request }) => {

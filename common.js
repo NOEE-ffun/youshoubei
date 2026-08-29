@@ -1573,8 +1573,7 @@
       { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' },
       { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' },
       { page: 'stats', href: 'stats.html', icon: 'bar_chart', label: '数据统计' },
-      { page: 'my-decks', href: 'my-decks.html', icon: 'rule', label: '我的对局' },
-      { page: 'my-tourneys', href: 'my-tourneys.html', icon: 'add', label: '我的比赛' }
+      { page: 'me', href: 'me.html', icon: 'person', label: '选手中心' }
     ];
     const isActive = (page) => {
       if (page === 'match') return active === 'schedule' || active === 'match';
@@ -1631,7 +1630,8 @@
         '</div>'
       : '';
     const scheduleActions = isSchedule
-      ? searchBox +
+      ? '<button type="button" id="view-toggle" class="btn btn-ghost btn-sm icon-btn" title="切换到列表视图" aria-label="切换到列表视图">' + iconMarkup('view_list', '切换到列表视图') + '</button>' +
+        searchBox +
         '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
         '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单" aria-label="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
         '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>' +
@@ -1712,7 +1712,7 @@
     const header = document.getElementById('app-header');
     if (header && app.current) {
       const active = app.current;
-      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', profile: '个人中心', 'my-decks': '我的对局', 'my-tourneys': '我的比赛' };
+      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', me: '选手中心' };
       const headerTitle = pageTitles[app.activePage] || active.name;
 
       const titleEl = header.querySelector('.header-title');
@@ -1761,9 +1761,9 @@
     const manageBtn = document.getElementById('manage-btn');
     if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
 
-    /* 选手自助页导航项(我的对局/我的比赛):仅云端+登录+已绑定选手可见 */
+    /* 选手中心导航项:仅云端+登录+已绑定选手可见 */
     const playerPagesVisible = Boolean(mode === 'cloud' && sessionUser && sessionPlayer);
-    document.querySelectorAll('#app-sidebar .side-link[data-page="my-decks"], #app-sidebar .side-link[data-page="my-tourneys"]').forEach((link) => {
+    document.querySelectorAll('#app-sidebar .side-link[data-page="me"]').forEach((link) => {
       link.hidden = !playerPagesVisible;
     });
 
@@ -1872,7 +1872,7 @@
     sidebar.appendChild(group);
     appendSideLabel(group.querySelector('#manage-btn'), '管理');
     group.querySelector('#header-login-btn').addEventListener('click', () => {
-      if (sessionUser) location.href = 'profile.html';
+      if (sessionUser) location.href = 'me.html#profile';
       else openLoginDialog();
     });
     group.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
@@ -2023,7 +2023,7 @@
       notify((isRegister ? '注册成功,欢迎 ' : '欢迎回来,') + ((data.user && data.user.username) || username));
       if (data.user && data.user.role === 'admin') notify('已获得管理员身份');
       /* 资料页/我的对局的空态不随会话变化自动重建,直接刷新整页最稳 */
-      if (appInstance && (appInstance.activePage === 'profile' || appInstance.activePage === 'my-decks' || appInstance.activePage === 'my-tourneys')) location.reload();
+      if (appInstance && appInstance.activePage === 'me') location.reload();
     } catch (error) {
       statusEl.textContent = '网络错误,请稍后再试';
     } finally {

@@ -1,8 +1,9 @@
 (function () {
   'use strict';
 
-  /* 手机版赛程列表:resolveCanvas 后按阶段分组,行 = 场次 + A vs B + 比分 + 状态;
-   * 点行展开职业卡组(有效继承,图标可点跳链接)。 */
+  /* 赛程列表视图(比赛页内,与画布同页切换):resolveCanvas 后按阶段分组,
+   * 行 = 场次 + A vs B + 比分 + 状态;点行展开职业卡组(有效继承,图标可点跳链接)。
+   * 视图显隐由 bracket.js 的 body[data-view] 管理;本模块只负责渲染 #list-body。 */
 
   const { escapeHtml } = window.TournamentUtils;
 
@@ -70,7 +71,6 @@
     names = playerNameMap();
     const resolved = CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {});
     const eff = CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {});
-    const byId = new Map(resolved.cards.map((c) => [c.id, c]));
 
     /* 按 phase 分组,保持画布卡片顺序 */
     const groups = [];
@@ -91,48 +91,6 @@
     )).join('');
   }
 
-  function renderSelect() {
-    const app = window.TournamentApp;
-    const select = document.getElementById('list-tournament-select');
-    if (!select || !app) return;
-    const html = (app.list || []).map((t) =>
-      '<option value="' + t.id + '"' + (app.current && t.id === app.current.id ? ' selected' : '') + '>' +
-      escapeHtml(t.name) + '</option>'
-    ).join('');
-    if (select.dataset.sig !== html) {
-      select.dataset.sig = html;
-      select.innerHTML = html;
-    }
-  }
-
-  document.addEventListener('ts:ready', () => {
-    /* 主动切回画布:写会话偏好,画布页窄屏重定向本会话内放行 */
-    const backCanvas = document.querySelector('.mobile-back-canvas');
-    if (backCanvas) {
-      backCanvas.addEventListener('click', () => {
-        try { sessionStorage.setItem('ts:preferCanvas', '1'); } catch (error) { /* 忽略 */ }
-      });
-    }
-    const select = document.getElementById('list-tournament-select');
-    if (select) {
-      select.addEventListener('change', async () => {
-        try {
-          await window.TournamentApp.setActiveId(select.value);
-          document.dispatchEvent(new CustomEvent('ts:changed'));
-        } catch (error) {
-          window.TournamentUtils.notify('切换比赛失败：' + window.TournamentUtils.errMsg(error), 'danger');
-          renderSelect();
-        }
-      });
-    }
-    renderSelect();
-    render();
-    document.addEventListener('ts:changed', () => {
-      renderSelect();
-      render();
-    });
-  });
-  window.TournamentAppInit('list').catch((error) => {
-    if (window.TournamentApp) window.TournamentApp.fatalError(error);
-  });
+  document.addEventListener('ts:ready', render);
+  document.addEventListener('ts:changed', render);
 })();

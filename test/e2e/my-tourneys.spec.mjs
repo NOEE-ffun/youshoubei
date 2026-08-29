@@ -38,9 +38,9 @@ test('报名:开窗→报名→退报→关闭只读', async ({ browser, request
   await admin.waitForTimeout(800);
 
   /* 2. 选手登录并进入我的比赛(账号已在开头经 API 注册) */
-  await player.goto('/my-tourneys.html');
-  await player.waitForSelector('#my-tourneys-login-btn', { state: 'visible' });
-  await player.locator('#my-tourneys-login-btn').click();
+  await player.goto('/me.html#tourneys');
+  await player.waitForSelector('#me-login-btn', { state: 'visible' });
+  await player.locator('#me-login-btn').click();
   await player.fill('#login-username', 'e2e报名者');
   await player.fill('#login-password', '12345678');
   await player.locator('#login-submit').click();
@@ -73,15 +73,15 @@ test('报名:开窗→报名→退报→关闭只读', async ({ browser, request
   await admin.locator('#settings-form button[type="submit"]').click();
   await admin.waitForTimeout(800);
 
-  await player.goto('/my-tourneys.html');
+  await player.goto('/me.html#tourneys');
+  await player.reload(); /* 同 URL 含 hash 的 goto 不重载,显式刷新拿新数据 */
   await player.waitForSelector('#my-tourneys-body', { state: 'visible' });
   const card3 = player.locator('.mt-card', { hasText: 'E2E报名届' });
   await expect(card3).toBeVisible();
   await expect(card3).toContainText('已报名');
   await expect(card3.locator('[data-signup]')).toHaveCount(0);
-  /* 侧栏两个选手自助入口都在 */
-  await expect(player.locator('#app-sidebar .side-link[data-page="my-tourneys"]')).toBeVisible();
-  await expect(player.locator('#app-sidebar .side-link[data-page="my-decks"]')).toBeVisible();
+  /* 侧栏选手中心入口可见 */
+  await expect(player.locator('#app-sidebar .side-link[data-page="me"]')).toBeVisible();
 
   await adminCtx.close();
   await playerCtx.close();
