@@ -598,6 +598,11 @@
     var INK = "#1a1a1e";
     var MUTED = "#8a8a96";
 
+    /* 头像尺寸与名字字号:defs 里的 clipPath 先用,必须在此声明(var 提升会把
+     * 后置声明变成 undefined,拼出 NaN 坐标) */
+    var AV = 200;
+    var nameFs = Math.min(140, Math.max(48, Math.floor(700 / Math.max(1, Math.max(leftName.length, rightName.length)))));
+
     var parts = [];
     parts.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="' + escapeXml(leftName + " vs " + rightName) + '">');
 
@@ -615,8 +620,7 @@
     parts.push('<text x="120" y="60" font-family="Impact, Arial Black, PingFang SC, sans-serif" font-size="28" letter-spacing="14" fill="' + INK + '">' + escapeXml(name.toUpperCase()) + '</text>');
     parts.push('<text x="1800" y="60" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="22" letter-spacing="3" fill="' + MUTED + '">' + escapeXml(boText) + '</text>');
 
-    /* 中央:两选手名超大对排 + VS 小号居中 */
-    var nameFs = Math.min(140, Math.max(48, Math.floor(700 / Math.max(1, Math.max(leftName.length, rightName.length)))));
+    /* 中央:两选手名超大对排 + VS 小号居中(字号已在上方声明) */
     /* 左名字右对齐中央偏左 */
     parts.push('<text x="830" y="520" text-anchor="end" font-family="Impact, Arial Black, PingFang SC, Microsoft YaHei, sans-serif" font-size="' + nameFs + '" font-weight="900" fill="' + INK + '">' + escapeXml(leftName) + '</text>');
     /* 右名字左对齐中央偏右 */
@@ -630,8 +634,7 @@
     parts.push('<rect x="' + (830 - lineW) + '" y="560" width="' + lineW + '" height="4" fill="' + leftLine + '"/>');
     parts.push('<rect x="1090" y="560" width="' + lineW + '" height="4" fill="' + rightLine + '"/>');
 
-    /* 头像:小方形,放名字上方 */
-    var AV = 200;
+    /* 头像:小方形,放名字上方(尺寸已在上方声明) */
     if (isAllowedImgURL(data.left.img)) {
       parts.push('<image href="' + escapeXml(data.left.img) + '" x="' + (830 - AV) + '" y="' + (520 - nameFs - 40) + '" width="' + AV + '" height="' + AV + '" preserveAspectRatio="xMidYMid slice" clip-path="url(#clipMinL)"/>');
     } else {

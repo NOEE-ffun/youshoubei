@@ -5,22 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="view-transition" content="same-origin">
-  <meta name="description" content="右手杯——画布式自定义赛程与选手库。">
+  <meta name="description" content="右手杯总览:当前对阵、最新战报与快捷入口。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
-  <title>主页 - 右手杯</title>
+  <title>总览 - 右手杯</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
   <link rel="prefetch" href="schedule.html">
   <link rel="prefetch" href="players.html">
-  <link rel="prefetch" href="poster.html">
-  <script src="theme-init.js?v=2026082167"></script>
-  <link rel="stylesheet" href="styles.css?v=2026082167">
+  <link rel="prefetch" href="stats.html">
+  <script src="theme-init.js?v=2026082901"></script>
+  <link rel="stylesheet" href="styles.css?v=2026082901">
 </head>
 <body data-page="home">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
   <div id="bg-layer" aria-hidden="true"></div>
   <aside id="app-sidebar" class="app-sidebar" aria-label="主导航">
     <nav class="side-nav" aria-label="主导航">
-      <a class="side-link is-active" href="index.html" data-page="home" title="主页" aria-label="主页"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/home.svg" alt="主页" aria-hidden="true"></span></a>
+      <a class="side-link is-active" href="index.html" data-page="home" title="总览" aria-label="总览"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/home.svg" alt="总览" aria-hidden="true"></span></a>
       <a class="side-link" href="schedule.html" data-page="match" title="比赛" aria-label="比赛"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/emoji_events.svg" alt="比赛" aria-hidden="true"></span></a>
       <a class="side-link" href="players.html" data-page="players" title="选手库" aria-label="选手库"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/groups.svg" alt="选手库" aria-hidden="true"></span></a>
       <a class="side-link" href="poster.html" data-page="poster" title="海报" aria-label="海报"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/vs_poster.svg" alt="海报" aria-hidden="true"></span></a>
@@ -31,29 +31,29 @@
 
   <div class="layout-body">
     <main class="home-main" id="main-content" tabindex="-1">
-      <h1 class="visually-hidden">右手杯主页</h1>
+      <h1 class="visually-hidden">右手杯总览</h1>
 
-      <div class="home-hero">
-        <div class="home-slideshow" id="home-slideshow" aria-hidden="true"></div>
-        <div class="home-content">
-          <div class="home-marquee" role="group" aria-label="参赛选手">
-            <div class="marquee-row">
-              <div class="marquee-track" id="marquee-track"></div>
-            </div>
-            <div class="marquee-row">
-              <div class="marquee-track marquee-track-reverse" id="marquee-track-reverse"></div>
-            </div>
-          </div>
-          <div class="home-actions">
-            <a class="btn btn-primary btn-lg" href="schedule.html">查看比赛</a>
-          </div>
-        </div>
-      </div>
+      <section class="ov-head" id="ov-head" hidden></section>
+
+      <section class="ov-grid" id="ov-grid" hidden></section>
+
+      <section class="ov-blank" id="ov-blank" hidden>
+        <p>还没有赛事数据。</p>
+        <a class="btn btn-primary" href="schedule.html">去创建第一届比赛</a>
+      </section>
+
+      <nav class="ov-links" aria-label="快捷入口">
+        <a href="schedule.html"><img class="icon" src="icons/emoji_events.svg" alt="" aria-hidden="true">赛程画布</a>
+        <a href="players.html"><img class="icon" src="icons/groups.svg" alt="" aria-hidden="true">选手库</a>
+        <a href="stats.html"><img class="icon" src="icons/bar_chart.svg" alt="" aria-hidden="true">数据统计</a>
+        <a href="poster.html"><img class="icon" src="icons/vs_poster.svg" alt="" aria-hidden="true">海报</a>
+        <a href="me.html"><img class="icon" src="icons/person.svg" alt="" aria-hidden="true">选手中心</a>
+      </nav>
     </main>
   </div>
 
-  <script src="canvas-model.js?v=2026082167" defer></script>
-  <script src="common.js?v=2026082167" defer></script>
-  <script src="home.js?v=2026082167" defer></script>
+  <script src="canvas-model.js?v=2026082901" defer></script>
+  <script src="common.js?v=2026082901" defer></script>
+  <script src="home.js?v=2026082901" defer></script>
 </body>
 </html>
