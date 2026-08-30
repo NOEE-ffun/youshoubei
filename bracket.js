@@ -51,7 +51,10 @@
     escapeHtml, canEdit, save, avatarMarkup, notify, uiConfirm, iconMarkup,
     formatStartTime, bindZoomDock: bindZoomDockControls, bindZoomFitOnResize
   } = window.TournamentUtils;
-  const { CARD_WIDTH, CARD_HEIGHT, COL_GAP, ROW_GAP, PORT_Y, DEFAULT_CANVAS_COLS, DEFAULT_CANVAS_ROWS } = window.CanvasModel;
+  const {
+    DOT, CARD_WIDTH, CARD_HEIGHT, PORT_NORMALS, portOffset, pickPort, edgePath, arrowDefs,
+    DEFAULT_CANVAS_COLS, DEFAULT_CANVAS_ROWS
+  } = window.CanvasModel;
 
   let editMode = false;
   let scoreDialog = null;
@@ -315,11 +318,11 @@
   }
 
   function cardLeft(card) {
-    return (Number(card.x) || 0) * COL_GAP;
+    return (Number(card.x) || 0) * DOT;
   }
 
   function cardTop(card) {
-    return (Number(card.y) || 0) * ROW_GAP;
+    return (Number(card.y) || 0) * DOT;
   }
 
   function playerRow(match, side) {
@@ -436,6 +439,9 @@
     );
   }
 
+  /* 连线箭头 marker(与编辑器临时线共用同一模板,canvas-model.js 唯一真源) */
+  const EDGE_ARROW_DEFS = arrowDefs('edge');
+
   function renderEdges(canvas, resolvedById, container) {
     let svg = container.querySelector('.canvas-edges');
     if (!svg) {
@@ -451,21 +457,24 @@
         const source = resolvedById.get(slot.cardId);
         const target = resolvedById.get(card.id);
         if (!source || !target) continue;
-        const x1 = cardLeft(source) + CARD_WIDTH;
-        const y1 = cardTop(source) + (slot.outcome === 'winner' ? PORT_Y.winner : PORT_Y.loser);
-        const x2 = cardLeft(target);
-        const y2 = cardTop(target) + (slotIndex === 0 ? PORT_Y.winner : PORT_Y.loser);
-        const mid = (x1 + x2) / 2;
+        /* 端点按两卡方位自动选连接点:胜者线从源卡上排出,A 位入上排;败者/B 位走下排 */
+        const band = slot.outcome === 'winner' ? 'upper' : 'lower';
+        const srcPort = pickPort(source, target, band);
+        const dstPort = pickPort(target, source, slotIndex === 0 ? 'upper' : 'lower');
+        const o1 = portOffset(srcPort);
+        const o2 = portOffset(dstPort);
+        const p1 = { x: cardLeft(source) + o1.x, y: cardTop(source) + o1.y };
+        const p2 = { x: cardLeft(target) + o2.x, y: cardTop(target) + o2.y };
+        const cls = slot.outcome === 'loser' ? 'loser' : 'winner';
         paths.push(
-          '<path d="M ' + x1 + ' ' + y1 +
-          ' C ' + mid + ' ' + y1 + ', ' + mid + ' ' + y2 + ', ' + x2 + ' ' + y2 +
-          '" class="canvas-edge ' + (slot.outcome === 'loser' ? 'loser' : 'winner') + '"></path>'
+          '<path d="' + edgePath(p1, PORT_NORMALS[srcPort], p2, PORT_NORMALS[dstPort]) +
+          '" class="canvas-edge ' + cls + '" marker-end="url(#edge-arrow-' + cls + ')"></path>'
         );
       }
     }
     svg.setAttribute('width', container.scrollWidth || 1000);
     svg.setAttribute('height', container.scrollHeight || 800);
-    svg.innerHTML = paths.join('');
+    svg.innerHTML = EDGE_ARROW_DEFS + paths.join('');
   }
 
   function renderCanvas() {
@@ -482,14 +491,15 @@
     const effLinksMap = CanvasModel.resolveEffectiveClassLinks(canvas, record.scores || {});
     const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match, effLinksMap)).join('');
     /* 无限画布:board 尺寸纯由卡片范围决定,无边界框;无卡时保留最小底 */
-    const cardMaxX = Math.max(600, ...(canvas.cards || []).map((c) => (Number(c.x) || 0) * COL_GAP + CARD_WIDTH + 40));
-    const cardMaxY = Math.max(400, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * ROW_GAP + CARD_HEIGHT + 40));
+    const cardMaxX = Math.max(600, ...(canvas.cards || []).map((c) => (Number(c.x) || 0) * DOT + CARD_WIDTH + 40));
+    const cardMaxY = Math.max(400, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * DOT + CARD_HEIGHT + 40));
     board.style.width = cardMaxX + 'px';
     board.style.height = cardMaxY + 'px';
-    /* 玻璃样式:写在内联变量上,卡片 CSS 消费 */
+    /* 玻璃样式:写在内联变量上,卡片 CSS 消费;--dot 驱动编辑态点阵背景 */
     const cardStyle = cardStyleOf(canvas);
     board.style.setProperty('--card-glass', cardStyle.opacity);
     board.style.setProperty('--card-blur', cardStyle.blur + 'px');
+    board.style.setProperty('--dot', DOT + 'px');
     /* editing class 由 CanvasEditor.enter/exit 维护(编辑器自身状态) */
     board.innerHTML = '';
     const resolvedById = new Map(resolved.cards.map((c) => [c.id, c]));
@@ -500,15 +510,23 @@
     board.appendChild(wrap);
     CanvasEditor.syncZoom();
     if (editMode) {
-      // 编辑模式额外显示端口（连线交互在 canvas-editor.js 中实现）
+      // 编辑模式额外显示六连接点(连线交互在 canvas-editor.js 中实现):
+      // 上排三点 = 胜者输出 / A 位输入,下排三点 = 败者输出 / B 位输入
       board.querySelectorAll('.canvas-card').forEach((el) => {
         const cardId = el.dataset.match;
+        const ports = [
+          ['top', 'upper', '上连接点:拖出胜者 / 拖入 A 位'],
+          ['leftTop', 'upper', '左上连接点:拖出胜者 / 拖入 A 位'],
+          ['rightTop', 'upper', '右上连接点:拖出胜者 / 拖入 A 位'],
+          ['bottom', 'lower', '下连接点:拖出败者 / 拖入 B 位'],
+          ['leftBottom', 'lower', '左下连接点:拖出败者 / 拖入 B 位'],
+          ['rightBottom', 'lower', '右下连接点:拖出败者 / 拖入 B 位']
+        ];
         el.insertAdjacentHTML('beforeend',
           '<div class="card-ports">' +
-          '<span class="port port-input" data-port="input" data-card="' + cardId + '" data-slot="0" title="A 位输入"></span>' +
-          '<span class="port port-input" data-port="input" data-card="' + cardId + '" data-slot="1" title="B 位输入"></span>' +
-          '<span class="port port-output" data-port="output" data-card="' + cardId + '" data-outcome="winner" title="胜者输出"></span>' +
-          '<span class="port port-output" data-port="output" data-card="' + cardId + '" data-outcome="loser" title="败者输出"></span>' +
+          ports.map((p) =>
+            '<span class="port port-node" data-port="' + p[0] + '" data-card="' + cardId + '" data-band="' + p[1] + '" title="' + p[2] + '"></span>'
+          ).join('') +
           '</div>'
         );
       });
@@ -953,11 +971,12 @@
       else if (kind === 'link') editor.setTool('link');
       else if (kind === 'add') {
         const cards = (currentRecord().canvas && currentRecord().canvas.cards) || [];
+        /* 点阵制找空位:步进 = 卡宽 10 点 + 2 点缝,换行步进 = 卡高 6 点 + 2 点缝 */
         let x = 2;
         let y = 2;
         while (cards.some((c) => (Number(c.x) || 0) === x && (Number(c.y) || 0) === y)) {
-          x += 2;
-          if (x > 14) { x = 0; y += 2; }
+          x += 12;
+          if (x > 100) { x = 0; y += 8; }
         }
         editor.addCard(x, y);
       } else if (kind === 'undo') editor.undo();

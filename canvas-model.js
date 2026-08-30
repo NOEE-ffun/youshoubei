@@ -34,13 +34,60 @@
   const MAX_CANVAS_COLS = 200;
   const MAX_CANVAS_ROWS = 200;
 
-  /* 画布几何唯一真源:卡片尺寸、网格间距、连线端口纵向偏移,
-   * bracket.js(渲染)与 canvas-editor.js(编辑)统一引用,改这里即可全局生效 */
-  const CARD_WIDTH = 280;
-  const CARD_HEIGHT = 176;
-  const COL_GAP = 320;
-  const ROW_GAP = 210;
-  const PORT_Y = { winner: 70, loser: 108 };
+/* 画布几何唯一真源:点阵点距、卡片尺寸(每卡 10×6 点)、连接点行位,
+ * bracket.js(渲染)与 canvas-editor.js(编辑)统一引用,改这里即可全局生效 */
+const DOT = 28;
+const CARD_WIDTH = DOT * 10;
+const CARD_HEIGHT = DOT * 6;
+/* 左右连接点纵向位置:与卡内 A/B 两行选手条对齐(标称卡高内) */
+const PORT_ROW_Y = { a: 54, b: 92 };
+/* 旧格制间距,仅供格→点迁移换算,勿在新代码中使用 */
+const LEGACY_COL_GAP = 320;
+const LEGACY_ROW_GAP = 210;
+
+/* 六连接点(参考 Obsidian 白板):top/bottom 为上下中点,其余四点与 A/B 行对齐。
+ * 上排三点(top/leftTop/rightTop)默认输出胜者、拖入进 A 位;
+ * 下排三点(bottom/leftBottom/rightBottom)默认输出败者、拖入进 B 位。 */
+const PORT_NORMALS = {
+  top: [0, -1],
+  bottom: [0, 1],
+  leftTop: [-1, 0],
+  leftBottom: [-1, 0],
+  rightTop: [1, 0],
+  rightBottom: [1, 0]
+};
+
+/* 连接点相对卡片左上角的偏移 */
+function portOffset(port) {
+  switch (port) {
+    case 'top': return { x: CARD_WIDTH / 2, y: 0 };
+    case 'bottom': return { x: CARD_WIDTH / 2, y: CARD_HEIGHT };
+    case 'leftTop': return { x: 0, y: PORT_ROW_Y.a };
+    case 'leftBottom': return { x: 0, y: PORT_ROW_Y.b };
+    case 'rightTop': return { x: CARD_WIDTH, y: PORT_ROW_Y.a };
+    default: return { x: CARD_WIDTH, y: PORT_ROW_Y.b };
+  }
+}
+
+/* 按两卡相对方位自动选连接点(白板式路由,卡片移动后连线自动跟随):
+ * band 'upper'=上排三点(胜者出/A 位入),'lower'=下排三点 */
+function pickPort(fromCard, toCard, band) {
+  const dx = ((Number(toCard.x) || 0) - (Number(fromCard.x) || 0)) * DOT;
+  const side = band === 'lower' ? 'Bottom' : 'Top';
+  if (dx < -CARD_WIDTH / 2) return 'left' + side;
+  if (dx > CARD_WIDTH / 2) return 'right' + side;
+  return band === 'lower' ? 'bottom' : 'top';
+}
+
+/* 连接点法线 stub 贝塞尔:两端各自沿连接点法线伸出 stub 再相互弯接 */
+function edgePath(p1, n1, p2, n2) {
+  const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const stub = Math.min(120, Math.max(24, dist / 2));
+  return 'M ' + p1.x + ' ' + p1.y +
+    ' C ' + (p1.x + n1[0] * stub) + ' ' + (p1.y + n1[1] * stub) +
+    ', ' + (p2.x + n2[0] * stub) + ' ' + (p2.y + n2[1] * stub) +
+    ', ' + p2.x + ' ' + p2.y;
+}
 
   function clampCanvasSize(cols, rows) {
     const c = Number(cols);
@@ -187,7 +234,30 @@
       // 总决赛
       { id: 'grand_final', label: '总决赛', phase: '总决赛', format: 'BO5', x: 9, y: 1, slots: [flow('wb_final', 'winner'), flow('lb_final', 'winner')], exitRanks: { winner: 1, loser: 2 } }
     ];
-    return { cards: cards.map(normalizeCard), size: { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS } };
+    /* 模板坐标以旧格值书写便于对齐阅读,统一经格→点迁移换算 */
+    const canvas = { cards: cards.map(normalizeCard), size: { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS } };
+    migrateCanvasToDot(canvas);
+    return canvas;
+  }
+
+  /* 连线箭头 marker 定义(正式线与编辑器临时线共用;id 前缀区分避免 document 内撞车) */
+function arrowDefs(prefix) {
+  const marker = function (cls) {
+    return '<marker id="' + prefix + '-arrow-' + cls + '" class="edge-arrow ' + cls + '" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="12" markerHeight="12" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker>';
+  };
+  return '<defs>' + marker('winner') + marker('loser') + '</defs>';
+}
+
+/* 格制→点制:坐标单位从 1 格(320×210px)换算为 1 点(DOT px),视觉位置不变;
+   * grid 标记保证幂等——迁移一次落盘后不再重算 */
+  function migrateCanvasToDot(canvas) {
+    if (!canvas || canvas.grid === 'dot') return false;
+    for (const card of Array.isArray(canvas.cards) ? canvas.cards : []) {
+      card.x = Math.max(0, Math.round(((Number(card.x) || 0) * LEGACY_COL_GAP) / DOT));
+      card.y = Math.max(0, Math.round(((Number(card.y) || 0) * LEGACY_ROW_GAP) / DOT));
+    }
+    canvas.grid = 'dot';
+    return true;
   }
 
   /* ========== 比分语义 ========== */
@@ -615,11 +685,16 @@
     DEFAULT_CANVAS_ROWS,
     MAX_CANVAS_COLS,
     MAX_CANVAS_ROWS,
+    DOT,
     CARD_WIDTH,
     CARD_HEIGHT,
-    COL_GAP,
-    ROW_GAP,
-    PORT_Y,
+    PORT_ROW_Y,
+    PORT_NORMALS,
+    portOffset,
+    pickPort,
+    edgePath,
+    arrowDefs,
+    migrateCanvasToDot,
     createEmptyCanvas,
     createDefaultCanvas,
     createDefaultTournament,

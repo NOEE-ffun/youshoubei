@@ -533,6 +533,7 @@
     for (const record of local) {
       const copy = structuredClone(record);
       CanvasModel.migrateLegacyTournament(copy, playerMap);
+      if (copy.canvas) CanvasModel.migrateCanvasToDot(copy.canvas);
       for (const matchId of Object.keys(copy.matchDecks || {})) {
         for (const playerId of Object.keys(copy.matchDecks[matchId])) {
           for (const deck of copy.matchDecks[matchId][playerId]) {
@@ -2145,6 +2146,10 @@
         record.schemaVersion = SCHEMA_VERSION;
       }
       if (record.canvas) {
+        /* 格→点阵坐标迁移(幂等,有 grid 标记跳过);有实际换算则需落盘 */
+        if (CanvasModel.migrateCanvasToDot(record.canvas) && !dirtyRecords.includes(record)) {
+          dirtyRecords.push(record);
+        }
         record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => playerMap.has(id));
       }
       const after = needsMigration ? JSON.stringify(record) : JSON.stringify(record.roster || null);

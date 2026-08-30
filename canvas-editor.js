@@ -3,7 +3,7 @@
 
   const { escapeHtml, save, notify, uiConfirm, debounce } = window.TournamentUtils;
   /* 画布几何唯一真源在 canvas-model.js */
-  const { CARD_WIDTH, COL_GAP, ROW_GAP, PORT_Y } = window.CanvasModel;
+  const { DOT, PORT_NORMALS, edgePath, arrowDefs } = window.CanvasModel;
 
   const MIN_SCALE = 0.05;
   const FIT_MIN_SCALE = 0.28;
@@ -594,12 +594,15 @@
       return;
     }
     if (!active) return;
-    const output = event.target.closest('.port-output');
-    if (output && tool !== 'delete') {
+    const node = event.target.closest('.port-node');
+    if (node && tool !== 'delete') {
+      /* 白板连接点:上排拖出=胜者,下排拖出=败者;入侧落点再定 A/B 位 */
       event.preventDefault();
-      const sourceCardId = output.dataset.card;
-      const outcome = output.dataset.outcome;
-      connectState = { sourceCardId, outcome };
+      connectState = {
+        sourceCardId: node.dataset.card,
+        outcome: node.dataset.band === 'lower' ? 'loser' : 'winner',
+        sourcePortEl: node
+      };
       ensureTempLine();
       updateTempLine(event.clientX, event.clientY);
       return;
@@ -683,9 +686,9 @@
     if (!dragState) return;
     const dx = event.clientX - dragState.startX;
     const dy = event.clientY - dragState.startY;
-    /* 网格步进(整格吸附):整组统一用同一偏移量,保持相对位置 */
-    const stepX = Math.round(dx / (COL_GAP * scale));
-    const stepY = Math.round(dy / (ROW_GAP * scale));
+    /* 点阵步进(1 点吸附):整组统一用同一偏移量,保持相对位置 */
+    const stepX = Math.round(dx / (DOT * scale));
+    const stepY = Math.round(dy / (DOT * scale));
     for (const entry of dragState.cards) {
       const card = findCard(entry.id);
       if (!card) continue;
@@ -698,8 +701,8 @@
         dragState.moved = true;
         const el = cardElement(entry.id);
         if (el) {
-          el.style.left = (nextX * COL_GAP) + 'px';
-          el.style.top = (nextY * ROW_GAP) + 'px';
+          el.style.left = (nextX * DOT) + 'px';
+          el.style.top = (nextY * DOT) + 'px';
         }
       }
     }
@@ -714,12 +717,14 @@
       return;
     }
     if (connectState) {
-      const input = event.target.closest('.port-input');
-      if (input && input.dataset.card && input.dataset.slot !== undefined) {
-        const targetCard = findCard(input.dataset.card);
+      const node = event.target.closest('.port-node');
+      if (node && node.dataset.card) {
+        const targetCard = findCard(node.dataset.card);
         if (targetCard) {
+          /* 落点上排 → A 位(slot0),下排 → B 位(slot1) */
+          const slotIndex = node.dataset.band === 'lower' ? 1 : 0;
           commitHistory();
-          targetCard.slots[Number(input.dataset.slot)] = {
+          targetCard.slots[slotIndex] = {
             type: 'flow',
             cardId: connectState.sourceCardId,
             outcome: connectState.outcome
@@ -765,8 +770,8 @@
     }
     if (tool === 'delete') return;
     const rect = board().getBoundingClientRect();
-    const x = Math.round((event.clientX - rect.left) / (COL_GAP * scale));
-    const y = Math.round((event.clientY - rect.top) / (ROW_GAP * scale));
+    const x = Math.round((event.clientX - rect.left) / (DOT * scale));
+    const y = Math.round((event.clientY - rect.top) / (DOT * scale));
     addCard(x, y);
   }
 
@@ -818,7 +823,7 @@
       }
       return;
     }
-    /* 方向键网格微调:±1 格,Shift ±3 格(兼作 WCAG 2.2 拖拽替代) */
+    /* 方向键点阵微调:±1 点,Shift ±3 点(兼作 WCAG 2.2 拖拽替代) */
     const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
     if (arrows[event.key] && batchSelected.size) {
       event.preventDefault();
@@ -852,8 +857,8 @@
       card.y = Math.max(0, (Number(card.y) || 0) + dy);
       const el = cardElement(id);
       if (el) {
-        el.style.left = (card.x * COL_GAP) + 'px';
-        el.style.top = (card.y * ROW_GAP) + 'px';
+        el.style.left = (card.x * DOT) + 'px';
+        el.style.top = (card.y * DOT) + 'px';
       }
     }
     if (!nudgeCommit) {
@@ -887,8 +892,8 @@
         card.y = entry.originY;
         const el = cardElement(entry.id);
         if (el) {
-          el.style.left = (card.x * COL_GAP) + 'px';
-          el.style.top = (card.y * ROW_GAP) + 'px';
+          el.style.left = (card.x * DOT) + 'px';
+          el.style.top = (card.y * DOT) + 'px';
         }
       }
       /* 拖拽被取消:还原原位,快照作废 */
@@ -1001,12 +1006,12 @@
     });
   }
 
-  /* 多卡粘贴:整体平移 (+1,+1) 保持相对位置,集内连线跟随重映射;
+  /* 多卡粘贴:整体平移一个卡位(12×8 点)保持相对位置,集内连线跟随重映射;
    * 自动选中新集合,不弹设置窗(多卡连续弹窗不合理) */
   function pasteCards(sources) {
     const record = currentRecord();
     const canvas = record.canvas || (record.canvas = { cards: [] });
-    const clones = CanvasModel.cloneCardsForPaste(sources, 1, 1);
+    const clones = CanvasModel.cloneCardsForPaste(sources, 12, 8);
     if (!clones.length) return;
     commitHistory();
     for (const clone of clones) canvas.cards.push(clone);
@@ -1038,8 +1043,8 @@
       '  <div class="form-field"><label for="card-phase">阶段</label><input type="text" id="card-phase" placeholder="如：胜者组决赛"></div>' +
       '  <div class="form-field"><label for="card-format">赛制文本</label><input type="text" id="card-format" placeholder="BO3 / BO5 / 自定义"></div>' +
       '  <div class="form-field"><label for="card-deck-count">卡组数量（留空自动）</label><input type="number" id="card-deck-count" min="1" step="1"></div>' +
-      '  <div class="form-field"><label for="card-slot-a">A 位选手</label><select id="card-slot-a"></select></div>' +
-      '  <div class="form-field"><label for="card-slot-b">B 位选手</label><select id="card-slot-b"></select></div>' +
+      '  <div class="form-field"><label for="card-slot-a">A 位选手</label><select id="card-slot-a"></select><select id="card-flow-outcome-a" class="flow-outcome" hidden aria-label="A 位连线取哪个出口"><option value="winner">取其胜者</option><option value="loser">取其败者</option></select></div>' +
+      '  <div class="form-field"><label for="card-slot-b">B 位选手</label><select id="card-slot-b"></select><select id="card-flow-outcome-b" class="flow-outcome" hidden aria-label="B 位连线取哪个出口"><option value="winner">取其胜者</option><option value="loser">取其败者</option></select></div>' +
       '  <div class="form-field"><label for="card-rank-winner">胜者出口名次</label><input type="number" id="card-rank-winner" placeholder="如 1"></div>' +
       '  <div class="form-field"><label for="card-rank-loser">败者出口名次</label><input type="number" id="card-rank-loser" placeholder="如 2"></div>' +
       '  <div class="form-field">' +
@@ -1050,7 +1055,7 @@
       '    <label>职业卡组 · B 位选手</label>' +
       '    <div class="cl-list" id="card-cl-b"></div>' +
       '  </div>' +
-      '  <p class="hint">连线请用卡片右侧输出口拖到目标卡片左侧输入口；这里只设置直接参赛选手。</p>' +
+      '  <p class="hint">连线:从连接点拖出箭头,拖到目标卡片连接点松手。上排连接点默认输出胜者、接入 A 位,下排默认输出败者、接入 B 位,均可在上面下拉中自定义。</p>' +
       '  <div class="dialog-actions">' +
       '    <button type="button" class="btn btn-secondary" data-card-close>取消</button>' +
       '    <button type="button" class="btn btn-primary" data-card-save>保存</button>' +
@@ -1169,13 +1174,20 @@
     const slotB = card.slots && card.slots[1];
     cardDialog.querySelector('#card-slot-a').innerHTML = playerOptions(slotA && slotA.type === 'player' ? slotA.playerId : '');
     cardDialog.querySelector('#card-slot-b').innerHTML = playerOptions(slotB && slotB.type === 'player' ? slotB.playerId : '');
+    /* 连线位的出口切换:显示并回填当前 outcome(拖拽侧默认之外的自定义入口) */
+    const flowOutcomeA = cardDialog.querySelector('#card-flow-outcome-a');
+    const flowOutcomeB = cardDialog.querySelector('#card-flow-outcome-b');
+    flowOutcomeA.hidden = !(slotA && slotA.type === 'flow');
+    flowOutcomeB.hidden = !(slotB && slotB.type === 'flow');
     if (slotA && slotA.type === 'flow') {
+      flowOutcomeA.value = slotA.outcome === 'loser' ? 'loser' : 'winner';
       cardDialog.querySelector('#card-slot-a').insertAdjacentHTML('beforeend',
-        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotA.cardId)) + ' 的' + (slotA.outcome === 'loser' ? '败者' : '胜者') + '</option>');
+        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotA.cardId)) + '</option>');
     }
     if (slotB && slotB.type === 'flow') {
+      flowOutcomeB.value = slotB.outcome === 'loser' ? 'loser' : 'winner';
       cardDialog.querySelector('#card-slot-b').insertAdjacentHTML('beforeend',
-        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotB.cardId)) + ' 的' + (slotB.outcome === 'loser' ? '败者' : '胜者') + '</option>');
+        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotB.cardId)) + '</option>');
     }
     cardDialog.querySelector('#card-rank-winner').value = card.exitRanks && card.exitRanks.winner != null ? card.exitRanks.winner : '';
     cardDialog.querySelector('#card-rank-loser').value = card.exitRanks && card.exitRanks.loser != null ? card.exitRanks.loser : '';
@@ -1209,11 +1221,15 @@
       card.slots[0] = { type: 'empty' };
     } else if (slotAValue && slotAValue !== '__flow') {
       card.slots[0] = { type: 'player', playerId: slotAValue };
+    } else if (slotAValue === '__flow' && card.slots[0] && card.slots[0].type === 'flow') {
+      card.slots[0].outcome = cardDialog.querySelector('#card-flow-outcome-a').value === 'loser' ? 'loser' : 'winner';
     }
     if (slotBValue === '') {
       card.slots[1] = { type: 'empty' };
     } else if (slotBValue && slotBValue !== '__flow') {
       card.slots[1] = { type: 'player', playerId: slotBValue };
+    } else if (slotBValue === '__flow' && card.slots[1] && card.slots[1].type === 'flow') {
+      card.slots[1].outcome = cardDialog.querySelector('#card-flow-outcome-b').value === 'loser' ? 'loser' : 'winner';
     }
     card.exitRanks = card.exitRanks || {};
     const rw = Number(cardDialog.querySelector('#card-rank-winner').value);
@@ -1317,45 +1333,30 @@
     }
   }
 
-  function portRect(cardId, kind, slotIndex) {
-    const b = board();
-    if (!b) return null;
-    const selector = kind === 'output'
-      ? '.port-output[data-card="' + cardId + '"][data-outcome="' + slotIndex + '"]'
-      : '.port-input[data-card="' + cardId + '"][data-slot="' + slotIndex + '"]';
-    const port = b.querySelector(selector);
-    if (port) return port.getBoundingClientRect();
-    const card = findCard(cardId);
-    if (!card) return null;
-    const boardRect = b.getBoundingClientRect();
-    return {
-      left: boardRect.left + (Number(card.x) || 0) * COL_GAP * scale + (kind === 'output' ? CARD_WIDTH * scale : 0),
-      top: boardRect.top + (Number(card.y) || 0) * ROW_GAP * scale + (slotIndex === 'loser' || Number(slotIndex) === 1 ? PORT_Y.loser * scale : PORT_Y.winner * scale),
-      width: 12,
-      height: 12
-    };
-  }
-
   function updateTempLine(x, y) {
     const line = document.getElementById('canvas-temp-line');
     if (!line || !connectState) return;
-    const outcome = connectState.outcome;
-    const startRect = portRect(connectState.sourceCardId, 'output', outcome);
-    if (!startRect) return;
+    const el = connectState.sourcePortEl;
+    if (!el || !el.isConnected) return;
     const b = board();
+    if (!b) return;
     const rect = b.getBoundingClientRect();
-    const startX = startRect.left - rect.left + startRect.width / 2;
-    const startY = startRect.top - rect.top + startRect.height / 2;
-    const endX = x - rect.left;
-    const endY = y - rect.top;
-    const mid = (startX + endX) / 2;
+    const r = el.getBoundingClientRect();
+    const p1 = { x: r.left - rect.left + r.width / 2, y: r.top - rect.top + r.height / 2 };
+    const p2 = { x: x - rect.left, y: y - rect.top };
+    /* 源端法线 = 出发连接点方位;末端尚无连接点,取 start→end 主轴方向作进入方向 */
+    const n1 = PORT_NORMALS[el.dataset.port] || [1, 0];
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const n2 = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dy) || 1];
+    const cls = connectState.outcome === 'loser' ? 'loser' : 'winner';
     line.style.left = rect.left + 'px';
     line.style.top = rect.top + 'px';
     line.setAttribute('width', rect.width || 1000);
     line.setAttribute('height', rect.height || 800);
-    line.innerHTML = '<path d="M ' + startX + ' ' + startY +
-      ' C ' + mid + ' ' + startY + ', ' + mid + ' ' + endY + ', ' + endX + ' ' + endY +
-      '" class="canvas-edge temp ' + (outcome === 'loser' ? 'loser' : 'winner') + '"></path>';
+    line.innerHTML = arrowDefs('temp') +
+      '<path d="' + edgePath(p1, n1, p2, n2) +
+      '" class="canvas-edge temp ' + cls + '" marker-end="url(#temp-arrow-' + cls + ')"></path>';
   }
 
   function removeTempLine() {

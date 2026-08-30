@@ -184,4 +184,30 @@ const model = require('../canvas-model.js');
   assert.deepEqual(eff.get('cy').a, [], '环另一侧同样为空');
 }
 
-console.log('canvas-model 全部 11 组测试通过 ✓');
+// 13. 格→点阵坐标迁移:换算、幂等、标记落盘
+{
+  assert.equal(model.DOT, 28, '点距应为 28');
+  assert.equal(model.CARD_WIDTH, 280, '卡宽 = 10 点');
+  assert.equal(model.CARD_HEIGHT, 168, '卡高 = 6 点');
+  const legacy = { cards: [
+    { id: 'c1', x: 2, y: 1, slots: [] },
+    { id: 'c2', x: 0, y: 0, slots: [] }
+  ] };
+  assert.equal(model.migrateCanvasToDot(legacy), true, '首次迁移应返回 true');
+  assert.deepEqual([legacy.cards[0].x, legacy.cards[0].y], [23, 8], '格(2,1)应换算为点(23,8)');
+  assert.equal(legacy.grid, 'dot', '幂等标记应落盘');
+  const snapshot = JSON.stringify(legacy);
+  assert.equal(model.migrateCanvasToDot(legacy), false, '有标记时二次迁移应跳过');
+  assert.equal(JSON.stringify(legacy), snapshot, '二次迁移不得改动数据');
+  // 新模板直接点制,自带标记不再换算
+  const fresh = createDefaultCanvas([]);
+  assert.equal(fresh.grid, 'dot');
+  assert.equal(model.migrateCanvasToDot(fresh), false);
+  // 方位选点:目标在右 → 右连接点;上排胜者、下排败者
+  assert.equal(model.pickPort({ x: 0, y: 0 }, { x: 11, y: 0 }, 'upper'), 'rightTop');
+  assert.equal(model.pickPort({ x: 0, y: 0 }, { x: 11, y: 0 }, 'lower'), 'rightBottom');
+  assert.equal(model.pickPort({ x: 0, y: 0 }, { x: 1, y: -4 }, 'upper'), 'top');
+  assert.equal(model.pickPort({ x: 0, y: 0 }, { x: -11, y: 0 }, 'upper'), 'leftTop');
+}
+
+console.log('canvas-model 全部 13 组测试通过 ✓');

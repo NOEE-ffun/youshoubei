@@ -1671,10 +1671,14 @@ dialog::backdrop {
 
 .canvas-board.editing {
   background-color: rgb(128 120 96 / 0.05);
+  /* 点阵背景(白板式):尺寸由 JS 写入的 --dot 变量驱动,与卡片点坐标同源 */
+  background-image: radial-gradient(circle, var(--dot-ink, rgb(128 120 96 / 0.35)) 1.2px, transparent 1.2px);
+  background-size: var(--dot, 28px) var(--dot, 28px);
 }
 
 [data-theme='dark'] .canvas-board.editing {
   background-color: rgb(196 184 152 / 0.05);
+  --dot-ink: rgb(196 184 152 / 0.28);
 }
 
 .canvas-cards {
@@ -1686,7 +1690,7 @@ dialog::backdrop {
 .canvas-card {
   position: absolute;
   width: 280px;
-  min-height: 176px;
+  min-height: 168px;
   box-sizing: border-box;
   z-index: 2;
   cursor: default;
@@ -1823,19 +1827,51 @@ dialog::backdrop {
   transform: translate(-50%, -50%);
 }
 
-.card-ports .port-input {
-  left: -7px;
+/* 编辑模式六连接点(白板式):上排 = 胜者出 / A 位入,下排 = 败者出 / B 位入;
+ * 左右连接点纵向与卡内 A/B 选手行对齐(标称 168 卡高,卡超高时下排悬于卡内) */
+.card-ports .port-node[data-port='top'] {
+  left: 50%;
+  top: -7px;
+  transform: translateX(-50%);
 }
 
-.card-ports .port-input[data-slot="0"] { top: 62px; }
-.card-ports .port-input[data-slot="1"] { top: 100px; }
-
-.card-ports .port-output {
-  right: -7px;
+.card-ports .port-node[data-port='bottom'] {
+  left: 50%;
+  bottom: -7px;
+  transform: translateX(-50%);
 }
 
-.card-ports .port-output[data-outcome="winner"] { top: 62px; }
-.card-ports .port-output[data-outcome="loser"] { top: 100px; }
+.card-ports .port-node[data-port='leftTop'] { left: -7px; top: 48px; }
+.card-ports .port-node[data-port='leftBottom'] { left: -7px; top: 86px; }
+.card-ports .port-node[data-port='rightTop'] { right: -7px; top: 48px; }
+.card-ports .port-node[data-port='rightBottom'] { right: -7px; top: 86px; }
+
+.card-ports .port-node[data-band='upper'] { border-color: #3b7e3e; }
+.card-ports .port-node[data-band='lower'] { border-color: #cc3a2b; }
+
+[data-theme='dark'] .card-ports .port-node[data-band='upper'] { border-color: #6bc26e; }
+[data-theme='dark'] .card-ports .port-node[data-band='lower'] { border-color: #f26d5f; }
+
+.card-ports .port-node[data-port='top']:hover,
+.card-ports .port-node[data-port='bottom']:hover {
+  transform: translateX(-50%) scale(1.25);
+}
+
+.card-ports .port-node:not([data-port='top']):not([data-port='bottom']):hover {
+  transform: scale(1.25);
+}
+
+/* 连线箭头 marker:与 winner/loser 线色一致 */
+.edge-arrow.winner path { fill: #3b7e3e; }
+.edge-arrow.loser path { fill: #cc3a2b; }
+[data-theme='dark'] .edge-arrow.winner path { fill: #6bc26e; }
+[data-theme='dark'] .edge-arrow.loser path { fill: #f26d5f; }
+
+/* 弹窗内连线出口切换(仅该位为连线时显示) */
+.form-field select.flow-outcome {
+  width: auto;
+  margin-left: 0.5rem;
+}
 
 /* 整页画布 */
 .canvas-wrap-full {
