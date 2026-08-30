@@ -1,9 +1,11 @@
 (function () {
   'use strict';
 
-  /* OBS 比分舞台:公开读 /api/data,10 秒轮询,resolveCanvas 派生当前对阵。
+  /* OBS 比分舞台:登录会话读 /api/data,10 秒轮询,resolveCanvas 派生当前对阵。
    * 当前对阵 = 赛事进行中(ongoing)且卡片 ready 未赛的那场;没有则取下一场。
-   * 直播时把本页 URL 作为 OBS 浏览器源,比分变化最迟 10 秒自动刷新。 */
+   * 直播时把本页 URL 作为 OBS 浏览器源,比分变化最迟 10 秒自动刷新。
+   * 401(未登录/会话过期):清空骨架换全屏登录提示并停轮询,替代报错横幅;
+   * 本页不引 common.js,登录遮罩内联实现。 */
 
   var POLL_MS = 10 * 1000;
   var NEXT_COUNT = 3;
@@ -70,24 +72,45 @@
   }
 
   var failCount = 0;
+  var loginRequired = false;
+  var pollTimer = null;
+
+  /* 401 登录墙:全屏居中提示 + 跳登录按钮,停轮询;登录后按 returnTo 回本页 */
+  function requireLogin() {
+    loginRequired = true;
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    document.body.innerHTML = '<div class="stage-login-required"><p>大屏需要登录后使用。</p>' +
+      '<a class="btn btn-primary" href="login.html?returnTo=' + encodeURIComponent(location.pathname) + '">去登录</a></div>';
+  }
 
   function load() {
-    /* 重入保护:上一次请求未完成时跳过本轮,防慢响应旧帧覆盖新帧 */
-    if (inFlight) return;
+    /* 重入保护:上一次请求未完成时跳过本轮,防慢响应旧帧覆盖新帧;401 后不再轮询 */
+    if (inFlight || loginRequired) return;
     inFlight = true;
     fetch('/api/data', { cache: 'no-store' })
       .then(function (resp) {
+        if (resp.status === 401) {
+          requireLogin();
+          return null;
+        }
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         failCount = 0;
         return resp.json();
       })
       .then(function (workspace) {
-        var list = (workspace && workspace.tournaments) || [];
+        /* 401 分流:骨架已换登录遮罩,不再渲染(遮罩后元素已不存在) */
+        if (!workspace) return;
+        var list = (workspace.tournaments) || [];
         var activeId = workspace.activeId || (list[0] && list[0].id);
         var record = list.filter(function (t) { return t.id === activeId; })[0] || list[0];
         render(record, workspace);
       })
       .catch(function () {
+        /* 401 已分流为登录遮罩,不再计入失败帧 */
+        if (loginRequired) return;
         /* 网络抖动保持上一帧;持续失败(服务不可达)给出可见提示 */
         failCount += 1;
         if (failCount >= 3) {
@@ -101,5 +124,5 @@
   }
 
   load();
-  setInterval(load, POLL_MS);
+  pollTimer = setInterval(load, POLL_MS);
 })();

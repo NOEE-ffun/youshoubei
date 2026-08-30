@@ -54,3 +54,42 @@ body {
 #stage-error[hidden] {
   display: none;
 }
+
+/* 大屏 401 登录墙:全屏居中提示 + 去登录按钮(替代报错横幅)。
+ * 由 vs-poster/js/stage.js 在 /api/poster-stage 返回 401 时整页注入;
+ * 本页不引站点 styles.css(无 CSS 变量与 .btn 样式),按钮样式在此自包含。 */
+.stage-login-required {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  text-align: center;
+  background: #000;
+  color: #e8ecf6;
+  z-index: 20;
+}
+
+.stage-login-required p {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #e8ecf6;
+}
+
+.stage-login-required .btn {
+  display: inline-block;
+  padding: 0.6rem 1.8rem;
+  border-radius: 8px;
+  background: #6ba0ff;
+  color: #1b1f24;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.stage-login-required .btn:hover {
+  background: #89b4ff;
+}
