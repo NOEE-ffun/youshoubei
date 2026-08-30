@@ -91,7 +91,8 @@ function createHandler(storage, options) {
           sendJson(res, 404, { error: '舞台已过期' });
           return;
         }
-        res.cacheControl('public, max-age=300').status(200).json({
+        /* 登录墙内的私有读(OBS 轮询):private 防共享缓存泄漏他人会话数据 */
+        res.cacheControl('private, max-age=300').status(200).json({
           data: stage.data,
           themeId: stage.themeId || null
         });

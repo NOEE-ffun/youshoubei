@@ -1,10 +1,13 @@
 'use strict';
 
 /* /api/poster-stage 一次性舞台接口行为测试（内存存储注入，不联网）：
- * 鉴权门禁、payload 校验、创建-读取往返、过期逻辑、Cache-Control 指令。 */
+ * 会话登录墙/角色门、payload 校验、创建-读取往返、过期逻辑、Cache-Control 指令。
+ * 门(requireUser/requireRole)走全局 account 单例，users 种子须落模块级
+ * dev-store(同 login-wall.test.js);会话真实签发:passHash null 的 pv 是空串。 */
 
 const assert = require('node:assert');
-const { isAuthorized } = require('../api/auth');
+const session = require('../api/session');
+const devStore = require('../api/dev-store');
 const {
   createHandler,
   validatePosterStagePayload,
@@ -33,6 +36,7 @@ function mockReq(method, opts) {
     method,
     url: o.url || '/api/poster-stage',
     headers: o.headers || {},
+    socket: { remoteAddress: '127.0.0.1' },
     [Symbol.asyncIterator]() {
       let i = 0;
       return {
@@ -50,6 +54,7 @@ function mockRes() {
   return {
     status(code) { captured.status = code; return this; },
     cacheControl(value) { captured.cacheControl = value; return this; },
+    setHeader() { return this; },
     json(payload) { captured.body = payload; return captured; },
     _captured: captured
   };
@@ -99,24 +104,42 @@ async function main() {
   assert.strictEqual(defaultTtlDays(), 7, '非法 TTL 回退 7');
   delete process.env.POSTER_STAGE_TTL_DAYS;
 
-  /* ---- 鉴权门禁 ---- */
-  delete process.env.ADMIN_TOKEN;
+  /* ---- 会话登录墙+角色门(种子落全局 dev-store,会话真实签发) ---- */
+  process.env.SESSION_SECRET = 'test-secret';
+  await devStore.writeJson('users.json', [
+    { id: 'u1', username: 'user1', usernameLower: 'user1', phone: '13900000001', passHash: null, role: 'user', playerId: null, status: 'active', createdAt: 't' },
+    { id: 'u2', username: 'player1', usernameLower: 'player1', phone: '13900000002', passHash: null, role: 'player', playerId: 'p1', status: 'active', createdAt: 't' },
+    { id: 'u3', username: 'admin1', usernameLower: 'admin1', phone: '13900000003', passHash: null, role: 'admin', playerId: null, status: 'active', createdAt: 't' },
+    { id: 'u5', username: 'super1', usernameLower: 'super1', phone: '13900000005', passHash: null, role: 'super', playerId: null, status: 'active', createdAt: 't' }
+  ]);
+  const ck = (uid) => 'sess=' + session.issueFor(uid, '');
+
   const storage = memoryStorage();
   const handler = createHandler(storage);
+  const stageBody = JSON.stringify(VALID);
+  const postReq = (headers) => mockReq('POST', { body: stageBody, headers: headers || {} });
+  const getReq = (id, headers) => mockReq('GET', {
+    url: '/api/poster-stage' + (id ? '?id=' + id : ''),
+    headers: headers || {}
+  });
 
-  let out = await call(handler, mockReq('POST', { body: JSON.stringify(VALID) }));
-  assert.strictEqual(out.status, 403, '未配置 ADMIN_TOKEN 应 403');
+  /* POST:匿名 401、旧 Bearer 口令彻底无效、登录非 admin(user/player)403 */
+  let out = await call(handler, postReq());
+  assert.strictEqual(out.status, 401, '匿名 POST 应被登录墙拦(401)');
+  out = await call(handler, postReq({ authorization: 'Bearer anything' }));
+  assert.strictEqual(out.status, 401, '旧 Bearer 口令无会话应 401');
+  out = await call(handler, postReq({ cookie: ck('u1') }));
+  assert.strictEqual(out.status, 403, 'user 角色应 403');
+  out = await call(handler, postReq({ cookie: ck('u2') }));
+  assert.strictEqual(out.status, 403, 'player 角色应 403');
 
-  process.env.ADMIN_TOKEN = 'secret-token';
-  out = await call(handler, mockReq('POST', { body: JSON.stringify(VALID) }));
-  assert.strictEqual(out.status, 401, '缺口令应 401');
+  /* GET:匿名 401(登录墙前置,id 校验在其后) */
+  out = await call(handler, getReq(ID_32));
+  assert.strictEqual(out.status, 401, '匿名 GET 应被登录墙拦(401)');
 
-  out = await call(handler, mockReq('POST', { headers: { authorization: 'Bearer wrong' }, body: JSON.stringify(VALID) }));
-  assert.strictEqual(out.status, 401, '错误口令应 401');
-
-  /* ---- 创建-读取往返 ---- */
-  out = await call(handler, mockReq('POST', { headers: { authorization: 'Bearer secret-token' }, body: JSON.stringify(VALID) }));
-  assert.strictEqual(out.status, 200);
+  /* ---- 创建-读取往返:admin/super 200 ---- */
+  out = await call(handler, postReq({ cookie: ck('u3') }));
+  assert.strictEqual(out.status, 200, 'admin POST 应 200');
   assert.match(out.body.id, /^[0-9a-f]{32}$/, 'id 应为 32 位十六进制');
   assert.strictEqual(out.body.url, '/poster-stage.html?id=' + out.body.id);
 
@@ -127,17 +150,21 @@ async function main() {
   assert.strictEqual(stored.themeId, 'ice-fire');
   assert.ok(stored.createdAt, '应记录 createdAt');
 
-  out = await call(handler, mockReq('GET', { url: '/api/poster-stage?id=' + id }));
+  out = await call(handler, postReq({ cookie: ck('u5') }));
+  assert.strictEqual(out.status, 200, 'super POST 应 200');
+
+  /* 读取走 requireUser:任意登录角色可读(user 亦然) */
+  out = await call(handler, getReq(id, { cookie: ck('u1') }));
   assert.strictEqual(out.status, 200);
   assert.deepStrictEqual(out.body, { data: VALID.data, themeId: 'ice-fire' });
-  assert.strictEqual(out.cacheControl, 'public, max-age=300', 'GET 应公开缓存 300s');
+  assert.strictEqual(out.cacheControl, 'private, max-age=300', '登录墙内私有读,GET 应 private 缓存 300s');
 
-  /* ---- GET 参数校验 ---- */
-  out = await call(handler, mockReq('GET'));
+  /* ---- GET 参数校验(登录后) ---- */
+  out = await call(handler, getReq(null, { cookie: ck('u1') }));
   assert.strictEqual(out.status, 400, '缺 id 应 400');
-  out = await call(handler, mockReq('GET', { url: '/api/poster-stage?id=xyz' }));
+  out = await call(handler, getReq('xyz', { cookie: ck('u1') }));
   assert.strictEqual(out.status, 400, '非 32hex id 应 400');
-  out = await call(handler, mockReq('GET', { url: '/api/poster-stage?id=' + 'b'.repeat(32) }));
+  out = await call(handler, getReq('b'.repeat(32), { cookie: ck('u1') }));
   assert.strictEqual(out.status, 404, '格式合法但不存在应 404');
 
   /* ---- 过期逻辑（注入固定时钟与 TTL） ---- */
@@ -150,25 +177,18 @@ async function main() {
   await expStorage.writeJson(stageKey(fresh), { data: VALID.data, themeId: 'ice-fire', createdAt: new Date(fixedNow - 1 * DAY_MS).toISOString() });
   await expStorage.writeJson(stageKey(expired), { data: VALID.data, themeId: 'ice-fire', createdAt: new Date(fixedNow - 8 * DAY_MS).toISOString() });
 
-  out = await call(expHandler, mockReq('GET', { url: '/api/poster-stage?id=' + fresh }));
+  out = await call(expHandler, getReq(fresh, { cookie: ck('u1') }));
   assert.strictEqual(out.status, 200, '1 天前创建的舞台未过期');
-  out = await call(expHandler, mockReq('GET', { url: '/api/poster-stage?id=' + expired }));
+  out = await call(expHandler, getReq(expired, { cookie: ck('u1') }));
   assert.strictEqual(out.status, 404, '8 天前创建的舞台应 404');
 
-  /* ---- 未支持方法 405 ---- */
+  /* ---- 未支持方法 405(GET/POST 分支都不进,直接落到方法兜底) ---- */
   out = await call(handler, mockReq('PUT'));
   assert.strictEqual(out.status, 405);
   out = await call(handler, mockReq('DELETE'));
   assert.strictEqual(out.status, 405);
 
-  /* ---- isAuthorized 三态 ---- */
-  delete process.env.ADMIN_TOKEN;
-  assert.strictEqual(isAuthorized(mockReq('GET')), null, '未配置应返回 null');
-  process.env.ADMIN_TOKEN = 'secret-token';
-  assert.strictEqual(isAuthorized(mockReq('GET', { headers: { authorization: 'Bearer secret-token' } })), true);
-  assert.strictEqual(isAuthorized(mockReq('GET', { headers: { authorization: 'Bearer nope' } })), false);
-  assert.strictEqual(isAuthorized(mockReq('GET')), false);
-
+  delete process.env.SESSION_SECRET;
   console.log('poster-stage-api 全部测试通过 ✓');
 }
 

@@ -7,7 +7,8 @@ test.setTimeout(60_000);
 
 test('卡片改名可撤销重做,删除可撤销找回', async ({ page }) => {
   /* 先行用例(如 auth-flow)在服务器建过选手后,访客上下文会进云模式、编辑被密码锁拦;
-   * 预置管理口令(playwright.config env ADMIN_TOKEN)绕开锁,云/本机两种模式都可编辑 */
+   * 预置前端旧本地管理口令绕开锁,云/本机两种模式都可编辑
+   * (前端口令机制与 E2E 整体改造属后续任务,本处仅沿用旧机制) */
   await page.addInitScript(() => sessionStorage.setItem('ts:adminToken', 'e2e-admin-token'));
 
   await page.goto('/schedule.html');

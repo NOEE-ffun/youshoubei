@@ -18,7 +18,7 @@ const args = process.argv.slice(2);
 const count = Math.max(1, Math.min(50, parseInt(args.find((a) => /^\d+$/.test(a)), 10) || 1));
 const playerArg = (args.includes('--player') && args[args.indexOf('--player') + 1]) || null;
 const push = args.includes('--push');
-const kindAdmin = args[args.indexOf('--kind') + 1] === 'admin';
+const kindAdmin = (args.includes('--kind') && args[args.indexOf('--kind') + 1]) === 'admin';
 
 async function resolvePlayerId(nameOrId) {
   const oss = require('../api/oss');

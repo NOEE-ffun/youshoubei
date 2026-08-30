@@ -1,8 +1,9 @@
 'use strict';
 
 /* 会话/角色门:2026-08-30 权限重构后唯一鉴权入口。
- *   requireUser(req, res, roles?)  会话必须;banned 拒;roles 给出时校角色
- * 旧 isAuthorized/adminGate(ADMIN_TOKEN Bearer)已随口令体系退役删除。 */
+ *   requireUser(req, res)       会话必须;banned 拒
+ *   requireRole(req, res, roles) 在 requireUser 之上校角色,不足 403
+ * 旧口令体系(Bearer 头校验)已随权限重构退役删除。 */
 const { effectiveRole } = require('./rbac');
 
 async function requireUser(req, res) {

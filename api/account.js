@@ -24,7 +24,6 @@ const DATA_KEY = 'data.json';
 const CODES_KEY = 'invite-codes.json';
 const MAX_BODY = 64 * 1024;
 
-const USERNAME_RE = /^[\w\u4e00-\u9fff-]{2,24}$/;
 const COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
 /* ---------- 密码:scrypt + 随机盐,常量时间比较 ---------- */
@@ -508,4 +507,3 @@ module.exports.createHandlers = createHandlers;
 module.exports.hashPassword = hashPassword;
 module.exports.verifyPassword = verifyPassword;
 module.exports.createRateLimiter = createRateLimiter;
-module.exports.USERNAME_RE = USERNAME_RE;

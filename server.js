@@ -46,14 +46,18 @@ const API_ROUTES = {
   '/api/upload': apiUpload,
   '/api/health': apiHealth,
   '/api/poster-stage': apiPosterStage,
-  '/api/auth/register': apiAccount.register,
+  '/api/auth/sms/send': apiAccount.smsSend,
+  '/api/auth/sms/login': apiAccount.smsLogin,
   '/api/auth/login': apiAccount.login,
   '/api/auth/logout': apiAccount.logout,
   '/api/me': apiAccount.me,
   '/api/me/player': apiAccount.me,
   '/api/me/password': apiAccount.mePassword,
+  '/api/me/redeem': apiAccount.redeem,
+  '/api/me/phone': apiAccount.mePhone,
   '/api/me/classlinks': apiDecks,
   '/api/me/signup': require('./api/signup'),
+  '/api/codes': require('./api/codes'),
   '/api/dev/reset': require('./api/dev-store').resetHandler
 };
 
@@ -101,8 +105,9 @@ function encodeBody(req, data) {
 }
 
 /* Vercel res 的最小适配:api/*.js 只用 status().json()。
- * 默认 Cache-Control no-store;个别公开只读接口(如 /api/poster-stage GET)
- * 可用 .cacheControl('public, max-age=300') 覆盖;setHeader 供登录接口写 Set-Cookie。 */
+ * 默认 Cache-Control no-store;个别接口(如 /api/poster-stage GET,
+ * 登录墙内的私有读)可用 .cacheControl('private, max-age=300') 覆盖;
+ * setHeader 供登录接口写 Set-Cookie。 */
 function apiResponse(rawRes) {
   let statusCode = 200;
   let cacheControl = 'no-store';
@@ -252,7 +257,7 @@ if (require.main === module) {
   const server = createServer();
   server.listen(PORT, () => {
     console.log('赛事网站已启动：http://localhost:' + PORT);
-    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me');
+    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/dev/reset');
     console.log('按 Ctrl+C 停止服务器');
   });
 }

@@ -14,12 +14,11 @@ export default defineConfig({
     port: 3999,
     reuseExistingServer: !process.env.CI,
     stdout: 'ignore',
-    /* 登录接口 E2E:管理员引导码 + 开发测试码(无 OSS 时走内存降级存储) */
+    /* 登录接口 E2E:短信开发后门码 + 超管名单手机号(无 OSS 时走内存降级存储) */
     env: {
       ...process.env,
-      ADMIN_TOKEN: 'e2e-admin-token',
-      ADMIN_INVITE_CODE: 'e2e-admin-code',
-      AUTH_DEV_INVITE_CODES: 'e2e-dev-1,e2e-dev-2,e2e-dev-3,e2e-dev-4,e2e-dev-5',
+      AUTH_DEV_SMS_CODE: '000000',
+      SUPER_ADMIN_PHONES: '13900000000',
       SESSION_SECRET: 'e2e-session-secret'
     }
   }

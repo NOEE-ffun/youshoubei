@@ -22,12 +22,13 @@ function reset() {
 module.exports = { readJson, writeJson, reset };
 
 
-/* 仅测试服务器可用的一键清空(OSS 已配置或未设开发码时 404),
- * E2E 用例收尾自清,避免把云端模式状态泄漏给后续需要本地模式的用例 */
+/* 仅测试服务器可用的一键清空(OSS 已配置或未设短信开发后门码时 404),
+ * E2E 用例收尾自清,避免把云端模式状态泄漏给后续需要本地模式的用例;
+ * 开关跟随 AUTH_DEV_SMS_CODE:短信开发后门开着,E2E 自清才可用 */
 function resetHandler(req, res) {
   const { sendJson } = require('./helpers');
   const { isOssConfigured } = require('./oss');
-  if (isOssConfigured() || !process.env.AUTH_DEV_INVITE_CODES) {
+  if (isOssConfigured() || !process.env.AUTH_DEV_SMS_CODE) {
     sendJson(res, 404, { error: 'Not Found' });
     return;
   }
