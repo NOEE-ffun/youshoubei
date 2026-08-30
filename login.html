@@ -3,6 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>登录 - 右手杯</title>
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css?v=2026090001">
@@ -11,7 +13,7 @@
 <body class="login-body">
   <main class="login-shell" id="login-shell">
     <h1 class="login-title">右手杯</h1>
-    <div class="login-tabs" role="tablist" aria-label="登录方式">
+    <div class="login-mode-tabs" role="tablist" aria-label="登录方式">
       <button type="button" class="login-tab is-active" id="login-tab-sms" role="tab" aria-selected="true" aria-controls="login-panel-sms">手机验证码</button>
       <button type="button" class="login-tab" id="login-tab-pw" role="tab" aria-selected="false" aria-controls="login-panel-pw">账号密码</button>
     </div>

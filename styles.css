@@ -3850,8 +3850,10 @@ body[data-view='canvas'] .list-view {
   letter-spacing: 0.08em;
 }
 
-/* tab:下划线式,同 .me-tab 写法 */
-.login-tabs {
+/* tab:下划线式,同 .me-tab 写法。
+ * 容器名用 login-mode-tabs:旧登录弹窗已有 .login-tabs(styles.css 上方,
+ * Task 9 拆弹窗时删除),避免互相污染。 */
+.login-mode-tabs {
   display: flex;
   gap: 0.2rem;
   border-block-end: 1px solid var(--border);
