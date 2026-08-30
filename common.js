@@ -361,6 +361,10 @@
           if (typeof id === 'string' && !merged.includes(id)) merged.push(id);
         }
         winner.signup.players = merged;
+        /* 取前人数(管理端配置):胜者未设则继承败者,不随快照丢失 */
+        if (winner.signup.slots == null && loser.signup.slots != null) {
+          winner.signup.slots = loser.signup.slots;
+        }
       }
     }
     return winner;
@@ -935,17 +939,27 @@
       '      </div>' +
       '      <p class="hint" id="deck-window-hint">开启期间：选手可在「我的对局」修改自己未开始场次的卡组，未开始场次的卡组对其他人隐藏；关闭即全员公示。时段留空则只看手动开关。</p>' +
       '    </div>' +
-      '    <div class="form-field">' +
-      '      <span id="signup-label">比赛报名</span>' +
-      '      <div class="deck-window-controls">' +
-      '        <select id="signup-open" aria-label="报名开关">' +
-      '          <option value="closed">关闭</option>' +
-      '          <option value="open">开放报名</option>' +
-      '        </select>' +
-      '        <span class="hint" id="signup-count"></span>' +
-      '      </div>' +
-      '      <p class="hint">开放期间选手在「我的比赛」页自助报名/取消；已上场的选手不能自助退赛。</p>' +
-      '    </div>' +
+'    <div class="form-field">' +
+'      <span id="signup-label">比赛报名</span>' +
+'      <div class="deck-window-controls">' +
+'        <select id="signup-open" aria-label="报名开关">' +
+'          <option value="closed">关闭</option>' +
+'          <option value="open">开放报名</option>' +
+'        </select>' +
+'        <span class="hint" id="signup-count"></span>' +
+'      </div>' +
+'      <div class="deck-window-controls">' +
+'        <label for="signup-slots">取前</label>' +
+'        <input type="number" id="signup-slots" min="1" max="999" step="1" aria-label="取前多少人参赛">' +
+'        <span class="hint">人参赛(报名不限人数,按先后取前 N)</span>' +
+'        <span class="hint" id="signup-slots-hint"></span>' +
+'      </div>' +
+'      <p class="hint">开放期间选手在「我的比赛」页自助报名/取消;已上场的选手不能自助退赛。</p>' +
+'      <div class="dialog-actions" id="signup-autofill-row">' +
+'        <button type="button" id="signup-autofill" class="btn btn-secondary btn-sm">自动填入选手</button>' +
+'        <span class="hint">报名关闭后可用:前 N 名随机填入无箭头指向的比赛,已指派选手会被覆盖。</span>' +
+'      </div>' +
+'    </div>' +
       '    <div class="form-field" id="admin-field" hidden>' +
       '      <label for="settings-admin-token">管理口令</label>' +
       '      <div class="admin-controls">' +
@@ -1010,12 +1024,28 @@
       }
       if (dw.open || dw.close || dw.manual) record.deckWindow = dw;
       else delete record.deckWindow;
-      /* 报名开关:只改 open,players 名单保留 */
+      /* 报名开关:只改 open/取前人数,players 名单保留 */
       const signupSel = settingsDialog.querySelector('#signup-open');
       if (signupSel) {
         const players = (record.signup && Array.isArray(record.signup.players)) ? record.signup.players : [];
-        if (signupSel.value === 'open') record.signup = { open: true, players };
-        else if (record.signup) record.signup = { open: false, players };
+        const slotsInput = settingsDialog.querySelector('#signup-slots');
+        let slots = null;
+        if (slotsInput && slotsInput.value.trim()) {
+          slots = Math.floor(Number(slotsInput.value));
+          if (!Number.isInteger(slots) || slots < 1) {
+            notify('取前人数需为正整数', 'danger');
+            return;
+          }
+          const capacity = CanvasModel.entryCards(record.canvas).length * 2;
+          if (slots > capacity) {
+            notify('取前人数不能大于空位数(' + capacity + ')', 'danger');
+            return;
+          }
+        }
+        const opening = signupSel.value === 'open';
+        if (opening || record.signup || slots) {
+          record.signup = { open: opening, players, slots };
+        }
       }
       if (pendingBackground !== undefined) {
         record.background = pendingBackground;
@@ -1031,6 +1061,66 @@
       renderHeader();
       settingsDialog.close();
       document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+    });
+
+    /* 报名自动填入:关闭报名后手动触发,前 N 名洗牌覆盖入场卡,走正常保存链路 */
+    settingsDialog.querySelector('#signup-autofill').addEventListener('click', async (event) => {
+      const btn = event.currentTarget;
+      if (mode === 'cloud' && !appInstance.isAdmin()) {
+        notify('请先输入管理口令并解锁', 'danger');
+        return;
+      }
+      const record = appInstance.current;
+      const signup = record && record.signup;
+      const selNow = settingsDialog.querySelector('#signup-open');
+      if (!signup || signup.open || (selNow && selNow.value === 'open')) {
+        notify('报名开放期间不能自动填入,请先关闭报名并保存', 'danger');
+        return;
+      }
+      if (!Array.isArray(signup.players) || !signup.players.length) {
+        notify('暂无报名选手,无法自动填入', 'danger');
+        return;
+      }
+      const slots = Number(signup.slots);
+      if (!Number.isInteger(slots) || slots < 1) {
+        notify('请先设置「取前 N 人参赛」并保存', 'danger');
+        return;
+      }
+      const entries = CanvasModel.entryCards(record.canvas);
+      const capacity = entries.length * 2;
+      if (!capacity) {
+        notify('画布上没有入场空位(无箭头指向的比赛)', 'danger');
+        return;
+      }
+      if (slots > capacity) {
+        notify('取前人数不能大于空位数(' + capacity + ')', 'danger');
+        return;
+      }
+      const scores = record.scores || {};
+      if (entries.some((card) => scores[card.id])) {
+        notify('入场卡已录比分,不能自动填入', 'danger');
+        return;
+      }
+      const known = new Set((appInstance.players || []).map((p) => p.id));
+      const take = signup.players.filter((id) => known.has(id)).slice(0, slots);
+      if (!take.length) {
+        notify('报名选手均已不在选手库,无法自动填入', 'danger');
+        return;
+      }
+      btn.disabled = true;
+      try {
+        const filled = CanvasModel.autoFillEntries(record.canvas, take);
+        record.roster = CanvasModel.deriveRoster(record.canvas);
+        await storagePut(record);
+        notify('已随机填入 ' + filled + ' 名选手');
+        renderHeader();
+        settingsDialog.close();
+        document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+      } catch (error) {
+        notify('自动填入保存失败：' + errMsg(error), 'danger');
+      } finally {
+        btn.disabled = false;
+      }
     });
   }
 
@@ -1348,6 +1438,14 @@
       const n = (record.signup && Array.isArray(record.signup.players)) ? record.signup.players.length : 0;
       signupCount.textContent = n ? ('已报名 ' + n + ' 人') : '暂无报名';
     }
+    const signupSlots = settingsDialog.querySelector('#signup-slots');
+    const signupSlotsHint = settingsDialog.querySelector('#signup-slots-hint');
+    const signupFill = settingsDialog.querySelector('#signup-autofill');
+    if (signupSlots) signupSlots.value = (record.signup && record.signup.slots) || '';
+    if (signupSlotsHint) {
+      signupSlotsHint.textContent = '当前入场空位 ' + (CanvasModel.entryCards(record.canvas).length * 2) + ' 个';
+    }
+    if (signupFill) signupFill.disabled = Boolean(record.signup && record.signup.open);
     pendingBackground = undefined;
     if (record.background) {
       preview.style.backgroundImage = cssUrl(blobUrl(record.background));

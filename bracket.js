@@ -877,29 +877,32 @@
 
   /* ---------- 顶栏下拉(选手名单/赛制规则共用一个实现) ----------
    * fill 返回下拉 innerHTML;返回 null(无数据)不展开。
-   * 互斥:开一个自动关另一个;点外部/再点按钮关闭 */
+   * 互斥:开一个自动关另一个;点外部/再点按钮关闭。
+   * close(byUser):byUser=用户主动关(按钮/点外部/切别的下拉),
+   * 触发可选的 onCloseByUser 回调;渲染导致的批量关闭不传,不算用户意愿 */
   const topDropdowns = [];
 
-  function createTopDropdown(btnId, className, fill) {
+  function createTopDropdown(btnId, className, fill, onCloseByUser) {
     let el = null;
-    function close() {
+    function close(byUser) {
       if (el) el.remove();
       el = null;
       document.removeEventListener('click', onOutside);
+      if (byUser && typeof onCloseByUser === 'function') onCloseByUser();
     }
     function onOutside(event) {
       const target = event.target;
       if (!target || !target.closest || !el) return;
-      if (!el.contains(target) && !target.closest('#' + btnId)) close();
+      if (!el.contains(target) && !target.closest('#' + btnId)) close(true);
     }
     function toggle() {
       if (el) {
-        close();
+        close(true);
         return;
       }
       const html = fill();
       if (!html) return;
-      for (const other of topDropdowns) other.close();
+      for (const other of topDropdowns) other.close(true);
       el = document.createElement('div');
       el.className = className;
       el.innerHTML = html;
@@ -910,7 +913,7 @@
       el.style.right = '1rem';
       document.addEventListener('click', onOutside);
     }
-    const api = { toggle, close };
+    const api = { toggle, close, open: () => { if (!el) toggle(); }, isOpen: () => Boolean(el) };
     topDropdowns.push(api);
     return api;
   }
@@ -919,26 +922,61 @@
     const app = window.TournamentApp;
     const record = app && app.current;
     if (!record) return null;
-    /* 名单 = 画布派生 roster ∪ 报名池(signup.players);仅报名未上场者加标注 */
+    /* 名单 = 报名池(按先后编号排前)∪ 画布派生 roster;
+     * 编号即报名顺序,超出取前 N 的是候补(弱化);"已报名"标记只在开放期间显示 */
     const onCanvas = new Set(record.roster || []);
-    const signedUp = (record.signup && Array.isArray(record.signup.players)) ? record.signup.players : [];
-    const ids = [...new Set([...(record.roster || []), ...signedUp])];
-    const players = ids
-      .map((id) => (app.players || []).find((p) => p.id === id))
-      .filter(Boolean);
-    return (
-      '<div class="roster-dropdown-head">选手名单</div>' +
-      '<div class="roster-dropdown-list">' +
-      players.map((p) =>
+    const signup = record.signup || {};
+    const pool = Array.isArray(signup.players) ? signup.players : [];
+    const takeN = Number(signup.slots) > 0 ? Number(signup.slots) : 0;
+    const byId = new Map((app.players || []).map((p) => [p.id, p]));
+    const rows = [];
+    const shown = new Set();
+    pool.forEach((id, i) => {
+      const p = byId.get(id);
+      if (!p || shown.has(id)) return;
+      shown.add(id);
+      rows.push(
+        '<div class="roster-dropdown-item">' +
+        '<em class="roster-sign-num' + (takeN > 0 && i >= takeN ? ' reserve' : '') + '">' + (i + 1) + '</em>' +
+        avatarMarkup(p, 'avatar-sm') +
+        '<span>' + escapeHtml(p.name) + '</span>' +
+        (signup.open && !onCanvas.has(id) ? '<em class="roster-signed-only">已报名</em>' : '') +
+        '</div>'
+      );
+    });
+    for (const id of record.roster || []) {
+      if (shown.has(id)) continue;
+      const p = byId.get(id);
+      if (!p) continue;
+      shown.add(id);
+      rows.push(
         '<div class="roster-dropdown-item">' +
         avatarMarkup(p, 'avatar-sm') +
         '<span>' + escapeHtml(p.name) + '</span>' +
-        (onCanvas.has(p.id) ? '' : '<em class="roster-signed-only">已报名</em>') +
         '</div>'
-      ).join('') +
+      );
+    }
+    return (
+      '<div class="roster-dropdown-head">选手名单</div>' +
+      '<div class="roster-dropdown-list">' +
+      (rows.length ? rows.join('') : '<div class="roster-dropdown-item"><span class="hint">暂无选手</span></div>') +
       '</div>'
     );
-  });
+  }, () => { if (rosterAutoState) rosterAutoState.manualClosed = true; });
+
+  /* 报名开放期间,名单下拉默认弹开:进页/切届自动展开,
+   * 重绘(renderAll 会批量关下拉)后自动恢复;用户主动关闭后不强开,切届重置 */
+  let rosterAutoState = null;
+  function maybeAutoOpenRoster() {
+    const app = window.TournamentApp;
+    const record = app && app.current;
+    if (!record || !(record.signup && record.signup.open)) return;
+    if (!rosterAutoState || rosterAutoState.id !== record.id) {
+      rosterAutoState = { id: record.id, manualClosed: false };
+    }
+    if (rosterAutoState.manualClosed) return;
+    rosterDropdown.open();
+  }
 
   const rulesDropdown = createTopDropdown('header-rules-btn', 'rules-dropdown', () => {
     const record = window.TournamentApp && window.TournamentApp.current;
@@ -1033,6 +1071,7 @@
     CanvasEditor.connect({ renderCanvas, updateToolbar: updateToolbarState });
     renderAll();
     autoFitCanvas();
+    maybeAutoOpenRoster();
     syncEditUI();
     hideEditLock();
     bindCanvasLock();
@@ -1045,11 +1084,13 @@
   document.addEventListener('ts:changed', () => {
     renderAll();
     autoFitCanvas(true); /* 数据变更(切届/刷新):按记忆级别重新居中 */
+    maybeAutoOpenRoster();
     syncEditUI();
   });
   /* 会话身份就绪(晚于首渲)后重绘:公示锁/图标按"本人视角"重新判定 */
   document.addEventListener('ts:session', () => {
     renderAll();
+    maybeAutoOpenRoster(); /* 会话重绘会关下拉,开放报名的名单须恢复 */
     syncEditUI();
   });
   bindCanvas();

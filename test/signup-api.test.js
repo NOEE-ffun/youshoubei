@@ -97,7 +97,7 @@ async function main() {
 
   const audits = [];
   {
-    const storage = memoryStorage(seedWorld({ open: true, players: ['p_2'] }));
+    const storage = memoryStorage(seedWorld({ open: true, players: ['p_2'], slots: 8 }));
     const h = createHandler(storage, { appendAudit: (a, d) => audits.push(a + ' ' + d), currentUser: makeFindUser(storage) });
 
     const join = await call(h.signup, mockReq('PUT', { headers: auth, body: json({ tournamentId: 't1', action: 'join' }) }));
@@ -105,6 +105,7 @@ async function main() {
     assert.strictEqual(join.body.players, 2, '人数含既有 1 人');
     const rec = storage._map.get('data.json').tournaments[0];
     assert.ok(rec.signup.players.includes(P1), '名单入档');
+    assert.strictEqual(rec.signup.slots, 8, '报名不得抹掉取前人数(slots)');
     assert.ok(rec.updatedAt > 1, 'bump updatedAt');
     assert.ok(audits.some((a) => a.startsWith('signup.join')), '审计 join');
 
@@ -115,6 +116,7 @@ async function main() {
     const leave = await call(h.signup, mockReq('PUT', { headers: auth, body: json({ tournamentId: 't1', action: 'leave' }) }));
     assert.strictEqual(leave.status, 200, '退报 200');
     assert.strictEqual(leave.body.players, 1, '人数回落');
+    assert.strictEqual(storage._map.get('data.json').tournaments[0].signup.slots, 8, '退报也不得抹掉 slots');
     assert.ok(audits.some((a) => a.startsWith('signup.leave')), '审计 leave');
 
     const leaveAgain = await call(h.signup, mockReq('PUT', { headers: auth, body: json({ tournamentId: 't1', action: 'leave' }) }));
@@ -135,6 +137,19 @@ async function main() {
     const closed = await call(h.signup, mockReq('PUT', { headers: auth, body: json({ tournamentId: 't1', action: 'leave' }) }));
     assert.strictEqual(closed.status, 423, '关窗连退报都 423');
     assert.deepStrictEqual(storage._map.get('data.json').tournaments[0].signup.players, [P1], '名单保留');
+  }
+
+  {
+    /* slots 归一:非正整数(小数/字符串/0)不透传,合法值保留 */
+    const storage = memoryStorage(seedWorld({ open: true, players: [], slots: 8.5 }));
+    const h = createHandler(storage, { currentUser: makeFindUser(storage) });
+    await call(h.signup, mockReq('PUT', { headers: auth, body: json({ tournamentId: 't1', action: 'join' }) }));
+    assert.strictEqual(storage._map.get('data.json').tournaments[0].signup.slots, null, '小数 slots 归一为 null');
+
+    const storage2 = memoryStorage(seedWorld({ open: true, players: [], slots: '6' }));
+    const h2 = createHandler(storage2, { currentUser: makeFindUser(storage2) });
+    await call(h2.signup, mockReq('PUT', { headers: auth, body: json({ tournamentId: 't1', action: 'join' }) }));
+    assert.strictEqual(storage2._map.get('data.json').tournaments[0].signup.slots, 6, '数字字符串 slots 归一为整数并保留');
   }
 
   {

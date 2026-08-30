@@ -85,7 +85,10 @@ function createHandler(storage, options) {
         players.splice(players.indexOf(user.playerId), 1);
       }
 
-      record.signup = { open: true, players };
+      /* slots(取前 N 人)是管理端配置,选手报名/退报只动 players,不得抹掉 */
+      const prevNum = Number(record.signup && record.signup.slots);
+      const prevSlots = Number.isInteger(prevNum) && prevNum > 0 ? prevNum : null;
+      record.signup = { open: true, players, slots: prevSlots };
       record.updatedAt = now();
       await backup(DATA_PATH, 'data');
       await write(DATA_PATH, workspace);

@@ -1457,6 +1457,20 @@ dialog::backdrop {
   margin-inline-start: auto;
 }
 
+/* 报名顺序编号(名单下拉里,池内选手按先后编号;.reserve=超出取前 N 的候补) */
+.roster-sign-num {
+  font-style: normal;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  min-width: 1.3rem;
+  text-align: center;
+}
+
+.roster-sign-num.reserve {
+  opacity: 0.45;
+}
+
 /* 卡片编辑弹窗:职业链接行 */
 .cl-list {
   display: flex;

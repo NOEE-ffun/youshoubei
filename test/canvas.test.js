@@ -210,4 +210,42 @@ const model = require('../canvas-model.js');
   assert.equal(model.pickPort({ x: 0, y: 0 }, { x: -11, y: 0 }, 'upper'), 'leftTop');
 }
 
-console.log('canvas-model 全部 13 组测试通过 ✓');
+// 14. 报名自动填入:入场卡识别 + 洗牌覆盖
+{
+  assert.deepEqual(
+    model.entryCards(createDefaultCanvas(seeds)).map((c) => c.id),
+    ['wb_r1_1', 'wb_r1_2', 'wb_r1_3', 'wb_r1_4'],
+    '默认画布的入场卡 = 胜者组 R1 四场(其余卡均有箭头指入)'
+  );
+  assert.equal(model.entryCards(null).length, 0, '空画布无入场卡');
+  const lone = { cards: [{ id: 'solo', slots: [{ type: 'empty' }, { type: 'empty' }] }] };
+  assert.equal(model.entryCards(lone).length, 1, '孤卡(无箭头指入)算入场卡');
+
+  // 5 人填 8 个入场空位:全部落位、覆盖已指派、余下留空、flow 卡不动
+  const seeded = createDefaultCanvas(['OLD1', 'OLD2', null, null, null, null, null, null]);
+  const filled = model.autoFillEntries(seeded, ['Q1', 'Q2', 'Q3', 'Q4', 'Q5']);
+  assert.equal(filled, 5, '填入 5 人');
+  const entrySlots = model.entryCards(seeded).flatMap((c) => c.slots);
+  const playerIds = entrySlots.filter((s) => s.type === 'player').map((s) => s.playerId).sort();
+  assert.deepEqual(playerIds, ['Q1', 'Q2', 'Q3', 'Q4', 'Q5'], '五人全部随机落位');
+  assert.ok(entrySlots.some((s) => s.type === 'empty'), '余下 3 槽留空');
+  assert.ok(!playerIds.includes('OLD1'), '已指派选手被覆盖');
+  assert.equal(seeded.cards.find((c) => c.id === 'wb_r2_1').slots[0].cardId, 'wb_r1_1', '非入场卡的 flow 槽原样保留');
+
+  // 洗牌注入确定性 rng(恒取上界 = 不交换,保持原序)
+  const keep = createDefaultCanvas([]);
+  model.autoFillEntries(keep, ['A', 'B', 'C', 'D'], () => 0.999);
+  assert.deepEqual(
+    model.entryCards(keep).flatMap((c) => c.slots).map((s) => s.playerId),
+    ['A', 'B', 'C', 'D', undefined, undefined, undefined, undefined],
+    '注入 rng 恒上界时按原序填入'
+  );
+  // 名单超过容量:只填容量内
+  const tiny = { cards: [
+    { id: 'e1', slots: [{ type: 'empty' }, { type: 'empty' }] },
+    { id: 'e2', slots: [{ type: 'flow', cardId: 'e1', outcome: 'winner' }, { type: 'empty' }] }
+  ] };
+  assert.equal(model.autoFillEntries(tiny, ['A', 'B', 'C', 'D', 'E'], () => 0.999), 2, '超过容量只填入场空位数');
+}
+
+console.log('canvas-model 全部 14 组测试通过 ✓');

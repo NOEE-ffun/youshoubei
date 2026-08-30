@@ -205,6 +205,34 @@ function edgePath(p1, n1, p2, n2) {
     return ids;
   }
 
+  /* 入场卡:没有任何箭头指入的比赛卡。箭头完全由 flow 槽派生,
+   * 所以两个槽都不是 flow 的卡就是选手直接上场的入口(首轮卡)。 */
+  function entryCards(canvas) {
+    return ((canvas && canvas.cards) || []).filter((card) =>
+      !(card.slots || []).some((slot) => slot && slot.type === 'flow')
+    );
+  }
+
+  /* 报名自动填入:ids 为入选名单(调用方已按报名顺序截取),
+   * Fisher-Yates 洗牌后覆盖所有入场卡的两个槽,人数不足留空、多余清空。
+   * rng 可注入(测试确定性)。返回实际填入人数。 */
+  function autoFillEntries(canvas, ids, rng) {
+    const rand = typeof rng === 'function' ? rng : Math.random;
+    const list = (Array.isArray(ids) ? ids : []).filter((id) => typeof id === 'string');
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      const t = list[i]; list[i] = list[j]; list[j] = t;
+    }
+    const capacity = entryCards(canvas).length * 2;
+    let k = 0;
+    for (const card of entryCards(canvas)) {
+      card.slots = [0, 1].map(() => (k < list.length
+        ? { type: 'player', playerId: list[k++] }
+        : { type: 'empty' }));
+    }
+    return Math.min(k, capacity);
+  }
+
   /* 默认 8 人双败淘汰画布，卡片 id 沿用旧版场次 id，便于旧数据迁移 */
   function createDefaultCanvas(roster) {
     const p = roster || [];
@@ -703,6 +731,8 @@ function arrowDefs(prefix) {
     normalizeCanvas,
     normalizeCard,
     deriveRoster,
+    entryCards,
+    autoFillEntries,
     getCanvasSize,
     clampCanvasSize,
     getResult,
