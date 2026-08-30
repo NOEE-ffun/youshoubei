@@ -3,9 +3,16 @@
 const crypto = require('node:crypto');
 
 /* 短信验证码服务(内存,单实例——多实例前需外置,记入设计文档遗留):
- *   issue(phone, ip)  限速前置检查 → 生成 6 位码 → sender 发送
- *   verify(phone, code) dev 后门直验 / 存储码哈希比对(限尝试)
+ *   issue(phone, ip)  限速前置检查 → sender 发送
+ *   verify(phone, code) dev 后门直验 / 注入 verifier 平台校验 / 存储码哈希比对(限尝试)
  * 参数:120s 重发间隔、5 分钟有效、同手机日 10 条、同 IP 日 20 条、每码验 5 次。
+ *
+ * 通道为阿里云号码认证服务的「短信认证服务」(dypns,官方签名/模板,无需自有签名):
+ * 平台生成验证码(templateParam 的 ##code## 占位符由平台替换,本地无法注入自定义码),
+ * 服务端经 CheckSmsVerifyCode 校验——故真通道走 provider-verify 模式(createSmsService
+ * 注入 options.verifier 时启用):本地不再存码哈希,store 退化为发送记录(过期/尝试计数),
+ * 限速/日限/尝试次数逻辑与本地模式完全同构;每次 check 失败计一次,超 5 次删记录
+ * (平台码随之作废,须重新获取)。未注入 verifier 时保持本地生成+本地校验(注入测试用)。
  * dev 后门 AUTH_DEV_SMS_CODE(单码或 phone:code 列表)仅在真通道 env
  * (SMS_SIGN_NAME+SMS_TEMPLATE_CODE)不齐全时启用——生产配置齐即自动关死。 */
 
@@ -30,28 +37,38 @@ function envDevCode(phone) {
   return any;
 }
 
-/* 阿里云真发送器:lazy require,未装 SDK/未配 env 不阻断进程启动 */
-async function realSender(phone, code) {
+function dypnsClient() {
+  const Dypnsapi = require('@alicloud/dypnsapi20170525');
+  const OpenApi = require('@alicloud/openapi-client');
+  const config = new OpenApi.Config({
+    accessKeyId: process.env.SMS_ACCESS_KEY_ID || process.env.OSS_ACCESS_KEY_ID,
+    accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET || process.env.OSS_ACCESS_KEY_SECRET
+  });
+  config.endpoint = 'dypnsapi.aliyuncs.com';
+  return new Dypnsapi.default(config);
+}
+
+/* 阿里云真发送器:lazy require,未装 SDK/未配 env 不阻断进程启动。
+ * code 入参仅为维持 sender(phone, code) 契约(注入测试用)——dypns 平台生成码,不采用本地码 */
+async function realSender(phone) {
   if (!process.env.SMS_SIGN_NAME || !process.env.SMS_TEMPLATE_CODE) {
     return { ok: false, error: '短信通道未配置(SMS_SIGN_NAME / SMS_TEMPLATE_CODE)' };
   }
   try {
-    const Dysmsapi = require('@alicloud/dysmsapi20170525');
-    const OpenApi = require('@alicloud/openapi-client');
-    const config = new OpenApi.Config({
-      accessKeyId: process.env.SMS_ACCESS_KEY_ID || process.env.OSS_ACCESS_KEY_ID,
-      accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET || process.env.OSS_ACCESS_KEY_SECRET
-    });
-    config.endpoint = 'dysmsapi.aliyuncs.com';
-    const client = new Dysmsapi.default(config);
-    const resp = await client.sendSms(new Dysmsapi.SendSmsRequest({
-      phoneNumbers: phone,
+    const Dypnsapi = require('@alicloud/dypnsapi20170525');
+    const resp = await dypnsClient().sendSmsVerifyCode(new Dypnsapi.SendSmsVerifyCodeRequest({
+      phoneNumber: phone,
       signName: process.env.SMS_SIGN_NAME,
       templateCode: process.env.SMS_TEMPLATE_CODE,
-      templateParam: JSON.stringify({ code: String(code) })
+      templateParam: JSON.stringify({ code: '##code##' }),
+      codeLength: 6,        /* 平台生成 6 位码(4-8 可选),对齐本地模式口径 */
+      codeType: 1,          /* 纯数字 */
+      validTime: 300,       /* 平台侧 5 分钟有效,同本地 ttlMs */
+      interval: 60,         /* 平台侧重发间隔(秒),本地 120s 更严先拦 */
+      duplicatePolicy: 1    /* 重发覆盖旧码,与本地 store.set 同构 */
     }));
-    /* SDK 对业务性失败(如 isv.BUSINESS_LIMIT_CONTROL)返回 HTTP 200 + body.code≠'OK' 且不抛异常,
-     * 必须显式判码才算发送成功;该路径依赖真通道,无单测,语义在此注明 */
+    /* SDK 对业务性失败返回 HTTP 200 + body.code≠'OK' 且不抛异常,必须显式判码;
+     * 该路径依赖真通道,无单测,语义在此注明 */
     if (resp.body && resp.body.code === 'OK') return { ok: true };
     return { ok: false, error: '短信发送失败:' + ((resp.body && (resp.body.message || resp.body.code)) || '未知') };
   } catch (error) {
@@ -59,14 +76,33 @@ async function realSender(phone, code) {
   }
 }
 
+/* 平台验码器:CheckSmsVerifyCode 收 phoneNumber+verifyCode,verifyResult=PASS 即通过。
+ * 仅真通道发送成功后才有本地记录可走到此处,AK 缺失等异常由 catch 兜底为校验失败(fail-closed) */
+async function realVerifier(phone, code) {
+  try {
+    const Dypnsapi = require('@alicloud/dypnsapi20170525');
+    const resp = await dypnsClient().checkSmsVerifyCode(new Dypnsapi.CheckSmsVerifyCodeRequest({
+      phoneNumber: phone,
+      verifyCode: String(code)
+    }));
+    if (resp.body && resp.body.code === 'OK' && resp.body.model && resp.body.model.verifyResult === 'PASS') {
+      return { ok: true };
+    }
+    return { ok: false, error: '验证码错误' };
+  } catch (error) {
+    return { ok: false, error: '验证码校验失败:' + (error.message || error.code || error) };
+  }
+}
+
 function createSmsService(options) {
   const o = Object.assign({}, DEFAULTS, options || {});
   const now = typeof o.now === 'function' ? o.now : Date.now;
   const sender = typeof o.sender === 'function' ? o.sender : realSender;
+  const verifier = typeof o.verifier === 'function' ? o.verifier : null;
   const devResolver = typeof o.devResolver === 'function' ? o.devResolver : envDevCode;
-  const secret = crypto.randomBytes(32); /* 进程内盐:码哈希不可逆推 */
+  const secret = crypto.randomBytes(32); /* 进程内盐:码哈希不可逆推(仅本地校验模式使用) */
 
-  const store = new Map();     /* phone -> {hash, exp, attempts} */
+  const store = new Map();     /* phone -> {hash, exp, attempts};provider 模式无 hash=发送记录 */
   const lastSent = new Map();  /* phone -> ts */
   const daily = new Map();     /* 'p:phone'/'i:ip' -> {day, count} */
 
@@ -103,16 +139,19 @@ function createSmsService(options) {
       dayKey('p', phone); dayKey('i', ip); lastSent.set(phone, now());
       return { ok: true, dev: true };
     }
+    /* 本地码仅维持 sender 契约:provider 模式下平台另生成码,本地码不落存储 */
     const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
     const sent = await sender(phone, code);
     if (!sent.ok) return { ok: false, error: sent.error || '短信发送失败' };
     dayKey('p', phone); dayKey('i', ip);
     lastSent.set(phone, now());
-    store.set(phone, { hash: hash(phone, code), exp: now() + o.ttlMs, attempts: 0 });
+    store.set(phone, verifier
+      ? { exp: now() + o.ttlMs, attempts: 0 }
+      : { hash: hash(phone, code), exp: now() + o.ttlMs, attempts: 0 });
     return { ok: true };
   }
 
-  function verify(phone, code) {
+  async function verify(phone, code) {
     const dev = devResolver(phone);
     if (dev) {
       return String(code) === dev ? { ok: true } : { ok: false, error: '验证码错误' };
@@ -121,6 +160,16 @@ function createSmsService(options) {
     if (!rec) return { ok: false, error: '请先获取验证码' };
     if (now() > rec.exp) { store.delete(phone); return { ok: false, error: '验证码已过期,请重新获取' }; }
     if (rec.attempts >= o.maxAttempts) { store.delete(phone); return { ok: false, error: '尝试次数过多,请重新获取' }; }
+    if (verifier) {
+      const res = await verifier(phone, code);
+      if (res && res.ok) {
+        store.delete(phone);
+        return { ok: true };
+      }
+      rec.attempts += 1;
+      if (rec.attempts >= o.maxAttempts) store.delete(phone);
+      return { ok: false, error: (res && res.error) || '验证码错误' };
+    }
     const a = Buffer.from(hash(phone, code));
     if (a.length === rec.hash.length && crypto.timingSafeEqual(a, rec.hash)) {
       store.delete(phone);
@@ -134,4 +183,4 @@ function createSmsService(options) {
   return { issue, verify };
 }
 
-module.exports = { createSmsService };
+module.exports = { createSmsService, realVerifier };

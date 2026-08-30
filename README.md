@@ -54,15 +54,15 @@ npm start
 
 默认地址是 http://localhost:8000,也可以用 `PORT=3000 npm start` 或 `node server.js 3000` 换端口。未配置 OSS 环境变量时,数据落在浏览器 IndexedDB,登录等账号接口走进程内开发存储,适合本地体验。
 
-短信登录走阿里云短信(`@alicloud/dysmsapi20170525`,首个外部运行时依赖,lazy require 缺库不阻断启动):
+短信登录走阿里云号码认证服务的「短信认证服务」(`@alicloud/dypnsapi20170525`,首个外部运行时依赖,lazy require 缺库不阻断启动;官方签名/模板,个人无需自有短信签名):
 
-- `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE`:短信签名与模板,两者配齐才算真通道开通(当前阿里云侧待开通,配置前发送接口返回明确报错)
+- `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE`:号码认证服务控制台申请的短信认证签名与模板,两者配齐才算真通道开通(当前阿里云侧待开通,配置前发送接口返回明确报错)
 - `SMS_ACCESS_KEY_ID` / `SMS_ACCESS_KEY_SECRET`:独立的短信 AK(建议与 OSS 分权);缺省回落复用 `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`
 - `AUTH_DEV_SMS_CODE`:开发后门验证码——单码(如 `123456`)或 `phone:code` 逗号列表;仅真通道 env 不齐时生效,配齐即自动关死(本地与 E2E 全靠它走通链路)
 - `SESSION_SECRET`:登录会话签名密钥,生产必须固定(不设则每次重启全员掉线)
 - `SUPER_ADMIN_USERNAMES` / `SUPER_ADMIN_PHONES`:超管名单(见上文账号与权限)
 
-防骚扰参数:6 位码 5 分钟有效,同手机号 120 秒一条、每日 10 条,同 IP 每日 20 条,每码验错 5 次作废;验证码以进程内随机盐哈希存储,不落明文(单实例内存态,多实例部署前需外置)。
+防骚扰参数:6 位码 5 分钟有效,同手机号 120 秒一条、每日 10 条,同 IP 每日 20 条,每码验错 5 次作废。真通道为「平台生成码+服务端校验」:验证码由 dypns 生成、经 CheckSmsVerifyCode 校验,码明文不经过本站,本地仅存发送记录做过期与尝试计数;开发/注入模式才走本地生成+进程内随机盐哈希比对(单实例内存态,多实例部署前需外置)。
 
 ## 数据怎么存
 

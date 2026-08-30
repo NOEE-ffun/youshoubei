@@ -6,7 +6,7 @@ const { appendAudit, backupData, backupJson } = require('./oss');
 const { withWorkspaceLock } = require('./workspace-lock');
 const { sessionOf, setSessionCookie, issueFor } = require('./session');
 const { effectiveRole } = require('./rbac');
-const { createSmsService } = require('./sms');
+const { createSmsService, realVerifier } = require('./sms');
 
 /* 账号体系(v2):
  *   POST /api/auth/sms/send   发送短信验证码(限速在 sms 服务内:重发间隔/手机与 IP 日限)
@@ -137,7 +137,9 @@ function createHandlers(storage, options) {
   const audit = typeof o.appendAudit === 'function' ? o.appendAudit : appendAudit;
   const backup = typeof o.backupData === 'function' ? o.backupData : backupData;
   const rate = o.rateLimiter || createRateLimiter(now);
-  const sms = (o && o.sms) || createSmsService();
+  /* 真通道注入平台验码器(dypns CheckSmsVerifyCode)→ provider-verify 模式;
+   * 注入 o.sms(测试)时完全替换,不触发真通道 */
+  const sms = (o && o.sms) || createSmsService({ verifier: realVerifier });
   const { read, write } = createStorage(storage);
 
   async function readUsers() {
@@ -220,7 +222,7 @@ function createHandlers(storage, options) {
     const phone = String(body.phone || '').trim();
     const code = String(body.code || '');
     if (!PHONE_RE.test(phone)) return sendJson(res, 400, { error: '手机号格式不正确' });
-    const v = sms.verify(phone, code);
+    const v = await sms.verify(phone, code);
     if (!v.ok) { rate.recordFail(ip); return sendJson(res, 401, { error: v.error }); }
     rate.reset(ip);
     /* users 读改写整段上锁(读→查号→建号→写):自动注册与 me PUT 昵称/redeem/
@@ -489,7 +491,7 @@ function createHandlers(storage, options) {
     if (body === undefined) return;
     const phone = String(body.phone || '').trim();
     if (!PHONE_RE.test(phone)) return sendJson(res, 400, { error: '手机号格式不正确' });
-    const v = sms.verify(phone, String(body.code || ''));
+    const v = await sms.verify(phone, String(body.code || ''));
     if (!v.ok) return sendJson(res, 401, { error: v.error });
     /* users 读改写整段上锁:占用检查(409)与落盘必须原子,
      * 防两账号并发绑同一手机号双双通过检查;亦与其他 users 写者互斥防覆盖 */
