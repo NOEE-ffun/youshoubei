@@ -355,6 +355,23 @@ async function main() {
     }));
     assert.strictEqual(rbad.status, 400);
 
+    /* 纯 user 账号(未兑码、无 playerId)也能改昵称:账号级字段写 users.json,与选手档案无关 */
+    const r3 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000003', code: '000000' }) }));
+    assert.strictEqual(r3.status, 200);
+    const rnick = await call(acc.me, mockReq('PUT', {
+      body: jsonBody({ nickname: '路人昵称' }),
+      headers: { cookie: sessCookie(r3.body.user.id) }
+    }));
+    assert.strictEqual(rnick.status, 200);
+    assert.strictEqual(store._map.get('users.json').find((u) => u.id === r3.body.user.id).nickname, '路人昵称');
+    /* 选手字段守卫仍生效:无 playerId 的请求含选手字段 → 400,且昵称不得先落盘(不半写) */
+    const rguard = await call(acc.me, mockReq('PUT', {
+      body: jsonBody({ nickname: '不应生效', tag: 'Y' }),
+      headers: { cookie: sessCookie(r3.body.user.id) }
+    }));
+    assert.strictEqual(rguard.status, 400);
+    assert.strictEqual(store._map.get('users.json').find((u) => u.id === r3.body.user.id).nickname, '路人昵称');
+
     /* ---- 绑手机 ---- */
     const rp = await call(acc.mePhone, mockReq('PUT', {
       body: jsonBody({ phone: '13911112222', code: '000000' }),

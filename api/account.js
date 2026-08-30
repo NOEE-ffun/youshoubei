@@ -14,7 +14,7 @@ const { createSmsService } = require('./sms');
  *   POST /api/auth/login      用户名密码登录(内存限速:同 IP 15 分钟 5 次失败锁 10 分钟)
  *   POST /api/auth/logout     登出
  *   GET  /api/me              当前会话的用户+绑定选手
- *   PUT  /api/me/player       选手自助改资料(字段白名单;nickname 属账号,落 users.json)
+ *   PUT  /api/me/player       选手自助改资料(字段白名单;nickname 属账号落 users.json,纯昵称不要求绑定选手)
  *   PUT  /api/me/password     修改密码
  *   POST /api/me/redeem       填码跃迁:空白码建新选手/绑定码继承既有选手/admin 码升格(角色升级唯一入口)
  *   PUT  /api/me/phone        绑定手机号(验码 + 未被他人占用;已有 phone 拒绝)
@@ -292,7 +292,6 @@ function createHandlers(storage, options) {
     if (req.method === 'PUT') {
       const user = await currentUser(req);
       if (!user) return sendJson(res, 401, { error: '未登录' });
-      if (!user.playerId) return sendJson(res, 400, { error: '该账号未绑定选手,无法编辑资料' });
 
       const body = await readJsonBody(req, res, MAX_BODY);
       if (body === undefined) return;
@@ -342,6 +341,11 @@ function createHandlers(storage, options) {
       }
       if (nickname === null && !Object.keys(patch).length) {
         return sendJson(res, 400, { error: '没有可更新的字段' });
+      }
+      /* 选手资料字段仍要求已绑定选手;纯昵称请求放行——
+       * 昵称是账号级字段(写 users.json),与选手档案无关,未兑码的 user 账号也可改 */
+      if (Object.keys(patch).length && !user.playerId) {
+        return sendJson(res, 400, { error: '该账号未绑定选手,无法编辑资料' });
       }
 
       /* 读-改-写整段上锁:users(昵称)与 players(资料)两段写共用一把锁,
@@ -421,43 +425,47 @@ function createHandlers(storage, options) {
     const code = String(body.code || '').trim();
     if (!code) return sendJson(res, 400, { error: '请填写验证码' });
 
-    const codes = (await read(CODES_KEY)) || [];
-    const entry = codes.find((c) => c && c.code === code);
-    if (!entry || entry.used) return sendJson(res, 400, { error: '验证码无效或已被使用' });
+    /* 码表查找→核销落盘整段上锁:codes/users/data(createPlayerFor 建档)三段读改写,
+     * 与 me PUT/signup/管理 PUT 等带锁写者互斥,堵并发兑同一码的双消费(含 admin 升格)与交错覆盖 */
+    return withWorkspaceLock(async () => {
+      const codes = (await read(CODES_KEY)) || [];
+      const entry = codes.find((c) => c && c.code === code);
+      if (!entry || entry.used) return sendJson(res, 400, { error: '验证码无效或已被使用' });
 
-    if (entry.kind === 'admin') {
-      user.role = 'admin';
-    } else {
-      if (user.playerId) return sendJson(res, 409, { error: '该账号已绑定选手,无需再次填码' });
-      if (entry.playerId) {
-        const workspace = await readWorkspace();
-        const players = (workspace && workspace.players) || [];
-        if (!players.some((p) => p && p.id === entry.playerId)) {
-          return sendJson(res, 400, { error: '验证码绑定的选手不存在' });
-        }
-        const users = await readUsers();
-        if (users.some((u) => u.playerId === entry.playerId && u.id !== user.id)) {
-          return sendJson(res, 409, { error: '该选手已被其他账号绑定' });
-        }
-        user.playerId = entry.playerId;
+      if (entry.kind === 'admin') {
+        user.role = 'admin';
       } else {
-        user.playerId = await createPlayerFor(String(user.nickname || user.username).slice(0, 24));
+        if (user.playerId) return sendJson(res, 409, { error: '该账号已绑定选手,无需再次填码' });
+        if (entry.playerId) {
+          const workspace = await readWorkspace();
+          const players = (workspace && workspace.players) || [];
+          if (!players.some((p) => p && p.id === entry.playerId)) {
+            return sendJson(res, 400, { error: '验证码绑定的选手不存在' });
+          }
+          const users = await readUsers();
+          if (users.some((u) => u.playerId === entry.playerId && u.id !== user.id)) {
+            return sendJson(res, 409, { error: '该选手已被其他账号绑定' });
+          }
+          user.playerId = entry.playerId;
+        } else {
+          user.playerId = await createPlayerFor(String(user.nickname || user.username).slice(0, 24));
+        }
+        if (user.role === 'user') user.role = 'player';
       }
-      if (user.role === 'user') user.role = 'player';
-    }
-    /* 核销码(单次使用)+ 同步用户表:users[idx] 与 user 对象是两个引用,须整体替换 */
-    entry.used = true;
-    entry.usedBy = user.username;
-    entry.usedAt = t0iso(now);
-    await backupJson(CODES_KEY, 'codes');
-    await write(CODES_KEY, codes);
-    const users = await readUsers();
-    const idx = users.findIndex((u) => u.id === user.id);
-    users[idx] = user;
-    await backupJson(USERS_KEY, 'users');
-    await write(USERS_KEY, users);
-    audit('redeem', 'user=' + user.username + ' kind=' + (entry.kind || 'player') + ' player=' + (user.playerId || '-'));
-    sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
+      /* 核销码(单次使用)+ 同步用户表:users[idx] 与 user 对象是两个引用,须整体替换 */
+      entry.used = true;
+      entry.usedBy = user.username;
+      entry.usedAt = t0iso(now);
+      await backupJson(CODES_KEY, 'codes');
+      await write(CODES_KEY, codes);
+      const users = await readUsers();
+      const idx = users.findIndex((u) => u.id === user.id);
+      users[idx] = user;
+      await backupJson(USERS_KEY, 'users');
+      await write(USERS_KEY, users);
+      audit('redeem', 'user=' + user.username + ' kind=' + (entry.kind || 'player') + ' player=' + (user.playerId || '-'));
+      sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
+    });
   }
 
   /* PUT /api/me/phone:绑定手机号。顺序:格式 → 验码(401)→ 被他人占用(409)
