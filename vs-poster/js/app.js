@@ -503,13 +503,10 @@
     });
 
     els.obsBtn.addEventListener("click", function () {
-      var app = window.TournamentApp;
+      /* 鉴权走同源会话 cookie,无需 Authorization 头(口令体系已拆) */
       fetch("/api/poster-stage", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer " + ((app && app.adminToken) || "")
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data: currentData(), themeId: state.themeId })
       }).then(function (resp) {
         return resp.json().catch(function () { return {}; }).then(function (json) {
