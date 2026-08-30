@@ -162,6 +162,9 @@ function createHandlers(storage, options) {
     const user = users.find((u) => u.id === payload.uid) || null;
     /* pv 不匹配 = 密码已改过,旧会话全部失效 */
     if (user && payload.pv !== pvOf(user)) return null;
+    /* banned = 账号已停用,会话视为无效:requireUser/me/decks/signup 等经此统一拒;
+     * logout 例外——currentUser null 时按匿名登出(清 cookie 仍可用) */
+    if (user && user.status === 'banned') return null;
     return user;
   }
 
@@ -243,6 +246,11 @@ function createHandlers(storage, options) {
         await backupJson(USERS_KEY, 'users');
         await write(USERS_KEY, users);
       }
+      /* 既有用户已停用 → 403(建号路径 status 恒 active,不可能 banned) */
+      if (user.status === 'banned') {
+        audit('auth.login.banned', 'user=' + user.username);
+        return sendJson(res, 403, { error: '账号已被停用' });
+      }
       audit(created ? 'sms.register' : 'sms.login', 'user=' + user.username);
       setSessionCookie(res, issueFor(user.id, pvOf(user), now), req);
       sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
@@ -270,6 +278,12 @@ function createHandlers(storage, options) {
       rate.recordFail(ip);
       audit('auth.login.fail', 'user=' + username + ' ip=' + ip);
       return sendJson(res, 401, { error: '用户名或密码错误' });
+    }
+    /* banned:密码已验证(身份确认,非爆破)→ 403;不计限速失败亦不 reset,
+     * 防借停用账号的既知密码清失败计数助跑爆破 */
+    if (user.status === 'banned') {
+      audit('auth.login.banned', 'user=' + user.username + ' ip=' + ip);
+      return sendJson(res, 403, { error: '账号已被停用' });
     }
     rate.reset(ip);
     audit('auth.login', 'user=' + user.username + ' ip=' + ip);

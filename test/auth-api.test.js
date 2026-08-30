@@ -431,6 +431,59 @@ async function main() {
     console.log('✓ rateLimiter:窗口/隔离/重置');
   }
 
+  /* ---- banned 收口:currentUser 视为无会话;两条登录链 403;不污染限速 ---- */
+  {
+    const seed = seedWorld();
+    /* banned 用户:同一账号同时具备密码与手机两条登录链 */
+    const bannedUser = {
+      id: 'u_banned', username: 'banned1', usernameLower: 'banned1', phone: '13900000004',
+      passHash: hashPassword('password8'), role: 'player', playerId: null, status: 'banned', createdAt: 't'
+    };
+    seed['users.json'].push(bannedUser);
+    /* 正常账号:验证 banned 命中不污染限速(连续 banned 尝试后仍可正常登录) */
+    seed['users.json'].push({
+      id: 'u_ok', username: 'okuser', usernameLower: 'okuser',
+      passHash: hashPassword('password8'), role: 'user', playerId: null, status: 'active', createdAt: 't'
+    });
+    const audits = [];
+    const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
+    const acc = account.createHandlers(memoryStorage(seed), {
+      sms: smsSvc,
+      appendAudit: (event, detail) => audits.push(event + ' ' + detail)
+    });
+    const pvOf = (u) => String(u.passHash || '').slice(-8);
+
+    /* 密码链:密码正确但账号停用 → 403(非 200 非 401) */
+    const banPw = await call(acc.login, mockReq('POST', { body: jsonBody({ username: 'banned1', password: 'password8' }) }));
+    assert.strictEqual(banPw.status, 403, 'banned 密码登录 403');
+    assert.strictEqual(banPw.body.error, '账号已被停用');
+
+    /* 短信链:验码通过后的既有 banned 用户 → 403(新注册路径不可能 banned) */
+    const banSms = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000004', code: '000000' }) }));
+    assert.strictEqual(banSms.status, 403, 'banned 短信登录 403');
+    assert.strictEqual(banSms.body.error, '账号已被停用');
+
+    /* 两条链各记一条 auth.login.banned */
+    assert.strictEqual(audits.filter((a) => a.startsWith('auth.login.banned')).length, 2, 'audit: 两条链各记 auth.login.banned');
+
+    /* banned 用户持有效签名会话 → /api/me 401(currentUser 拒) */
+    assert.strictEqual((await call(acc.me, mockReq('GET', { headers: { cookie: 'sess=' + session.issueFor('u_banned', pvOf(bannedUser)) } }))).status, 401, 'banned 会话视为无效');
+
+    /* banned 命中不计限速失败(身份已确认,非爆破):累计 5 次 banned 尝试后正常账号仍可登录 */
+    for (let i = 0; i < 4; i++) {
+      const again = await call(acc.login, mockReq('POST', { body: jsonBody({ username: 'banned1', password: 'password8' }) }));
+      assert.strictEqual(again.status, 403);
+    }
+    const stillOk = await call(acc.login, mockReq('POST', { body: jsonBody({ username: 'okuser', password: 'password8' }) }));
+    assert.strictEqual(stillOk.status, 200, 'banned 命中不得计入限速失败');
+
+    /* logout 对 banned(currentUser null)按匿名登出,仍 200 */
+    const banOut = await call(acc.logout, mockReq('POST', { headers: { cookie: 'sess=' + session.issueFor('u_banned', pvOf(bannedUser)) } }));
+    assert.strictEqual(banOut.status, 200, 'logout 对 banned 仍可用');
+
+    console.log('✓ banned:两条登录链 403/会话视为无效/不计限速/可登出');
+  }
+
   delete process.env.SESSION_SECRET;
   console.log('auth-api 全部通过');
 }
