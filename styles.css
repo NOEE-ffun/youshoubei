@@ -1669,16 +1669,23 @@ dialog::backdrop {
   transition: background-color 0.2s ease;
 }
 
-.canvas-board.editing {
+/* 编辑态点阵铺在视口级 scroll 层:跟随相机平移/缩放(JS 同步 size/position),
+ * 不受 board 边界截断,实现无限绘制;board 只留内容。
+ * 用 id 选择器:后面的 .layout-body-canvas .canvas-scroll { background: transparent }
+ * 是简写且与类选择器同特异性,会把这里的 image 重置掉 */
+#canvas-scroll.editing {
   background-color: rgb(128 120 96 / 0.05);
-  /* 点阵背景(白板式):尺寸由 JS 写入的 --dot 变量驱动,与卡片点坐标同源 */
   background-image: radial-gradient(circle, var(--dot-ink, rgb(128 120 96 / 0.35)) 1.2px, transparent 1.2px);
-  background-size: var(--dot, 28px) var(--dot, 28px);
 }
 
-[data-theme='dark'] .canvas-board.editing {
+[data-theme='dark'] #canvas-scroll.editing {
   background-color: rgb(196 184 152 / 0.05);
   --dot-ink: rgb(196 184 152 / 0.28);
+}
+
+/* 编辑模式隐藏赛事背景图,只留底色与点阵(背景图为 runtime 内联样式,需 !important) */
+body.canvas-editing #bg-layer {
+  background-image: none !important;
 }
 
 .canvas-cards {

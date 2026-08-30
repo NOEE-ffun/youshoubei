@@ -197,6 +197,10 @@
       b.classList.add('editing');
       syncToolClasses();
     }
+    /* 点阵层与背景图隐藏挂在 scroll/body 上:点阵铺满视口实现无限绘制 */
+    const sc = scrollEl();
+    if (sc) sc.classList.add('editing');
+    document.body.classList.add('canvas-editing');
     bindBoardEvents();
     bindWheel();
     syncZoom();
@@ -219,6 +223,9 @@
       b.classList.remove('editing');
       b.classList.remove('tool-link', 'tool-delete', 'tool-select', 'zoom-mode');
     }
+    const sc = scrollEl();
+    if (sc) sc.classList.remove('editing');
+    document.body.classList.remove('canvas-editing');
     if (cardDialog && cardDialog.open) cardDialog.close();
     refreshToolbarUI();
   }
@@ -292,6 +299,13 @@
     if (!b) return;
     b.style.transformOrigin = '0 0';
     b.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) scale(' + scale + ')';
+    /* 无限点阵:铺在视口级 scroll 层,跟随相机平移/缩放,不受 board 边界截断 */
+    const sc = scrollEl();
+    if (sc && sc.classList.contains('editing')) {
+      const size = DOT * scale;
+      sc.style.backgroundSize = size + 'px ' + size + 'px';
+      sc.style.backgroundPosition = tx + 'px ' + ty + 'px';
+    }
     if (Math.abs(scale - rasterScale) > 0.001) scheduleHqRaster();
     /* 右下角常驻缩放控件的百分比读数（仅赛程页存在该元素） */
     const label = document.getElementById('zoom-level');

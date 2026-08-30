@@ -495,11 +495,10 @@
     const cardMaxY = Math.max(400, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * DOT + CARD_HEIGHT + 40));
     board.style.width = cardMaxX + 'px';
     board.style.height = cardMaxY + 'px';
-    /* 玻璃样式:写在内联变量上,卡片 CSS 消费;--dot 驱动编辑态点阵背景 */
+    /* 玻璃样式:写在内联变量上,卡片 CSS 消费;点阵层在 scroll 上由相机同步 */
     const cardStyle = cardStyleOf(canvas);
     board.style.setProperty('--card-glass', cardStyle.opacity);
     board.style.setProperty('--card-blur', cardStyle.blur + 'px');
-    board.style.setProperty('--dot', DOT + 'px');
     /* editing class 由 CanvasEditor.enter/exit 维护(编辑器自身状态) */
     board.innerHTML = '';
     const resolvedById = new Map(resolved.cards.map((c) => [c.id, c]));
