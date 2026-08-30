@@ -44,13 +44,16 @@ async function realSender(phone, code) {
     });
     config.endpoint = 'dysmsapi.aliyuncs.com';
     const client = new Dysmsapi.default(config);
-    await client.sendSms(new Dysmsapi.SendSmsRequest({
+    const resp = await client.sendSms(new Dysmsapi.SendSmsRequest({
       phoneNumbers: phone,
       signName: process.env.SMS_SIGN_NAME,
       templateCode: process.env.SMS_TEMPLATE_CODE,
       templateParam: JSON.stringify({ code: String(code) })
     }));
-    return { ok: true };
+    /* SDK 对业务性失败(如 isv.BUSINESS_LIMIT_CONTROL)返回 HTTP 200 + body.code≠'OK' 且不抛异常,
+     * 必须显式判码才算发送成功;该路径依赖真通道,无单测,语义在此注明 */
+    if (resp.body && resp.body.code === 'OK') return { ok: true };
+    return { ok: false, error: '短信发送失败:' + ((resp.body && (resp.body.message || resp.body.code)) || '未知') };
   } catch (error) {
     return { ok: false, error: '短信发送失败:' + (error.message || error.code || error) };
   }
@@ -86,13 +89,15 @@ function createSmsService(options) {
     if (prev && now() - prev < o.resendMs) {
       return { ok: false, error: '发送过于频繁,请 ' + Math.ceil((o.resendMs - (now() - prev)) / 1000) + ' 秒后再试', wait: Math.ceil((o.resendMs - (now() - prev)) / 1000) };
     }
-    /* 日限检查要在计数前判越界(第 11 条拒) */
+    /* 日限检查要在计数前判越界(第 11 条拒);day 为 UTC epoch 天——北京 8 点切日,
+     * 反滥用语义下可接受,不引入时区复杂度;非当日陈旧记录直接忽略,由 dayKey 在成功路径重置 */
+    const day = Math.floor(now() / o.dayMs);
     const pk = 'p:' + phone;
     const prevDay = daily.get(pk);
-    if (prevDay && prevDay.count >= o.phoneDaily) return { ok: false, error: '该手机号今日发送次数已达上限' };
+    if (prevDay && prevDay.day === day && prevDay.count >= o.phoneDaily) return { ok: false, error: '该手机号今日发送次数已达上限' };
     const ik = 'i:' + ip;
     const prevIp = daily.get(ik);
-    if (prevIp && prevIp.count >= o.ipDaily) return { ok: false, error: '该 IP 今日发送次数已达上限' };
+    if (prevIp && prevIp.day === day && prevIp.count >= o.ipDaily) return { ok: false, error: '该 IP 今日发送次数已达上限' };
 
     if (devResolver(phone)) {
       dayKey('p', phone); dayKey('i', ip); lastSent.set(phone, now());

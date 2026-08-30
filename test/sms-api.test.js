@@ -67,6 +67,25 @@ function mkSvc(patch) {
   assert.strictEqual(r4.ok, false);
   assert.match(r4.error, /IP/);
 
+  /* 跨日重置:手机日限命中后次日恢复(UTC epoch 天界,北京 8 点切日) */
+  const { svc: s7, tick: t7 } = mkSvc();
+  for (let i = 0; i < 10; i++) { assert.strictEqual((await s7.issue(P, IP)).ok, true); t7(121_000); }
+  assert.match((await s7.issue(P, IP)).error, /今日/); /* 当日已满 */
+  t7(24 * 60 * 60 * 1000 + 121_000); /* 跨过 24h 日界 */
+  for (let i = 0; i < 10; i++) { assert.strictEqual((await s7.issue(P, IP)).ok, true); t7(121_000); } /* 次日恢复 */
+  assert.match((await s7.issue(P, IP)).error, /今日/); /* 新一天同样限 10 条 */
+
+  /* 跨日重置:IP 日限同构 */
+  const { svc: s8, tick: t8 } = mkSvc();
+  for (let i = 0; i < 20; i++) {
+    assert.strictEqual((await s8.issue('1390000' + String(1000 + i).padStart(4, '0'), IP)).ok, true);
+    t8(121_000);
+  }
+  assert.match((await s8.issue('13900009999', IP)).error, /IP/); /* 当日已满 */
+  t8(24 * 60 * 60 * 1000 + 121_000);
+  const r8 = await s8.issue('13900009999', IP);
+  assert.strictEqual(r8.ok, true); /* 次日恢复 */
+
   /* dev 后门:免 issue 直接验,标记 dev */
   const { svc: s5 } = mkSvc({ devResolver: () => '000000' });
   assert.strictEqual((await s5.verify('13800000000', '000000')).ok, true);
@@ -81,5 +100,5 @@ function mkSvc(patch) {
   assert.strictEqual(r6.ok, false);
   assert.match(r6.error, /供应商限流/);
 
-  console.log('✓ sms-api: 7 组行为通过');
+  console.log('✓ sms-api: 9 组行为通过');
 })().catch((e) => { console.error(e); process.exit(1); });
