@@ -99,7 +99,15 @@ async function main() {
     assert.strictEqual(health.headers['x-frame-options'], 'DENY');
     assert.strictEqual(health.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
 
-    console.log('server-smoke 全部 10 组测试通过 ✓');
+    /* 11. 后台前缀分发:/api/admin/* 交给 admin 处理器(匿名先被登录墙 401 拦);
+     * 裸 /api/admin 未注册,保持 404 语义(admin 内部对裸路径同样 404) */
+    const adminUsers = await request(server, '/api/admin/users');
+    assert.strictEqual(adminUsers.status, 401, '/api/admin/users 匿名应被登录墙拦(401)');
+    assert.strictEqual(JSON.parse(adminUsers.body).error, '未登录或账号已被停用');
+    const adminBare = await request(server, '/api/admin');
+    assert.strictEqual(adminBare.status, 404, '裸 /api/admin 未注册应保持 404');
+
+    console.log('server-smoke 全部 11 组测试通过 ✓');
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

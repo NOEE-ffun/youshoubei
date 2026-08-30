@@ -41,6 +41,7 @@ const apiHealth = require('./api/health');
 const apiPosterStage = require('./api/poster-stage');
 const apiAccount = require('./api/account');
 const apiDecks = require('./api/decks');
+const apiAdmin = require('./api/admin');
 const API_ROUTES = {
   '/api/data': apiData,
   '/api/upload': apiUpload,
@@ -186,6 +187,12 @@ function requestHandler(req, res) {
     return;
   }
   const lowerPathname = pathname.toLowerCase();
+  /* /api/admin/* 前缀分发:admin.js 内部按尾段(含方法)再分发,裸 /api/admin
+   * 不带尾段 → 不命中此前缀,继续走下方 /api/ 兜底 404(语义与 admin 内部一致) */
+  if (lowerPathname.startsWith('/api/admin/')) {
+    handleApi(apiAdmin, req, res);
+    return;
+  }
   if (lowerPathname.startsWith('/api/')) {
     sendPlain(res, 404, '404 Not Found');
     return;
@@ -257,7 +264,7 @@ if (require.main === module) {
   const server = createServer();
   server.listen(PORT, () => {
     console.log('赛事网站已启动：http://localhost:' + PORT);
-    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/dev/reset');
+    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/dev/reset /api/admin/*');
     console.log('按 Ctrl+C 停止服务器');
   });
 }
