@@ -22,10 +22,30 @@ const MAX_LIMIT = 1000;
 const BACKUP_KEYS_SHOW = 20;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+/** 11 位手机号共用的脱敏变换:138****1234 */
+function maskDigits11(s) {
+  return s.slice(0, 3) + '****' + s.slice(7);
+}
+
 /** 手机号脱敏:仅 11 位数字回 138****1234;其余(非 11 位/null)回 null */
 function maskPhone(phone) {
   const s = phone == null ? '' : String(phone);
-  return /^\d{11}$/.test(s) ? s.slice(0, 3) + '****' + s.slice(7) : null;
+  return /^\d{11}$/.test(s) ? maskDigits11(s) : null;
+}
+
+/** username 本身是手机号(短信自动注册 username=phone)→ 同规则脱敏,
+ * 否则 phoneMasked 会被同响应里的完整手机号用户名抵消;其余用户名原样 */
+function maskUsername(username) {
+  if (username === null || username === undefined) return null;
+  const s = String(username);
+  return /^1\d{10}$/.test(s) ? maskDigits11(s) : s;
+}
+
+/** 审计详情读侧脱敏:appendAudit 既有写入模式 user=<username>(短信用户即手机号),
+ * 下发前把独立 11 位手机形态子串(1[3-9] 开头,\b 词边界)换成脱敏形态;
+ * IP/时间戳等不含连续 11 位手机形态,不受影响 */
+function maskDetail(detail) {
+  return String(detail || '').replace(/\b1[3-9]\d{9}\b/g, (m) => m.slice(0, 3) + '****' + m.slice(7));
 }
 
 /** 当月(UTC)yyyy-mm,与 oss.js auditKeyNow 的月份规则同源 */
@@ -68,7 +88,7 @@ function createHandlers(options) {
     sendJson(res, 200, {
       users: raw.filter(Boolean).map((u) => ({
         id: u.id || null,
-        username: u.username || null,
+        username: maskUsername(u.username),
         nickname: u.nickname || null,
         role: effectiveRole(u),
         playerId: u.playerId || null,
@@ -112,7 +132,7 @@ function createHandlers(options) {
     const items = entries
       .slice(-limit)
       .reverse()
-      .map((e) => (e ? { action: e.action || '', detail: e.detail || '', at: e.t || null } : null))
+      .map((e) => (e ? { action: e.action || '', detail: maskDetail(e.detail), at: e.t || null } : null))
       .filter(Boolean);
     sendJson(res, 200, { month, items, oss: oss.isOssConfigured() });
   }
@@ -178,5 +198,7 @@ function createHandlers(options) {
 module.exports = createHandlers();
 module.exports.createHandlers = createHandlers;
 module.exports.maskPhone = maskPhone;
+module.exports.maskUsername = maskUsername;
+module.exports.maskDetail = maskDetail;
 module.exports.monthKeyNow = monthKeyNow;
 module.exports.backupTimeOf = backupTimeOf;

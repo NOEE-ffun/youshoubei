@@ -62,7 +62,9 @@ async function call(handler, req) {
     { id: 'u2', username: 'admin1', usernameLower: 'admin1', phone: '13900000002', passHash: null, role: 'admin', playerId: 'p1', status: 'active', createdAt: 't2' },
     { id: 'u3', username: 'shortphone', usernameLower: 'shortphone', phone: '12345', passHash: null, role: 'player', playerId: null, status: 'banned', createdAt: 't3' },
     { id: 'u4', username: 'nophone', usernameLower: 'nophone', phone: null, passHash: null, role: 'user', playerId: null, status: 'active', createdAt: 't4' },
-    { id: 'u5', username: 'root', usernameLower: 'root', phone: '13800000000', passHash: null, role: 'super', playerId: null, status: 'active', createdAt: 't5' }
+    { id: 'u5', username: 'root', usernameLower: 'root', phone: '13800000000', passHash: null, role: 'super', playerId: null, status: 'active', createdAt: 't5' },
+    /* 短信自动注册形态:username 即完整手机号(account.js smsLogin),不得原样下发 */
+    { id: 'u6', username: '13899990000', usernameLower: '13899990000', phone: '13899990000', passHash: null, role: 'user', playerId: null, status: 'active', createdAt: 't6' }
   ];
   /* 种子落全局 dev-store:requireRole→account 单例与模块默认 handler 都从这里读 */
   await devStore.writeJson('users.json', users);
@@ -82,7 +84,7 @@ async function call(handler, req) {
     r = await call(apiAdmin, mockReq('GET', { url: '/api/admin/users', headers: { cookie: ck('u1') } }));
     assert.strictEqual(r.status, 200);
     assert.ok(Array.isArray(r.body.users));
-    assert.strictEqual(r.body.users.length, 5);
+    assert.strictEqual(r.body.users.length, 6);
     const by = Object.fromEntries(r.body.users.map((u) => [u.id, u]));
     /* role 用 effectiveRole:env 升格回 'super'(非存档 'admin') */
     assert.strictEqual(by.u1.role, 'super');
@@ -91,8 +93,11 @@ async function call(handler, req) {
     assert.strictEqual(by.u1.phoneMasked, '138****1234');
     assert.strictEqual(by.u3.phoneMasked, null); /* 5 位 → null */
     assert.strictEqual(by.u4.phoneMasked, null); /* 无手机 → null */
-    /* 原始手机号绝不下发 */
+    /* username 即手机号(短信自动注册)→ 同规则脱敏,不得抵消 phoneMasked */
+    assert.strictEqual(by.u6.username, '138****0000');
+    /* 原始手机号绝不下发(任何字段) */
     assert.ok(!JSON.stringify(r.body).includes('13812341234'));
+    assert.ok(!JSON.stringify(r.body).includes('13899990000'));
     /* playerName 从 data.json players 映射;未绑定选手 → null */
     assert.strictEqual(by.u2.playerName, '选手一');
     assert.strictEqual(by.u1.playerName, null);
@@ -120,7 +125,9 @@ async function call(handler, req) {
   const entries = [
     { t: '2026-08-01T00:00:00.000Z', action: 'data.put', detail: '1 届' },
     { t: '2026-08-02T00:00:00.000Z', action: 'me.player', detail: 'x' },
-    { t: '2026-08-03T00:00:00.000Z', action: 'sms.send', detail: 'y' }
+    { t: '2026-08-03T00:00:00.000Z', action: 'sms.send', detail: 'y' },
+    /* appendAudit 既有写入模式 user=<username>:短信用户即完整手机号 → 读侧须脱敏 */
+    { t: '2026-08-04T00:00:00.000Z', action: 'auth.login', detail: 'user=13899990000 ip=1.2.3.4' }
   ];
   const adminAudit = apiAdmin.createHandlers({
     storage: memoryStorage({ ['audit/log-' + month + '.json']: entries })
@@ -129,22 +136,25 @@ async function call(handler, req) {
   assert.strictEqual(r.status, 200);
   assert.strictEqual(r.body.month, month);
   /* 最新在前;条目形状 {action,detail,at}(at 取存档 t) */
-  assert.strictEqual(r.body.items.length, 3);
-  assert.strictEqual(r.body.items[0].action, 'sms.send');
-  assert.strictEqual(r.body.items[0].at, '2026-08-03T00:00:00.000Z');
+  assert.strictEqual(r.body.items.length, 4);
+  assert.strictEqual(r.body.items[0].action, 'auth.login');
+  assert.strictEqual(r.body.items[0].at, '2026-08-04T00:00:00.000Z');
   assert.deepStrictEqual(Object.keys(r.body.items[0]).sort(), ['action', 'at', 'detail']);
+  /* detail 读侧脱敏:手机形态子串 → 138****0000;ip 原样保留 */
+  assert.strictEqual(r.body.items[0].detail, 'user=138****0000 ip=1.2.3.4');
+  assert.ok(!JSON.stringify(r.body).includes('13899990000'));
 
   /* limit 钳制:2 → 最新 2 条;0/-5 → 钳 1;99999 → 钳 1000(全部) */
   r = await call(adminAudit, mockReq('GET', { url: '/api/admin/audit?month=' + month + '&limit=2', headers: { cookie: ck('u5') } }));
   assert.strictEqual(r.body.items.length, 2);
-  assert.strictEqual(r.body.items[0].action, 'sms.send');
-  assert.strictEqual(r.body.items[1].action, 'me.player');
+  assert.strictEqual(r.body.items[0].action, 'auth.login');
+  assert.strictEqual(r.body.items[1].action, 'sms.send');
   r = await call(adminAudit, mockReq('GET', { url: '/api/admin/audit?month=' + month + '&limit=0', headers: { cookie: ck('u5') } }));
   assert.strictEqual(r.body.items.length, 1);
   r = await call(adminAudit, mockReq('GET', { url: '/api/admin/audit?month=' + month + '&limit=-5', headers: { cookie: ck('u5') } }));
   assert.strictEqual(r.body.items.length, 1);
   r = await call(adminAudit, mockReq('GET', { url: '/api/admin/audit?month=' + month + '&limit=99999', headers: { cookie: ck('u5') } }));
-  assert.strictEqual(r.body.items.length, 3);
+  assert.strictEqual(r.body.items.length, 4);
 
   /* 非法 month 400(13 月/缺零填充);空月(文件不存在)空数组 + 降级信号 */
   assert.strictEqual((await call(adminAudit, mockReq('GET', { url: '/api/admin/audit?month=2026-13', headers: { cookie: ck('u5') } }))).status, 400);
@@ -162,7 +172,7 @@ async function call(handler, req) {
   r = await call(adminCurMonth, mockReq('GET', { url: '/api/admin/audit', headers: { cookie: ck('u5') } }));
   assert.strictEqual(r.status, 200);
   assert.strictEqual(r.body.month, curMonth);
-  assert.strictEqual(r.body.items.length, 3);
+  assert.strictEqual(r.body.items.length, 4);
 
   /* audit 守卫:admin 403;匿名 401 */
   assert.strictEqual((await call(adminAudit, mockReq('GET', { url: '/api/admin/audit', headers: { cookie: ck('u2') } }))).status, 403);
@@ -220,7 +230,7 @@ async function call(handler, req) {
     assert.deepStrictEqual(r.body.backups, { count: 0, latest: null, keys: [] });
     assert.strictEqual(r.body.lastBackupAt, null);
     /* 数据量照常(dev-store 种子) */
-    assert.strictEqual(r.body.users, 5);
+    assert.strictEqual(r.body.users, 6);
     assert.strictEqual(r.body.tournaments, 2);
     assert.strictEqual(r.body.series, 1);
   } finally {
