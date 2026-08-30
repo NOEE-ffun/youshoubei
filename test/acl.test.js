@@ -130,4 +130,36 @@ assert.strictEqual(r.workspace.tournaments[0].createdBy, 'uB');   /* 回填 curr
 assert.strictEqual(curWs.tournaments[1].createdBy, 'uB');         /* current 未被改 */
 assert.strictEqual(inWs.tournaments[0].createdBy, 'uS');          /* 调用方 incoming 未被改 */
 
+/* ---- 迁移脚本纯函数 planMigration:存量届挂默认系列「历届比赛」(幂等) ---- */
+const { planMigration } = require('../scripts/migrate-series');
+
+/* 空库(无 series、存量届无 createdBy 无 seriesId)→ 建默认系列并把届挂进去 */
+let m = planMigration({ tournaments: [{ id: 't1', name: '一届' }], players: [] }, 'uNOEE');
+assert.strictEqual(m.changed, true);
+assert.strictEqual(m.workspace.series[0].key, 'default');
+assert.strictEqual(m.workspace.series[0].name, '历届比赛');
+assert.strictEqual(m.workspace.series[0].createdBy, 'uNOEE');
+assert.strictEqual(m.workspace.tournaments[0].seriesId, m.workspace.series[0].id);
+assert.strictEqual(m.workspace.tournaments[0].createdBy, 'uNOEE');
+/* 幂等:再跑零变更;新届(有 createdBy 无 seriesId)不卷入 */
+m = planMigration(m.workspace, 'uNOEE');
+assert.strictEqual(m.changed, false);
+m = planMigration({ series: [], tournaments: [{ id: 't9', createdBy: 'uA' }], players: [] }, 'uNOEE');
+assert.strictEqual(m.changed, false);
+/* superUserId 为 null:默认系列与届的 createdBy 均保持 null(系统资源,仅 env 超管可管) */
+m = planMigration({ tournaments: [{ id: 't2' }], players: [] }, null);
+assert.strictEqual(m.changed, true);
+assert.strictEqual(m.workspace.series[0].createdBy, null);
+assert.strictEqual(m.workspace.tournaments[0].createdBy, null);
+/* 「无 createdBy 但有 seriesId」的届不动(已有归属系列,不重挂) */
+m = planMigration({ series: [], tournaments: [{ id: 't3', seriesId: 'sX' }], players: [] }, 'uNOEE');
+assert.strictEqual(m.changed, false);
+/* 复用已存在的默认系列(key:'default'),不重复建 */
+const reuse = { series: [{ id: 'sD', key: 'default', name: '历届比赛', createdBy: 'uNOEE' }],
+  tournaments: [{ id: 't4' }], players: [] };
+m = planMigration(reuse, 'uNOEE');
+assert.strictEqual(m.changed, true);
+assert.strictEqual(m.workspace.series.length, 1);
+assert.strictEqual(m.workspace.tournaments[0].seriesId, 'sD');
+
 console.log('✓ acl: 归属判定与整库写守卫通过');
