@@ -5,6 +5,7 @@ const { effectiveRole, isAdminRole } = require('./rbac');
 const { isWindowOpen } = require('./decks');
 const { resolveCanvas, getResult } = require('../canvas-model');
 const { sendJson, readBody, createStorage } = require('./helpers');
+const { workspacePutGuard } = require('./acl');
 const { DATA_PATH, backupData, appendAudit, isOssConfigured } = require('./oss');
 const { withWorkspaceLock } = require('./workspace-lock');
 
@@ -82,7 +83,8 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PUT') {
-    if (!(await requireRole(req, res, ['admin', 'super']))) return;
+    const user = await requireRole(req, res, ['admin', 'super']);
+    if (!user) return;
 
     const body = await readBody(req, MAX_BODY);
     if (body === null) {
@@ -100,13 +102,25 @@ module.exports = async function handler(req, res) {
 
     try {
       /* 写入段上锁:与选手提交/报名/资料的读-改-写互斥,避免交错覆盖 */
-      await withWorkspaceLock(async () => {
-        /* 覆盖前备份当前版本(best-effort,失败不阻塞) */
+      const outcome = await withWorkspaceLock(async () => {
+        /* 守卫必须用锁内最新 current:锁外读快照会开 TOCTOU 窗口
+         * (读完判完、写入前被并发写改库,判定基准已过期) */
+        const current = await storage.read(DATA_PATH)
+          || { tournaments: [], series: [], players: [], activeId: null };
+        const guarded = workspacePutGuard(user, current, workspace);
+        if (!guarded.ok) return { status: guarded.status, error: guarded.error };
+        /* 覆盖前备份当前版本(best-effort,失败不阻塞);落盘守卫盖章后的 workspace */
         await backupData();
-        await storage.write(DATA_PATH, workspace);
+        await storage.write(DATA_PATH, guarded.workspace);
+        return { workspace: guarded.workspace };
       });
+      if (outcome.error) {
+        sendJson(res, outcome.status, { error: outcome.error });
+        return;
+      }
+      const saved = outcome.workspace;
       /* 审计:记录届数与当前届名,不落具体内容 */
-      appendAudit('data.put', (workspace.tournaments || []).length + ' 届 / active=' + ((workspace.tournaments || []).find((t) => t.id === workspace.activeId) || {}).name);
+      appendAudit('data.put', (saved.tournaments || []).length + ' 届 / active=' + ((saved.tournaments || []).find((t) => t.id === saved.activeId) || {}).name);
       sendJson(res, 200, { ok: true });
     } catch (error) {
       console.error('[data] PUT 失败:', error.message);

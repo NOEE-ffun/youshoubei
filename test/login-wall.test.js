@@ -116,6 +116,31 @@ async function call(handler, req) {
     assert.strictEqual((await call(apiData, mockReq('PUT', { body: putBody, headers: { cookie: ck('u1') } }))).status, 200);
   } finally { delete process.env.SUPER_ADMIN_PHONES; }
 
+  /* 归属守卫(集成):预置"他人届"(createdBy=u9)。
+   * admin(u3)改名他人届且伪造 createdBy → 403 且不落盘;
+   * 同 body 同会话,env 升格 super → 200,落盘的 createdBy 是回填的存档值非伪造值 */
+  await devStore.writeJson('data.json', {
+    tournaments: [{ id: 't1', name: '他人届', createdBy: 'u9' }],
+    series: [],
+    players: [],
+    activeId: 't1'
+  });
+  const forgeBody = JSON.stringify({
+    tournaments: [{ id: 't1', name: '改名届', createdBy: 'u3' }],
+    series: [],
+    players: [],
+    activeId: 't1'
+  });
+  assert.strictEqual((await call(apiData, mockReq('PUT', { body: forgeBody, headers: { cookie: ck('u3') } }))).status, 403);
+  assert.strictEqual((await devStore.readJson('data.json')).tournaments[0].name, '他人届', '403 时不得落盘');
+  process.env.SUPER_ADMIN_PHONES = '13900000003';
+  try {
+    assert.strictEqual((await call(apiData, mockReq('PUT', { body: forgeBody, headers: { cookie: ck('u3') } }))).status, 200);
+    const stored = await devStore.readJson('data.json');
+    assert.strictEqual(stored.tournaments[0].name, '改名届');
+    assert.strictEqual(stored.tournaments[0].createdBy, 'u9', 'createdBy 必须回填存档值,客户端伪造无效');
+  } finally { delete process.env.SUPER_ADMIN_PHONES; }
+
   delete process.env.SESSION_SECRET;
   console.log('✓ login-wall: 数据面登录墙+角色门断言通过');
 })().catch((e) => { console.error(e); process.exit(1); });
