@@ -1,8 +1,8 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { isAuthorized } = require('./auth');
-const { sessionOf } = require('./session');
+const { requireUser } = require('./auth');
+const { effectiveRole, isAdminRole } = require('./rbac');
 const { sendJson, readBody } = require('./helpers');
 const { uploadImageBuffer, publicUrl, appendAudit } = require('./oss');
 
@@ -30,17 +30,15 @@ function sniffImageType(buffer) {
   return null;
 }
 
-/* 鉴权:管理口令(三态)或登录会话(选手上传自己的头像/队标) */
-function uploadGate(req, res) {
-  const authed = isAuthorized(req);
-  if (authed === true) return true;
-  if (sessionOf(req)) return true;
-  if (authed === null) {
-    res.status(403).json({ error: '上传功能未配置(ADMIN_TOKEN)或未登录' });
-  } else {
-    res.status(401).json({ error: '需要管理员口令或登录会话' });
+/* 鉴权:登录会话必须,且为管理角色或已绑定选手(选手上传自己的头像/队标) */
+async function uploadGate(req, res) {
+  const user = await requireUser(req, res);
+  if (!user) return false;
+  if (!isAdminRole(effectiveRole(user)) && !user.playerId) {
+    res.status(403).json({ error: '上传需要选手或管理员身份' });
+    return false;
   }
-  return false;
+  return true;
 }
 
 module.exports = async function handler(req, res) {
@@ -49,7 +47,7 @@ module.exports = async function handler(req, res) {
     return;
   }
 
-  if (!uploadGate(req, res)) return;
+  if (!(await uploadGate(req, res))) return;
 
   const buffer = await readBody(req, MAX_SIZE);
   if (buffer === null) {

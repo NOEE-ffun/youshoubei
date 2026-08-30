@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "node test/canvas.test.js && node test/canvas-history.test.js && node test/migration-smoke.test.js && node test/oss-retry.test.js && node test/oss-backup.test.js && node test/oss-audit.test.js && node test/common-surface.test.js && node test/clipboard-remap.test.js && node test/player-fields.test.js && node test/auth-api.test.js && node test/decks-api.test.js && node test/signup-api.test.js && node test/server-smoke.test.js && node test/poster-stage-api.test.js && node test/rbac.test.js && node test/sms-api.test.js && node vs-poster/test/run-tests.mjs",
+    "test": "node test/canvas.test.js && node test/canvas-history.test.js && node test/migration-smoke.test.js && node test/oss-retry.test.js && node test/oss-backup.test.js && node test/oss-audit.test.js && node test/common-surface.test.js && node test/clipboard-remap.test.js && node test/player-fields.test.js && node test/auth-api.test.js && node test/decks-api.test.js && node test/signup-api.test.js && node test/server-smoke.test.js && node test/poster-stage-api.test.js && node test/rbac.test.js && node test/sms-api.test.js && node test/login-wall.test.js && node vs-poster/test/run-tests.mjs",
     "test:e2e": "playwright test"
   },
   "devDependencies": {

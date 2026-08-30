@@ -1,13 +1,13 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { adminGate } = require('./auth');
+const { requireUser, requireRole } = require('./auth');
 const { sendJson, readBody } = require('./helpers');
 const { readJson, writeJson, appendAudit } = require('./oss');
 
 /* OBS 舞台(浏览器源)一次性生成接口：
- *   POST → 管理员创建新舞台，返回自包含 URL(/poster-stage.html?id=…)
- *   GET  → 公开按 id 读取舞台数据（OBS 轮询刷新），过期/缺失 404
+ *   POST → 管理员(admin/super)创建新舞台，返回自包含 URL(/poster-stage.html?id=…)
+ *   GET  → 登录会话按 id 读取舞台数据（OBS 轮询刷新），过期/缺失 404
  * 每次 POST 都生成新 id 与独立私有 OSS 对象 poster-stages/<id>.json，
  * 旧舞台到期后自然 404，无共享单例、无相互覆盖。 */
 const STAGE_KEY_PREFIX = 'poster-stages/';
@@ -66,6 +66,8 @@ function createHandler(storage, options) {
 
   return async function handler(req, res) {
     if (req.method === 'GET') {
+      if (!(await requireUser(req, res))) return;
+
       let url;
       try {
         url = new URL(req.url, 'http://localhost');
@@ -101,7 +103,7 @@ function createHandler(storage, options) {
     }
 
     if (req.method === 'POST') {
-      if (!(await adminGate(req, res))) return;
+      if (!(await requireRole(req, res, ['admin', 'super']))) return;
 
       const body = await readBody(req, MAX_BODY);
       if (body === null) {

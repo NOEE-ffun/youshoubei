@@ -1,7 +1,7 @@
 'use strict';
 
-const { isAuthorized, adminGate } = require('./auth');
-const { sessionOf } = require('./session');
+const { requireUser, requireRole } = require('./auth');
+const { effectiveRole, isAdminRole } = require('./rbac');
 const { isWindowOpen } = require('./decks');
 const { resolveCanvas, getResult } = require('../canvas-model');
 const { sendJson, readBody, createStorage } = require('./helpers');
@@ -16,7 +16,7 @@ const storage = createStorage();
 
 /* 未公示卡组剥离:开关开启期间,该届未录比分的卡,某侧已提交的 own classLinks
  * 对"非该侧所属选手"的请求者置 [](继承链自动回退到已公示数据,不泄露)。
- * 管理员(Bearer)原样;仅作用于响应,不落盘。viewerPlayerId 为会话选手 id 或 null。 */
+ * 管理员角色(admin/super)原样;仅作用于响应,不落盘。viewerPlayerId 为会话选手 id 或 null。 */
 function stripHiddenDecks(workspace, viewerPlayerId) {
   for (const record of (workspace.tournaments || [])) {
     if (!record || !record.canvas) continue;
@@ -58,6 +58,8 @@ function stripHiddenDecks(workspace, viewerPlayerId) {
 
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
+    const user = await requireUser(req, res);
+    if (!user) return;
     try {
       const workspace = await storage.read(DATA_PATH);
       /* 开发存储为空时按"云端不可用"处理(500),页面回落本地模式——
@@ -67,15 +69,9 @@ module.exports = async function handler(req, res) {
         return;
       }
       let payload = workspace || { tournaments: [], activeId: null };
-      /* 管理员原样;登录选手保留自己两侧;游客/其他选手剥离未公示卡组 */
-      if (isAuthorized(req) !== true) {
-        let viewerPlayerId = null;
-        if (sessionOf(req)) {
-          const account = require('./account');
-          const user = await account.currentUser(req).catch(() => null);
-          viewerPlayerId = (user && user.playerId) || null;
-        }
-        payload = stripHiddenDecks(JSON.parse(JSON.stringify(payload)), viewerPlayerId);
+      /* 管理员(admin/super)原样;其余登录者剥离未公示卡组,自己两侧保留 */
+      if (!isAdminRole(effectiveRole(user))) {
+        payload = stripHiddenDecks(JSON.parse(JSON.stringify(payload)), user.playerId || null);
       }
       sendJson(res, 200, payload);
     } catch (error) {
@@ -86,7 +82,7 @@ module.exports = async function handler(req, res) {
   }
 
   if (req.method === 'PUT') {
-    if (!(await adminGate(req, res))) return;
+    if (!(await requireRole(req, res, ['admin', 'super']))) return;
 
     const body = await readBody(req, MAX_BODY);
     if (body === null) {
