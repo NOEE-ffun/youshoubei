@@ -16,3 +16,6 @@ kb/.obsidian/
 # 开源准备:内部知识库与开发过程文档不入公开仓库(本地保留)
 kb/
 docs/
+
+# git worktree 隔离工作区
+.worktrees/
