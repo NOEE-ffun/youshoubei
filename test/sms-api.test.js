@@ -3,7 +3,7 @@
  * 本地模式(注入 sender:本地生成+哈希校验)与 provider-verify 模式(注入 verifier:
  * dypns 平台生成码+CheckSmsVerifyCode 服务端校验,本地存储退化为发送记录)双覆盖 */
 const assert = require('node:assert');
-const { createSmsService } = require('../api/sms');
+const { createSmsService, dypnsClient } = require('../api/sms');
 
 function mkSvc(patch) {
   let t = 1_000_000;
@@ -159,5 +159,26 @@ function mkSvc(patch) {
   const rpv6 = await pv6.issue('13500000000', IP);
   assert.strictEqual(rpv6.dev, true);
 
-  console.log('✓ sms-api: 本地模式 + provider-verify 模式全组行为通过');
+  /* ---- 回归钉子:dypnsClient 真通道构造(require 链 + Config 形态) ---- */
+  /* 修复前该组红:dypnsClient 误 require 已随 dysmsapi 卸载的 @alicloud/openapi-client
+   * (MODULE_NOT_FOUND);修复后绿:@alicloud/openapi-core 的 $OpenApiUtil.Config 构造
+   * Client 成功且两个真通道方法可触达。env 假值 finally 恢复(含原值不存在的键) */
+  {
+    const keys = ['SMS_SIGN_NAME', 'SMS_TEMPLATE_CODE', 'SMS_ACCESS_KEY_ID', 'SMS_ACCESS_KEY_SECRET'];
+    const saved = {};
+    for (const k of keys) { saved[k] = process.env[k]; process.env[k] = 'fixture'; }
+    try {
+      const client = dypnsClient();
+      assert.strictEqual(typeof client.sendSmsVerifyCode, 'function');
+      assert.strictEqual(typeof client.checkSmsVerifyCode, 'function');
+      assert.strictEqual(client._endpoint, 'dypnsapi.aliyuncs.com');
+    } finally {
+      for (const k of keys) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    }
+  }
+
+  console.log('✓ sms-api: 本地模式 + provider-verify 模式 + 真通道构造钉子全组行为通过');
 })().catch((e) => { console.error(e); process.exit(1); });

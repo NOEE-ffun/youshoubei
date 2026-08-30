@@ -37,10 +37,14 @@ function envDevCode(phone) {
   return any;
 }
 
+/* dypnsapi 2.0.0 的 Client 继承 @alicloud/openapi-core 默认导出,构造器收
+ * $OpenApiUtil.Config(client.d.ts 可证;勿用 dysmsapi 时代的 openapi-client——已随其卸载)。
+ * endpoint 按包内 client 构造器核实:productId 'dypnsapi' 走 central 规则解析为
+ * dypnsapi.aliyuncs.com,此处显式钉死防地域规则漂移 */
 function dypnsClient() {
   const Dypnsapi = require('@alicloud/dypnsapi20170525');
-  const OpenApi = require('@alicloud/openapi-client');
-  const config = new OpenApi.Config({
+  const OpenApi = require('@alicloud/openapi-core');
+  const config = new OpenApi.$OpenApiUtil.Config({
     accessKeyId: process.env.SMS_ACCESS_KEY_ID || process.env.OSS_ACCESS_KEY_ID,
     accessKeySecret: process.env.SMS_ACCESS_KEY_SECRET || process.env.OSS_ACCESS_KEY_SECRET
   });
@@ -183,4 +187,4 @@ function createSmsService(options) {
   return { issue, verify };
 }
 
-module.exports = { createSmsService, realVerifier };
+module.exports = { createSmsService, realVerifier, dypnsClient };
