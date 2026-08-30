@@ -5,26 +5,20 @@
  *   node scripts/gen-invite.js --list                查看所有码的绑定/使用状态 + 未认领选手
  *   node scripts/gen-invite.js 8                     生成 8 个空白码(新选手)
  *   node scripts/gen-invite.js 3 --player 雨橘        生成 3 个绑定到「雨橘」的码
+ *   node scripts/gen-invite.js 2 --kind admin         生成 2 个管理员码(应急用;日常请在网页发码中心)
  *   node scripts/gen-invite.js --all                 给每个未绑定的存量选手各生成 1 个绑定码(幂等,可反复跑)
  *   --push:生成后直接写入 OSS invite-codes.json;不加则只打印。
+ * 码生成函数与发码中心 API 共用 api/codes 的 generateCode。
  * 绑定码为老选手过渡方案,三期将整体删除。 */
 
-const crypto = require('node:crypto');
+const { generateCode: newCode } = require('../api/codes');
 
 const args = process.argv.slice(2);
 /* 数量取第一个纯数字参数(允许 --all/--player/--push 出现在任意位置) */
 const count = Math.max(1, Math.min(50, parseInt(args.find((a) => /^\d+$/.test(a)), 10) || 1));
 const playerArg = (args.includes('--player') && args[args.indexOf('--player') + 1]) || null;
 const push = args.includes('--push');
-
-function newCode() {
-  /* 12 位分组易读码,去掉易混淆字符 */
-  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  const bytes = crypto.randomBytes(12);
-  let s = '';
-  for (let i = 0; i < 12; i++) s += alphabet[bytes[i] % alphabet.length];
-  return s.slice(0, 4) + '-' + s.slice(4, 8) + '-' + s.slice(8, 12);
-}
+const kindAdmin = args[args.indexOf('--kind') + 1] === 'admin';
 
 async function resolvePlayerId(nameOrId) {
   const oss = require('../api/oss');
@@ -79,11 +73,15 @@ async function main() {
     console.log('选手总数 ' + players.length + ',已绑定 ' + boundIds.size + ',待发码 ' + entries.length + ':');
   } else {
     let player = null;
-    if (playerArg) {
+    if (kindAdmin) {
+      console.log('提示:admin 码请由超管在网页发码中心生成,此脚本仅供应急。');
+    } else if (playerArg) {
       player = await resolvePlayerId(playerArg);
     }
     for (let i = 0; i < count; i++) {
-      entries.push({ code: newCode(), playerId: player ? player.id : null, note: player ? '绑定:' + player.name : '', used: false, playerName: player ? player.name : '' });
+      entries.push(kindAdmin
+        ? { code: newCode(), kind: 'admin', playerId: null, note: '', used: false, playerName: '' }
+        : { code: newCode(), playerId: player ? player.id : null, note: player ? '绑定:' + player.name : '', used: false, playerName: player ? player.name : '' });
     }
   }
 
