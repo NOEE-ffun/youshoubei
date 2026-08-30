@@ -1605,6 +1605,27 @@
       '</nav>';
   }
 
+  /* 后台入口链接:侧栏六个主页面的骨架都是各页 HTML 静态自带,
+   * renderSidebar 只在无骨架页生效——admin 链接不写进任何静态骨架/items,
+   * 统一在此按需补建(静态骨架页与动态构建页两条路都覆盖),
+   * 显隐交给 syncHeaderState 按超管角色同步 */
+  function ensureAdminNavLink() {
+    const sidebar = document.getElementById('app-sidebar');
+    const nav = sidebar && sidebar.querySelector('.side-nav');
+    if (!nav || nav.querySelector('.side-link[data-page="admin"]')) return;
+    const link = document.createElement('a');
+    link.className = 'side-link';
+    link.href = 'admin.html';
+    link.dataset.page = 'admin';
+    link.title = '后台';
+    link.setAttribute('aria-label', '后台');
+    link.innerHTML = '<span class="side-icon" aria-hidden="true">' + iconMarkup('dashboard', '后台') + '</span>';
+    /* 文字标签与既有链接同构:侧栏功能组已建好(本次 sync 晚于 buildSideActions)
+     * 则自补;否则交给 buildSideActions 统一注入,避免重复标签 */
+    if (sideActionsBuilt) appendSideLabel(link, '后台');
+    nav.appendChild(link);
+  }
+
   let headerHeightBound = false;
 
   /* 顶栏高度随视口换行变化，写入 CSS 变量供整页画布 calc 使用 */
@@ -1799,6 +1820,13 @@
     const playerPagesVisible = Boolean(mode === 'cloud' && sessionUser && sessionUser.playerId);
     document.querySelectorAll('#app-sidebar .side-link[data-page="me"]').forEach((link) => {
       link.hidden = !playerPagesVisible;
+    });
+
+    /* 后台导航项:按需补建 + 仅超管可见(admin.html 独立轻量页,不引 common.js) */
+    ensureAdminNavLink();
+    const adminVisible = Boolean(mode === 'cloud' && sessionUser && sessionUser.role === 'super');
+    document.querySelectorAll('#app-sidebar .side-link[data-page="admin"]').forEach((link) => {
+      link.hidden = !adminVisible;
     });
 
     /* 登录/账号按钮:本地模式隐藏;登录态显示头像+昵称,点击进资料页 */

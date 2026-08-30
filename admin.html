@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="右手杯超管后台:审计流水、账号与邀请码、比赛状态、健康与备份。">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <title>超管后台 - 右手杯</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
+  <script src="theme-init.js?v=2026090006"></script>
+  <link rel="stylesheet" href="styles.css?v=2026090006">
+</head>
+<body class="admin-body" data-page="admin">
+  <a class="skip-link" href="#main-content">跳到主要内容</a>
+  <div id="bg-layer" aria-hidden="true"></div>
+
+  <header id="admin-header" class="admin-header">
+    <div class="admin-header-inner">
+      <h1 class="admin-title">超管后台</h1>
+      <div class="admin-header-actions">
+        <a class="btn btn-ghost btn-sm" href="index.html">返回站点</a>
+      </div>
+    </div>
+  </header>
+
+  <div class="layout-body admin-layout">
+    <main id="main-content" tabindex="-1">
+      <div id="admin-empty" hidden>
+        <p id="admin-empty-text" class="hint">加载中…</p>
+        <a id="admin-login-btn" class="btn btn-primary" href="login.html" hidden>登录</a>
+      </div>
+
+      <div id="admin-shell" hidden>
+        <nav class="me-tabs" role="tablist" aria-label="后台功能区">
+          <button type="button" class="me-tab" id="admin-tab-audit" role="tab" aria-controls="admin-panel-audit">审计流水</button>
+          <button type="button" class="me-tab" id="admin-tab-users" role="tab" aria-controls="admin-panel-users">账号与邀请码</button>
+          <button type="button" class="me-tab" id="admin-tab-tourneys" role="tab" aria-controls="admin-panel-tourneys">比赛状态</button>
+          <button type="button" class="me-tab" id="admin-tab-health" role="tab" aria-controls="admin-panel-health">健康与备份</button>
+        </nav>
+
+        <section class="me-panel" id="admin-panel-audit" role="tabpanel" aria-labelledby="admin-tab-audit" hidden>
+          <div class="admin-toolbar">
+            <label class="visually-hidden" for="admin-audit-month">审计月份</label>
+            <select id="admin-audit-month" class="header-select"></select>
+            <label class="visually-hidden" for="admin-audit-filter">关键词过滤</label>
+            <input type="search" id="admin-audit-filter" placeholder="按动作 / 详情关键词过滤" autocomplete="off" aria-label="关键词过滤">
+          </div>
+          <p class="hint admin-status" id="admin-audit-status" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>时间</th><th>动作</th><th>详情</th></tr></thead>
+              <tbody id="admin-audit-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="me-panel" id="admin-panel-users" role="tabpanel" aria-labelledby="admin-tab-users" hidden>
+          <section class="me-subsection">
+            <h2 class="subsection-title">账号</h2>
+            <p class="hint admin-status" id="admin-users-status" role="status" aria-live="polite"></p>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>用户名</th><th>昵称</th><th>角色</th><th>绑定选手</th><th>手机</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+                <tbody id="admin-users-tbody"></tbody>
+              </table>
+            </div>
+          </section>
+          <section class="me-subsection">
+            <h2 class="subsection-title">邀请码</h2>
+            <p class="hint admin-status" id="admin-codes-status" role="status" aria-live="polite"></p>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>码</th><th>类型</th><th>绑定选手</th><th>状态</th><th>使用人</th><th>签发时间</th></tr></thead>
+                <tbody id="admin-codes-tbody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="me-panel" id="admin-panel-tourneys" role="tabpanel" aria-labelledby="admin-tab-tourneys" hidden>
+          <p class="hint admin-status" id="admin-tourneys-status" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>届</th><th>系列</th><th>报名</th><th>卡组窗口</th><th>进度</th></tr></thead>
+              <tbody id="admin-tourneys-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="me-panel" id="admin-panel-health" role="tabpanel" aria-labelledby="admin-tab-health" hidden>
+          <section class="me-subsection">
+            <h2 class="subsection-title">健康</h2>
+            <p class="hint admin-status" id="admin-health-status" role="status" aria-live="polite"></p>
+            <dl class="admin-kv" id="admin-health-kv"></dl>
+            <button type="button" id="admin-backup-btn" class="btn btn-primary btn-sm">一键备份</button>
+            <p class="hint admin-status" id="admin-backup-status" role="status" aria-live="polite"></p>
+          </section>
+          <section class="me-subsection">
+            <h2 class="subsection-title">恢复</h2>
+            <form id="admin-restore-form" class="admin-restore">
+              <label class="form-field">
+                <span class="form-label">备份对象名</span>
+                <input type="text" id="admin-restore-key" placeholder="backups/data-….json" autocomplete="off">
+              </label>
+              <button type="submit" class="btn btn-danger btn-sm">恢复 data.json</button>
+            </form>
+            <p class="hint">恢复会覆盖 data.json(恢复前自动留底);仅支持 data 类备份;提交后需在确认框输入 RESTORE。</p>
+            <p class="hint admin-status" id="admin-restore-status" role="status" aria-live="polite"></p>
+          </section>
+          <section class="me-subsection">
+            <h2 class="subsection-title">最近备份</h2>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>对象名</th><th>类型</th><th>时间</th><th></th></tr></thead>
+                <tbody id="admin-backups-tbody"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="canvas-model.js?v=2026090006" defer></script>
+  <script src="admin.js?v=2026090006" defer></script>
+</body>
+</html>
