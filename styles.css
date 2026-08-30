@@ -819,8 +819,7 @@ dialog::backdrop {
 /* 弹窗内全部输入控件 */
 .dialog-body input,
 .dialog-body textarea,
-.dialog-body select,
-.canvas-lock-card input {
+.dialog-body select {
   font: inherit;
   color: var(--text);
   background: var(--surface);
@@ -845,8 +844,7 @@ dialog::backdrop {
 
 .dialog-body input:focus,
 .dialog-body textarea:focus,
-.dialog-body select:focus,
-.canvas-lock-card input:focus {
+.dialog-body select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
@@ -854,8 +852,7 @@ dialog::backdrop {
 
 .dialog-body input:disabled,
 .dialog-body textarea:disabled,
-.dialog-body select:disabled,
-.canvas-lock-card input:disabled {
+.dialog-body select:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -965,17 +962,6 @@ dialog::backdrop {
   padding: 0.45rem 0.8rem;
 }
 
-.admin-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.admin-controls input[type="password"] {
-  flex: 1 1 auto;
-  min-inline-size: 10rem;
-}
-
 .deck-window-controls {
   display: flex;
   align-items: center;
@@ -985,17 +971,6 @@ dialog::backdrop {
 
 .deck-window-controls input[type='time'] {
   width: 7.5rem;
-}
-
-/* 登录弹窗 tab */
-.login-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.login-tabs button {
-  flex: 1;
 }
 
 /* ---------- toast ---------- */
@@ -1999,61 +1974,6 @@ body.canvas-editing #bg-layer {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
-}
-
-/* 管理员锁遮罩 */
-.canvas-lock {
-  position: absolute;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgb(255 253 249 / 0.55);
-  backdrop-filter: blur(10px);
-  border-radius: var(--radius);
-}
-
-[data-theme='dark'] .canvas-lock {
-  background: rgb(10 8 4 / 0.55);
-}
-
-.canvas-lock[hidden] {
-  display: none;
-}
-
-.canvas-lock-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  box-shadow: var(--shadow);
-  width: min(90%, 24rem);
-  display: grid;
-  gap: 0.75rem;
-}
-
-.canvas-lock-card h2 {
-  margin: 0;
-}
-
-.canvas-lock-card p {
-  margin: 0;
-  color: var(--text-muted);
-}
-
-.canvas-lock-card input {
-  font: inherit;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-}
-
-.canvas-locked .canvas-board {
-  filter: blur(6px);
-  pointer-events: none;
 }
 
 /* ---------- 编辑工具栏与样式抽屉 ---------- */
@@ -3851,8 +3771,8 @@ body[data-view='canvas'] .list-view {
 }
 
 /* tab:下划线式,同 .me-tab 写法。
- * 容器名用 login-mode-tabs:旧登录弹窗已有 .login-tabs(styles.css 上方,
- * Task 9 拆弹窗时删除),避免互相污染。 */
+ * 容器名用 login-mode-tabs:历史上与旧登录弹窗的 .login-tabs 撞名而改名,
+ * 旧弹窗样式已随口令体系一并拆除(Task 9),容器名保留不动。 */
 .login-mode-tabs {
   display: flex;
   gap: 0.2rem;

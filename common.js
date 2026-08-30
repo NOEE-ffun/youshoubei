@@ -7,7 +7,6 @@
   const META_STORE = 'meta';
   const META_PLAYERS = 'globalPlayers';
   const LS_ACTIVE = 'ts:activeTournamentId';
-  const LS_ADMIN_TOKEN = 'ts:adminToken';
   /* 跨文件事件协议:数据变更 / 应用就绪。common.js 派发,各页面监听 */
   const EVT_CHANGED = 'ts:changed';
   const EVT_READY = 'ts:ready';
@@ -193,7 +192,8 @@
   /* ---------- 云端存储适配 ---------- */
 
   /* 一次请求同时完成模式探测与云端取数:拿到合法 workspace 即云端模式;
-   * 404(未部署 API)/超时/网络错误 → 本机模式,省掉原先 /api/health 的串行往返 */
+   * 404(未部署 API)/超时/网络错误 → 本机模式,省掉原先 /api/health 的串行往返。
+   * 401 是会话问题而非部署问题:跳登录页并中止 init,绝不落本地模式 */
   async function probeCloud() {
     let timer = null;
     try {
@@ -203,6 +203,7 @@
       clearTimeout(timer);
       timer = null;
       if (!response.ok) {
+        if (response.status === 401) throw redirectOnExpiredSession();
         if (response.status >= 500) {
           const message = await apiErrorMessage(response).catch(() => '');
           cloudFallbackReason = message ? ('云端数据读取失败:' + message) : '云端数据读取失败';
@@ -213,6 +214,8 @@
       if (!workspace || !Array.isArray(workspace.tournaments)) return null;
       return workspace;
     } catch (error) {
+      /* 登录跳转错误必须穿透,否则会被这里吞掉落回本机模式 */
+      if (error && error.loginRedirect) throw error;
       return null;
     } finally {
       if (timer) clearTimeout(timer);
@@ -275,12 +278,10 @@
     writeWorkspaceCache(workspace);
   }
 
-  /* 管理口令在场时 GET 也带上:服务端对未公示卡组按请求者剥离,
+  /* GET 无需显式鉴权头:同源自动携带会话 cookie,服务端对未公示卡组按请求者剥离,
    * 管理员必须拿全量数据,否则本地快照再保存会把选手已提交的卡组抹掉 */
   function cloudGetHeaders() {
-    const headers = { 'Accept': 'application/json' };
-    if (appInstance && appInstance.adminToken) headers['Authorization'] = 'Bearer ' + appInstance.adminToken;
-    return headers;
+    return { 'Accept': 'application/json' };
   }
 
   async function revalidateWorkspaceQuietly() {
@@ -374,7 +375,7 @@
   let cloudWriteQueue = Promise.resolve();
 
   async function cloudPutWorkspace(workspace, options) {
-    if (!appInstance.adminToken) throw new Error('需要管理口令');
+    if (!isAdmin()) throw new Error('需要管理员权限');
     const opts = options || {};
     const run = async () => {
       let payload = workspace;
@@ -390,15 +391,13 @@
         }
         payload = mergeWorkspace(latest, workspace);
       }
+      /* 写入鉴权走同源会话 cookie(服务端校验 admin/super 角色) */
       const response = await fetch('/api/data', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + appInstance.adminToken
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (response.status === 401) throw new Error('管理口令错误');
+      if (response.status === 401) throw new Error('登录已过期，请重新登录');
       if (!response.ok) throw new Error((await apiErrorMessage(response)) || '保存云端数据失败');
       /* 上传成功后本地快照与上传内容对齐 */
       setCloudWorkspace(payload);
@@ -409,11 +408,13 @@
   }
 
   async function uploadCloudImage(blob) {
-    /* 鉴权二选一:管理口令走 Authorization,登录选手靠同源自动携带的会话 cookie */
-    const headers = { 'Content-Type': blob.type || 'application/octet-stream' };
-    if (appInstance.adminToken) headers['Authorization'] = 'Bearer ' + appInstance.adminToken;
-    const response = await fetch('/api/upload', { method: 'POST', headers, body: blob });
-    if (response.status === 401) throw new Error('需要管理员权限或登录后上传');
+    /* 鉴权走同源自动携带的会话 cookie:管理员或登录选手均可上传 */
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': blob.type || 'application/octet-stream' },
+      body: blob
+    });
+    if (response.status === 401) throw new Error('登录已过期，请重新登录后再上传');
     if (response.status === 403) throw new Error('上传功能未配置');
     if (!response.ok) throw new Error((await apiErrorMessage(response)) || '图片上传失败');
     const data = await response.json();
@@ -495,32 +496,8 @@
     await refreshApp();
   }
 
-  function setAdminToken(token) {
-    appInstance.adminToken = (token || '').trim();
-    if (appInstance.adminToken) sessionStorage.setItem(LS_ADMIN_TOKEN, appInstance.adminToken);
-    else sessionStorage.removeItem(LS_ADMIN_TOKEN);
-  }
-
-  /* 口令只放 sessionStorage,关闭标签页即清;旧版本曾落在 localStorage,首次加载迁走并删除 */
-  function loadAdminToken() {
-    try {
-      const legacy = localStorage.getItem(LS_ADMIN_TOKEN);
-      if (legacy !== null) {
-        if (legacy && sessionStorage.getItem(LS_ADMIN_TOKEN) === null) {
-          sessionStorage.setItem(LS_ADMIN_TOKEN, legacy);
-        }
-        localStorage.removeItem(LS_ADMIN_TOKEN);
-      }
-      return sessionStorage.getItem(LS_ADMIN_TOKEN) || '';
-    } catch {
-      return '';
-    }
-  }
-
   function isAdmin() {
-    /* 登录身份优先:选手会话绝不因浏览器残留管理口令获得权限 */
-    if (sessionUser && sessionUser.role === 'player') return false;
-    return Boolean(appInstance && appInstance.adminToken);
+    return Boolean(sessionUser && (sessionUser.role === 'admin' || sessionUser.role === 'super'));
   }
 
   async function migrateLocalToCloud() {
@@ -960,17 +937,9 @@
 '        <span class="hint">报名关闭后可用:前 N 名随机填入无箭头指向的比赛,已指派选手会被覆盖。</span>' +
 '      </div>' +
 '    </div>' +
-      '    <div class="form-field" id="admin-field" hidden>' +
-      '      <label for="settings-admin-token">管理口令</label>' +
-      '      <div class="admin-controls">' +
-      '        <input type="password" id="settings-admin-token" autocomplete="off" placeholder="输入部署时设置的口令">' +
-      '        <button type="button" id="admin-unlock" class="btn btn-secondary btn-sm">解锁</button>' +
-      '      </div>' +
-      '      <p class="hint" id="admin-status"></p>' +
-      '      <div class="dialog-actions" id="migration-actions" hidden>' +
-      '        <button type="button" id="migrate-up" class="btn btn-secondary btn-sm">将本机数据上传到云端</button>' +
-      '        <button type="button" id="migrate-down" class="btn btn-secondary btn-sm">从云端拉取覆盖本机</button>' +
-      '      </div>' +
+      '    <div class="dialog-actions" id="migration-actions" hidden>' +
+      '      <button type="button" id="migrate-up" class="btn btn-secondary btn-sm">将本机数据上传到云端</button>' +
+      '      <button type="button" id="migrate-down" class="btn btn-secondary btn-sm">从云端拉取覆盖本机</button>' +
       '    </div>' +
       '    <div class="dialog-actions">' +
       '      <button type="button" class="btn btn-secondary" data-dialog-close>取消</button>' +
@@ -983,7 +952,6 @@
 
     bindSettingsForm();
     bindBackgroundControls();
-    bindAdminUnlock();
     bindMigrationButtons();
   }
 
@@ -991,7 +959,7 @@
     settingsDialog.querySelector('#settings-form').addEventListener('submit', async (event) => {
       event.preventDefault();
       if (mode === 'cloud' && !appInstance.isAdmin()) {
-        notify('请先输入管理口令并解锁', 'danger');
+        notify('保存设置需要管理员账号', 'danger');
         return;
       }
       const record = appInstance.current;
@@ -1067,7 +1035,7 @@
     settingsDialog.querySelector('#signup-autofill').addEventListener('click', async (event) => {
       const btn = event.currentTarget;
       if (mode === 'cloud' && !appInstance.isAdmin()) {
-        notify('请先输入管理口令并解锁', 'danger');
+        notify('自动填入需要管理员账号', 'danger');
         return;
       }
       const record = appInstance.current;
@@ -1152,49 +1120,6 @@
     });
   }
 
-  function bindAdminUnlock() {
-    settingsDialog.querySelector('#admin-unlock').addEventListener('click', async () => {
-      const input = settingsDialog.querySelector('#settings-admin-token');
-      const status = settingsDialog.querySelector('#admin-status');
-      setAdminToken(input.value);
-      if (!appInstance.adminToken) {
-        status.textContent = '已清除口令';
-        syncSettingsAdminState(true);
-        renderHeader();
-        document.dispatchEvent(new CustomEvent(EVT_CHANGED));
-        return;
-      }
-      if (!cloudWorkspace) {
-        if (mode !== 'cloud') {
-          status.textContent = '当前为本机模式，未连接云端：' + (cloudFallbackReason || '云端不可用');
-          syncSettingsAdminState(true);
-          return;
-        }
-        try {
-          cloudWorkspace = await cloudGetWorkspace();
-          if (!cloudWorkspace.players) cloudWorkspace.players = [];
-          if (!cloudWorkspace.tournaments) cloudWorkspace.tournaments = [];
-          if (!cloudWorkspace.activeId) cloudWorkspace.activeId = (cloudWorkspace.tournaments[0] || {}).id || null;
-        } catch (error) {
-          status.textContent = '云端数据读取失败：' + errMsg(error);
-          syncSettingsAdminState(true);
-          return;
-        }
-      }
-      try {
-        await cloudPutWorkspace(cloudWorkspace);
-        status.textContent = '口令正确，已解锁';
-        renderHeader();
-        document.dispatchEvent(new CustomEvent(EVT_CHANGED));
-      } catch (error) {
-        setAdminToken('');
-        input.value = '';
-        status.textContent = error.message;
-      }
-      syncSettingsAdminState(true);
-    });
-  }
-
   function bindMigrationButtons() {
     settingsDialog.querySelector('#migrate-up').addEventListener('click', async () => {
       try {
@@ -1225,12 +1150,10 @@
     }
   }
 
-  function syncSettingsAdminState(preserveStatus) {
+  /* 云端模式下编辑权限按登录角色锁定:非管理员全部字段禁用,迁移按钮隐藏 */
+  function syncSettingsAdminState() {
     if (!settingsDialog) return;
     const admin = mode !== 'cloud' || appInstance.isAdmin();
-    const adminField = settingsDialog.querySelector('#admin-field');
-    const tokenInput = settingsDialog.querySelector('#settings-admin-token');
-    const status = settingsDialog.querySelector('#admin-status');
     const migration = settingsDialog.querySelector('#migration-actions');
     const fields = [
       settingsDialog.querySelector('#settings-name'),
@@ -1247,14 +1170,7 @@
       settingsDialog.querySelector('#settings-form').querySelector('button[type="submit"]')
     ];
 
-    adminField.hidden = mode !== 'cloud';
-    if (mode === 'cloud') {
-      tokenInput.value = appInstance.adminToken;
-      if (!preserveStatus) {
-        status.textContent = appInstance.isAdmin() ? '已解锁' : '未解锁，编辑功能已锁定';
-      }
-      migration.hidden = !appInstance.isAdmin();
-    }
+    if (migration) migration.hidden = !admin;
     for (const field of fields) field.disabled = !admin;
   }
 
@@ -1879,8 +1795,8 @@
     const manageBtn = document.getElementById('manage-btn');
     if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
 
-    /* 选手中心导航项:仅云端+登录+已绑定选手可见 */
-    const playerPagesVisible = Boolean(mode === 'cloud' && sessionUser && sessionPlayer);
+    /* 选手中心导航项:云端+登录+账号绑定了选手即可见(管理员绑选手同样放行) */
+    const playerPagesVisible = Boolean(mode === 'cloud' && sessionUser && sessionUser.playerId);
     document.querySelectorAll('#app-sidebar .side-link[data-page="me"]').forEach((link) => {
       link.hidden = !playerPagesVisible;
     });
@@ -2007,10 +1923,22 @@
     syncHeaderState();
   }
 
-  /* ---------- 登录会话(一期:邀请码+密码) ---------- */
+  /* ---------- 登录会话(登录页 login.html 承载,这里只管会话态与跳转) ---------- */
 
   let sessionUser = null;   /* {id, username, role, playerId} 或 null */
   let sessionPlayer = null; /* 会话绑定的选手对象 */
+
+  function loginUrl() {
+    return 'login.html?returnTo=' + encodeURIComponent(location.pathname + location.hash);
+  }
+
+  /* 会话过期/缺失时的统一出口:跳登录页并返回带标记的错误供调用方中止流程 */
+  function redirectOnExpiredSession() {
+    location.replace(loginUrl());
+    const error = new Error('登录已过期，请重新登录');
+    error.loginRedirect = true;
+    return error;
+  }
 
   function getSession() {
     return { user: sessionUser, player: sessionPlayer };
@@ -2032,13 +1960,6 @@
       sessionUser = null;
       sessionPlayer = null;
     }
-    /* 选手登录时,浏览器残留的管理口令立即作废并清除
-     * (2026-08-25 紧急加固:防止同浏览器先解锁管理再登录选手导致越权) */
-    if (sessionUser && sessionUser.role === 'player' && appInstance && appInstance.adminToken) {
-      setAdminToken('');
-      syncSettingsAdminState();
-      notify('已登录选手账号,管理口令已自动停用');
-    }
     syncHeaderState();
     /* 会话就绪晚于页面首渲(如赛程页公示锁按本人判定),广播一次让依赖身份的视图重绘 */
     document.dispatchEvent(new CustomEvent('ts:session'));
@@ -2051,111 +1972,13 @@
     } catch (error) { /* 网络失败也按登出处理 */ }
     await refreshSession();
     notify('已退出登录');
+    /* 登出后当前页需要登录态,整页跳回登录页(带 returnTo 便于重新登录后回来) */
+    location.replace(loginUrl());
   }
 
-  let loginDialog = null;
-  let loginMode = 'login';
-
-  function setLoginMode(next) {
-    loginMode = next === 'register' ? 'register' : 'login';
-    if (!loginDialog) return;
-    loginDialog.querySelector('#login-dialog-title').textContent = loginMode === 'register' ? '注册账号' : '登录';
-    loginDialog.querySelector('#login-code-row').hidden = loginMode !== 'register';
-    loginDialog.querySelector('#login-submit').textContent = loginMode === 'register' ? '注册' : '登录';
-    loginDialog.querySelector('[data-login-tab="login"]').classList.toggle('btn-primary', loginMode === 'login');
-    loginDialog.querySelector('[data-login-tab="login"]').classList.toggle('btn-ghost', loginMode !== 'login');
-    loginDialog.querySelector('[data-login-tab="register"]').classList.toggle('btn-primary', loginMode === 'register');
-    loginDialog.querySelector('[data-login-tab="register"]').classList.toggle('btn-ghost', loginMode !== 'register');
-    loginDialog.querySelector('#login-status').textContent = '';
-  }
-
-  function ensureLoginDialog() {
-    if (loginDialog) return loginDialog;
-    loginDialog = document.createElement('dialog');
-    loginDialog.id = 'login-dialog';
-    loginDialog.setAttribute('aria-labelledby', 'login-dialog-title');
-    loginDialog.innerHTML =
-      '<div class="dialog-head">' +
-      '  <h2 id="login-dialog-title">登录</h2>' +
-      '  <button type="button" class="btn btn-ghost btn-sm" data-login-close>关闭</button>' +
-      '</div>' +
-      '<div class="dialog-body">' +
-      '  <div class="login-tabs" role="tablist">' +
-      '    <button type="button" data-login-tab="login">登录</button>' +
-      '    <button type="button" data-login-tab="register">注册</button>' +
-      '  </div>' +
-      '  <div class="form-field" id="login-code-row" hidden>' +
-      '    <label for="login-code">邀请码</label>' +
-      '    <input type="text" id="login-code" autocomplete="off" placeholder="向管理员索取">' +
-      '  </div>' +
-      '  <div class="form-field">' +
-      '    <label for="login-username">用户名</label>' +
-      '    <input type="text" id="login-username" autocomplete="username" maxlength="24">' +
-      '  </div>' +
-      '  <div class="form-field">' +
-      '    <label for="login-password">密码</label>' +
-      '    <input type="password" id="login-password" autocomplete="current-password" maxlength="72">' +
-      '  </div>' +
-      '  <p class="hint" id="login-status" role="status"></p>' +
-      '  <div class="dialog-actions">' +
-      '    <button type="button" id="login-submit" class="btn btn-primary">登录</button>' +
-      '  </div>' +
-      '</div>';
-    document.body.appendChild(loginDialog);
-    loginDialog.querySelectorAll('[data-login-close]').forEach((btn) => btn.addEventListener('click', () => loginDialog.close()));
-    loginDialog.querySelectorAll('[data-login-tab]').forEach((btn) => btn.addEventListener('click', () => setLoginMode(btn.dataset.loginTab)));
-    loginDialog.querySelector('#login-submit').addEventListener('click', submitLoginDialog);
-    loginDialog.querySelector('#login-password').addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') submitLoginDialog();
-    });
-    return loginDialog;
-  }
-
-  async function submitLoginDialog() {
-    if (!loginDialog) return;
-    const statusEl = loginDialog.querySelector('#login-status');
-    const username = loginDialog.querySelector('#login-username').value.trim();
-    const password = loginDialog.querySelector('#login-password').value;
-    const code = loginDialog.querySelector('#login-code').value.trim();
-    const isRegister = loginMode === 'register';
-    if (!username || !password || (isRegister && !code)) {
-      statusEl.textContent = '请填写完整';
-      return;
-    }
-    const submit = loginDialog.querySelector('#login-submit');
-    submit.disabled = true;
-    statusEl.textContent = isRegister ? '注册中…' : '登录中…';
-    try {
-      const resp = await fetch(isRegister ? '/api/auth/register' : '/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(isRegister ? { code, username, password } : { username, password })
-      });
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok) {
-        statusEl.textContent = data.error || '操作失败,请重试';
-        return;
-      }
-      loginDialog.close();
-      await refreshSession();
-      notify((isRegister ? '注册成功,欢迎 ' : '欢迎回来,') + ((data.user && data.user.username) || username));
-      if (data.user && data.user.role === 'admin') notify('已获得管理员身份');
-      /* 资料页/我的对局的空态不随会话变化自动重建,直接刷新整页最稳 */
-      if (appInstance && appInstance.activePage === 'me') location.reload();
-    } catch (error) {
-      statusEl.textContent = '网络错误,请稍后再试';
-    } finally {
-      submit.disabled = false;
-    }
-  }
-
+  /* 登录入口统一跳独立登录页;旧弹窗(用户名+密码+邀请码注册)已随口令体系退役 */
   function openLoginDialog() {
-    const dialog = ensureLoginDialog();
-    loginDialog.querySelector('#login-username').value = '';
-    loginDialog.querySelector('#login-password').value = '';
-    loginDialog.querySelector('#login-code').value = '';
-    setLoginMode('login');
-    if (!dialog.open) dialog.showModal();
+    location.href = loginUrl();
   }
 
   /* ---------- 主流程 ---------- */
@@ -2323,7 +2146,6 @@
       list: [],
       players: [],
       mode: 'local',
-      adminToken: loadAdminToken(),
       blobUrl,
       compressImage,
       compressAvatar,
@@ -2336,7 +2158,6 @@
       storagePutPlayers,
       storageDeletePlayer,
       isAdmin,
-      setAdminToken,
       setActiveId,
       refreshSession,
       getSession,
@@ -2348,7 +2169,12 @@
     };
     window.TournamentApp = appInstance;
     bindSystemThemeChange();
-    refreshSession(); /* 会话态与数据加载并行,拿到后自行刷新侧栏按钮 */
+    /* 登录墙:无会话不加载任何数据,直接跳登录页(带 returnTo 回跳) */
+    const sess = await refreshSession();
+    if (!sess.user) {
+      redirectOnExpiredSession();
+      return;
+    }
     try {
       const cached = readWorkspaceCache();
       if (cached) {

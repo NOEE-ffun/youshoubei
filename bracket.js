@@ -73,23 +73,7 @@
     return p ? p.name : '待定';
   }
 
-  /* ---------- 查看 / 编辑模式与管理员锁 ---------- */
-
-  function showEditLock() {
-    const lock = document.getElementById('canvas-lock');
-    const wrap = document.querySelector('.canvas-wrap-full');
-    if (lock) lock.hidden = false;
-    if (wrap) wrap.classList.add('canvas-locked');
-    const input = document.getElementById('canvas-lock-password');
-    if (input) setTimeout(() => input.focus(), 0);
-  }
-
-  function hideEditLock() {
-    const lock = document.getElementById('canvas-lock');
-    const wrap = document.querySelector('.canvas-wrap-full');
-    if (lock) lock.hidden = true;
-    if (wrap) wrap.classList.remove('canvas-locked');
-  }
+  /* ---------- 查看 / 编辑模式 ---------- */
 
   function enterEditMode() {
     if (editMode) return;
@@ -110,7 +94,8 @@
 
   function requestEdit() {
     if (!canEdit()) {
-      showEditLock();
+      /* 登录墙下人人有会话:非管理员即账号角色不足,提示后不进入编辑 */
+      notify('编辑需要管理员账号', 'danger');
       return;
     }
     if (editMode) exitEditMode();
@@ -121,48 +106,12 @@
     if (editMode && !canEdit()) {
       editMode = false;
       CanvasEditor.exit();
-      hideEditLock();
-    } else if (canEdit()) {
-      hideEditLock();
     }
     const layout = document.getElementById('canvas-layout');
     const toolbar = document.getElementById('edit-toolbar');
     if (layout) layout.classList.toggle('has-toolbar', editMode);
     if (toolbar) toolbar.hidden = !editMode;
     renderEditToolbar();
-  }
-
-  function bindCanvasLock() {
-    const submit = document.getElementById('canvas-lock-submit');
-    const input = document.getElementById('canvas-lock-password');
-    if (!submit || !input) return;
-    const cancel = document.getElementById('canvas-lock-cancel');
-    if (cancel) cancel.addEventListener('click', () => {
-      input.value = '';
-      hideEditLock();
-    });
-    const tryUnlock = async () => {
-      const token = input.value.trim();
-      if (!token) return;
-      window.TournamentApp.setAdminToken(token);
-      try {
-        // 通过一次真实写入验证口令（云端模式会校验 Authorization）
-        await window.TournamentApp.storagePutPlayers(window.TournamentApp.players);
-        input.value = '';
-        hideEditLock();
-        if (window.TournamentApp.renderHeader) window.TournamentApp.renderHeader();
-        if (window.TournamentApp.renderSidebar) window.TournamentApp.renderSidebar();
-        enterEditMode();
-      } catch (error) {
-        window.TournamentApp.setAdminToken('');
-        input.value = '';
-        notify(window.TournamentUtils.errMsg(error), 'danger');
-      }
-    };
-    submit.addEventListener('click', tryUnlock);
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') tryUnlock();
-    });
   }
 
   function renderAll() {
@@ -1073,8 +1022,6 @@
     autoFitCanvas();
     maybeAutoOpenRoster();
     syncEditUI();
-    hideEditLock();
-    bindCanvasLock();
     bindEditToolbar();
     bindCardStylePanel();
     bindMatchSearch();

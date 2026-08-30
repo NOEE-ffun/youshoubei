@@ -230,8 +230,8 @@
   });
 
   $('profile-logout').addEventListener('click', async () => {
+    /* logoutSession 内部登出后整页跳回登录页(带 returnTo) */
     await window.TournamentApp.logoutSession();
-    location.href = 'index.html';
   });
 
   $('profile-login-btn').addEventListener('click', () => {
