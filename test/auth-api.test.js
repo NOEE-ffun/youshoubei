@@ -3,7 +3,8 @@
 /* 账号体系 API 行为测试(内存存储注入,不联网):
  * 会话签名、短信验证码登录/自动注册、存量用户归一化、登录限速、
  * /api/me 会话读取、资料白名单更新、修改密码、
- * 填码跃迁(redeem)、账号昵称(nickname)、绑定手机号(mePhone)。 */
+ * 填码跃迁(redeem)、账号昵称(nickname)、绑定手机号(mePhone)。
+ * 并发轮:写延迟放大读-改-写窗口——smsLogin 两手机号并发注册不丢号。 */
 
 const assert = require('node:assert');
 const session = require('../api/session');
@@ -150,6 +151,35 @@ async function main() {
     assert.strictEqual(oldUser.nickname, null, '旧用户补 nickname:null');
     assert.strictEqual(stored.filter((u) => u.phone === '13900000001').length, 1, '同手机号只建一个账号');
     console.log('✓ sms:登录/自动注册/格式与码错/归一化');
+  }
+
+  /* ---- 并发注册互斥:两不同手机号同时 smsLogin,谁都不得丢 ---- */
+  {
+    const base = memoryStorage(seedWorld());
+    /* 写延迟 25ms:放大读-改-写窗口,复现生产 OSS 往返下的交错 */
+    const store = {
+      readJson: base.readJson,
+      writeJson: async (key, value) => {
+        await new Promise((r) => setTimeout(r, 25));
+        base.writeJson(key, value);
+      },
+      _map: base._map
+    };
+    const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
+    const acc = account.createHandlers(store, { sms: smsSvc, rateLimiter: noopRate() });
+
+    const [ra, rb] = await Promise.all([
+      call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13911110001', code: '000000' }) })),
+      call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13911110002', code: '000000' }) }))
+    ]);
+    assert.strictEqual(ra.status, 200, 'A 注册登录 200');
+    assert.strictEqual(rb.status, 200, 'B 注册登录 200');
+    assert.notStrictEqual(ra.body.user.id, rb.body.user.id, '两手机号应是两个账号');
+    const users = store._map.get('users.json');
+    assert.strictEqual(users.length, 2, '两账号均落盘(无锁时后写旧快照覆盖前写只剩 1)');
+    assert.ok(users.some((u) => u.phone === '13911110001'), 'A 在 users.json');
+    assert.ok(users.some((u) => u.phone === '13911110002'), 'B 在 users.json');
+    console.log('✓ 并发注册互斥:两手机号自动注册均落盘');
   }
 
   /* ---- 登录 + 限速 + 会话 ---- */

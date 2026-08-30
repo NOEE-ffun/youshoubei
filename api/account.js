@@ -223,24 +223,28 @@ function createHandlers(storage, options) {
     const v = sms.verify(phone, code);
     if (!v.ok) { rate.recordFail(ip); return sendJson(res, 401, { error: v.error }); }
     rate.reset(ip);
-    const users = await readUsers();
-    let user = users.find((u) => u.phone === phone);
-    let created = false;
-    if (!user) {
-      /* 验码通过即自动注册为注册用户(user 级) */
-      user = {
-        id: newId('u'), username: phone, usernameLower: phone,
-        phone, passHash: null, role: 'user', playerId: null,
-        nickname: '用户' + phone.slice(-4), status: 'active', createdAt: t0iso(now)
-      };
-      users.push(user);
-      created = true;
-      await backupJson(USERS_KEY, 'users');
-      await write(USERS_KEY, users);
-    }
-    audit(created ? 'sms.register' : 'sms.login', 'user=' + user.username);
-    setSessionCookie(res, issueFor(user.id, pvOf(user), now), req);
-    sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
+    /* users 读改写整段上锁(读→查号→建号→写):自动注册与 me PUT 昵称/redeem/
+     * mePhone/mePassword 等 users 写者共用一把锁,防并发交错用旧快照覆盖丢号 */
+    await withWorkspaceLock(async () => {
+      const users = await readUsers();
+      let user = users.find((u) => u.phone === phone);
+      let created = false;
+      if (!user) {
+        /* 验码通过即自动注册为注册用户(user 级) */
+        user = {
+          id: newId('u'), username: phone, usernameLower: phone,
+          phone, passHash: null, role: 'user', playerId: null,
+          nickname: '用户' + phone.slice(-4), status: 'active', createdAt: t0iso(now)
+        };
+        users.push(user);
+        created = true;
+        await backupJson(USERS_KEY, 'users');
+        await write(USERS_KEY, users);
+      }
+      audit(created ? 'sms.register' : 'sms.login', 'user=' + user.username);
+      setSessionCookie(res, issueFor(user.id, pvOf(user), now), req);
+      sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
+    });
   }
 
   async function login(req, res) {
@@ -399,16 +403,21 @@ function createHandlers(storage, options) {
     }
     const next = String(body.next || '');
     if (next.length < 8 || next.length > 72) return sendJson(res, 400, { error: '新密码需 8-72 位' });
-    const users = await readUsers();
-    const idx = users.findIndex((u) => u.id === user.id);
-    if (idx < 0) return sendJson(res, 401, { error: '账号不存在' });
-    users[idx].passHash = hashPassword(next);
-    await backupJson(USERS_KEY, 'users');
-    await write(USERS_KEY, users);
-    audit('me.password', 'user=' + user.username);
-    /* 重签当前会话(新 pv),其他浏览器/旧 cookie 因 pv 不匹配全部下线 */
-    setSessionCookie(res, issueFor(user.id, pvOf(users[idx]), now), req);
-    sendJson(res, 200, { ok: true });
+    /* 哈希在锁外算(scrypt 纯函数),users 读改写整段上锁:
+     * 与 me PUT 昵称/smsLogin 注册/redeem 等 users 写者互斥,防旧快照覆盖 */
+    const nextHash = hashPassword(next);
+    return withWorkspaceLock(async () => {
+      const users = await readUsers();
+      const idx = users.findIndex((u) => u.id === user.id);
+      if (idx < 0) return sendJson(res, 401, { error: '账号不存在' });
+      users[idx].passHash = nextHash;
+      await backupJson(USERS_KEY, 'users');
+      await write(USERS_KEY, users);
+      audit('me.password', 'user=' + user.username);
+      /* 重签当前会话(新 pv),其他浏览器/旧 cookie 因 pv 不匹配全部下线 */
+      setSessionCookie(res, issueFor(user.id, pvOf(users[idx]), now), req);
+      sendJson(res, 200, { ok: true });
+    });
   }
 
   /* POST /api/me/redeem:填码跃迁——角色升级唯一入口。
@@ -482,18 +491,22 @@ function createHandlers(storage, options) {
     if (!PHONE_RE.test(phone)) return sendJson(res, 400, { error: '手机号格式不正确' });
     const v = sms.verify(phone, String(body.code || ''));
     if (!v.ok) return sendJson(res, 401, { error: v.error });
-    const users = await readUsers();
-    if (users.some((u) => u.phone === phone && u.id !== user.id)) {
-      return sendJson(res, 409, { error: '该手机号已被其他账号绑定' });
-    }
-    if (user.phone) return sendJson(res, 400, { error: '该账号已绑定手机号' });
-    const idx = users.findIndex((u) => u.id === user.id);
-    if (idx < 0) return sendJson(res, 401, { error: '账号不存在' });
-    users[idx].phone = phone;
-    await backupJson(USERS_KEY, 'users');
-    await write(USERS_KEY, users);
-    audit('me.phone', 'user=' + user.username);
-    sendJson(res, 200, { user: safeUser(users[idx]) });
+    /* users 读改写整段上锁:占用检查(409)与落盘必须原子,
+     * 防两账号并发绑同一手机号双双通过检查;亦与其他 users 写者互斥防覆盖 */
+    return withWorkspaceLock(async () => {
+      const users = await readUsers();
+      if (users.some((u) => u.phone === phone && u.id !== user.id)) {
+        return sendJson(res, 409, { error: '该手机号已被其他账号绑定' });
+      }
+      if (user.phone) return sendJson(res, 400, { error: '该账号已绑定手机号' });
+      const idx = users.findIndex((u) => u.id === user.id);
+      if (idx < 0) return sendJson(res, 401, { error: '账号不存在' });
+      users[idx].phone = phone;
+      await backupJson(USERS_KEY, 'users');
+      await write(USERS_KEY, users);
+      audit('me.phone', 'user=' + user.username);
+      sendJson(res, 200, { user: safeUser(users[idx]) });
+    });
   }
 
   return { login, logout, me, mePassword, smsSend, smsLogin, currentUser, redeem, mePhone };
