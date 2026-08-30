@@ -65,14 +65,44 @@ assert.strictEqual(r.ok, true);
 /* ---- 附加边界:结构防御/角色门槛/series 缺省/无副作用不变式 ---- */
 const { comparableResource } = require('../api/acl');
 
-/* comparableResource:剥 updatedAt,且与键插入顺序无关 */
-assert.strictEqual(comparableResource({ id: 'a', updatedAt: 1, canvas: { cards: [1] } }),
-  comparableResource({ canvas: { cards: [1] }, id: 'a', updatedAt: 99 }));
+/* comparableResource:剥 updatedAt;键序无关(含嵌套),嵌套内容变必须不等,数组保序 */
+assert.strictEqual(
+  comparableResource({ id: 'a', updatedAt: 1, canvas: { cards: [1], nested: { z: 1, a: 2 } } }),
+  comparableResource({ canvas: { nested: { a: 2, z: 1 }, cards: [1] }, id: 'a', updatedAt: 99 }));
+assert.notStrictEqual(
+  comparableResource({ id: 'a', canvas: { cards: [1] } }),
+  comparableResource({ id: 'a', canvas: { cards: [7] } }));   /* 仅嵌套内容变 → 不等 */
+assert.notStrictEqual(
+  comparableResource({ id: 'a', v: [1, 2] }),
+  comparableResource({ id: 'a', v: [2, 1] }));                /* 数组保序 */
+
+/* admin 仅改他人届嵌套内容(canvas.cards)→ 403(比较序列化不得对嵌套失明) */
+const curNested = () => ({
+  series: [],
+  tournaments: [{ id: 't2', name: '别人的届', seriesId: null, createdBy: 'uB', updatedAt: 1, canvas: { cards: [1] } }],
+  players: [], activeId: 't2'
+});
+r = workspacePutGuard(U, curNested(), { series: [],
+  tournaments: [{ id: 't2', name: '别人的届', seriesId: null, createdBy: 'uB', updatedAt: 1, canvas: { cards: [7] } }],
+  players: [], activeId: 't2' });
+assert.strictEqual(r.ok, false);
+assert.strictEqual(r.status, 403);
+assert.match(r.error, /别人的届/);
 
 /* 结构防御:tournaments/series 非数组 → 400(与 data.js 现有校验同语义) */
 assert.strictEqual(workspacePutGuard(U, cur(), { series: 'x', tournaments: 'y' }).status, 400);
 assert.strictEqual(workspacePutGuard(U, cur(), { tournaments: [], series: 'x' }).status, 400);
 assert.strictEqual(workspacePutGuard(U, cur(), null).status, 400);
+
+/* 条目缺 id / id 非字符串 → 400:无 id 条目会绕过盖章,客户端伪造 createdBy 原样落库 */
+assert.strictEqual(workspacePutGuard(U, cur(), { series: cur().series,
+  tournaments: [...cur().tournaments, { name: '无 id 届', createdBy: 'uB' }], players: [], activeId: 't1' }).status, 400);
+assert.strictEqual(workspacePutGuard(U, cur(), { series: [...cur().series, { name: '无 id 系列', createdBy: 'uB' }],
+  tournaments: cur().tournaments, players: [], activeId: 't1' }).status, 400);
+assert.strictEqual(workspacePutGuard(U, cur(), { series: cur().series,
+  tournaments: [...cur().tournaments, { id: 42, name: '数字 id', createdBy: 'uB' }], players: [], activeId: 't1' }).status, 400);
+assert.strictEqual(workspacePutGuard(U, cur(), { series: cur().series,
+  tournaments: [...cur().tournaments, null], players: [], activeId: 't1' }).status, 400);
 
 /* 非管理角色(player)即使带合法数据也拒写 → 403 */
 assert.strictEqual(workspacePutGuard({ id: 'uP', role: 'player' }, cur(), cur()).status, 403);

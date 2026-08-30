@@ -18,11 +18,26 @@ function canManageResource(role, userId, resource) {
   return resource.createdBy != null && resource.createdBy === userId;
 }
 
-/* 剥 updatedAt 的 JSON 序列化(顶层键排序):纯时间戳/键序变化不视为内容修改 */
+/* 递归规范序列化:对象每层键名排序后拼接、数组保序、原始值走 JSON。
+ * 不能用 JSON.stringify 的数组型 replacer 排键——replacer 数组是每层生效的
+ * 属性白名单,嵌套对象会被剥成空壳(canvas:{cards:[7]} 与 cards:[1] 同为
+ * {"canvas":{}}),导致「仅改嵌套内容」逃过修改检测。 */
+function deepCanonical(value) {
+  if (value === undefined) return 'null';               /* 与 JSON 语义对齐:[undefined] → [null] */
+  if (Array.isArray(value)) return '[' + value.map(deepCanonical).join(',') + ']';
+  if (value !== null && typeof value === 'object') {
+    return '{' + Object.keys(value).sort()
+      .filter((k) => { const v = value[k]; return v !== undefined && typeof v !== 'function' && typeof v !== 'symbol'; })
+      .map((k) => JSON.stringify(k) + ':' + deepCanonical(value[k])).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
+/* 剥 updatedAt 的规范序列化:纯时间戳/键序变化不视为内容修改 */
 function comparableResource(resource) {
   const copy = Object.assign({}, resource || {});
   delete copy.updatedAt;
-  return JSON.stringify(copy, Object.keys(copy).sort());
+  return deepCanonical(copy);
 }
 
 /* 一类资源(series/tournaments)的删/改判定 + 盖章回填(就地改 outList,它已是深拷贝):
@@ -72,9 +87,22 @@ function workspacePutGuard(user, current, incoming) {
   if (role !== 'admin' && role !== 'super') {
     return { ok: false, status: 403, error: '无权写入工作区' };
   }
+  /* series 仅「缺失(undefined)」按 [] 处理;显式 null/非数组一律 400——
+   * fail-closed:字段带了却不是数组即为畸形输入,拒绝而不是猜语义 */
   if (!incoming || !Array.isArray(incoming.tournaments)
       || (incoming.series !== undefined && !Array.isArray(incoming.series))) {
     return { ok: false, status: 400, error: '数据格式不正确:series/tournaments 必须是数组' };
+  }
+  /* 条目必须带字符串 id:无 id 条目进不了盖章/回填/比较任一分支,
+   * 会带着客户端伪造的 createdBy 原样落库 → fail-closed 400 */
+  for (const kind of ['tournaments', 'series']) {
+    const list = kind === 'series' ? (incoming.series || []) : incoming.tournaments;
+    for (let i = 0; i < list.length; i++) {
+      const entry = list[i];
+      if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string') {
+        return { ok: false, status: 400, error: `资源缺少 id:${RESOURCE_LABELS[kind]} 第 ${i + 1} 项` };
+      }
+    }
   }
   const cur = current || {};
   const userId = user && user.id != null ? user.id : null;
