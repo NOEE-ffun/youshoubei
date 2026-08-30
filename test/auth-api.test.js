@@ -484,6 +484,47 @@ async function main() {
     console.log('✓ banned:两条登录链 403/会话视为无效/不计限速/可登出');
   }
 
+  /* ---- Task 1 收编:banned sms 命中不清限速计数 + banned audit 带 ip ---- */
+  {
+    const seed = seedWorld();
+    seed['users.json'].push({
+      id: 'u_banned2', username: 'banned2', usernameLower: 'banned2', phone: '13900000005',
+      passHash: hashPassword('password8'), role: 'user', playerId: null, status: 'banned', createdAt: 't'
+    });
+    const audits = [];
+    const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
+    /* 真限速器(非 noop):行为断言依赖失败计数跨请求保留 */
+    const acc = account.createHandlers(memoryStorage(seed), {
+      sms: smsSvc,
+      appendAudit: (event, detail) => audits.push(event + ' ' + detail)
+    });
+
+    /* banned sms:audit detail 带 ip(与密码链 'user=xxx ip=1.2.3.4' 惯例一致) */
+    const banSms = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000005', code: '000000' }) }));
+    assert.strictEqual(banSms.status, 403, 'banned 短信登录 403');
+    assert.ok(
+      audits.includes('auth.login.banned user=banned2 ip=127.0.0.1'),
+      'sms 链 banned audit 应含 ip(实际:' + audits.join(' | ') + ')'
+    );
+
+    /* banned sms 命中不得清失败计数(旧实现在验码通过即 reset,会清零):
+     * 4 次密码失败 → banned sms 命中(若曾 reset 则计数归 0)→ 第 5 次密码失败
+     * 触发锁定 → 第 6 次尝试应 429;若 banned sms 曾 reset,此刻计数仅 1,
+     * 第 6 次应答 401 而非 429,可判别 */
+    for (let i = 0; i < 4; i++) {
+      const f = await call(acc.login, mockReq('POST', { body: jsonBody({ username: 'banned2', password: 'wrong-' + i }) }));
+      assert.strictEqual(f.status, 401, '错误密码 401');
+    }
+    const again = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000005', code: '000000' }) }));
+    assert.strictEqual(again.status, 403, 'banned sms 再次命中 403');
+    const fifth = await call(acc.login, mockReq('POST', { body: jsonBody({ username: 'banned2', password: 'wrong-4' }) }));
+    assert.strictEqual(fifth.status, 401, '第 5 次失败本身仍 401(锁在本次记录后生效)');
+    const sixth = await call(acc.login, mockReq('POST', { body: jsonBody({ username: 'banned2', password: 'password8' }) }));
+    assert.strictEqual(sixth.status, 429, '计数未被 banned sms 清零 → 第 6 次 429');
+
+    console.log('✓ banned sms:不清限速计数/audit 带 ip');
+  }
+
   delete process.env.SESSION_SECRET;
   console.log('auth-api 全部通过');
 }

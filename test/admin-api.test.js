@@ -1,15 +1,19 @@
 'use strict';
 
-/* 后台读接口(users/audit/health):super 守卫矩阵 + 数据形状 + 降级信号。
+/* 后台接口:读(users/audit/health)+ 写(users/:id/status|role、backup、restore)。
  * 模块默认 handler 读 dev-store(种子模式同 login-wall.test.js):
  * requireRole 走全局 account 单例 → users 种子必须落全局 dev-store;
- * createHandlers({storage,listBackups}) 工厂注入内存存储/假备份列表。
- * 会话真实签发:种子账号 passHash 为 null,pv 为空串。 */
+ * createHandlers({storage,...}) 工厂注入内存存储/假备份列表/假审计。
+ * 会话真实签发:种子账号 passHash 为 null,pv 为空串。
+ * 写接口另注入共享 store 的 account 实例验证封禁 → 登录 403 链路。 */
 
 const assert = require('node:assert');
 const session = require('../api/session');
 const devStore = require('../api/dev-store');
 const apiAdmin = require('../api/admin');
+const account = require('../api/account');
+const { createSmsService } = require('../api/sms');
+const { hashPassword } = account;
 
 function memoryStorage(seed) {
   const map = new Map(Object.entries(seed || {}));
@@ -237,6 +241,233 @@ async function call(handler, req) {
     for (const [k, v] of ossEnvSaved) { if (v !== undefined) process.env[k] = v; }
   }
 
+  /* ==================== 写接口:封禁/角色/手工备份/快照恢复 ==================== */
+
+  const jsonBody = (obj) => JSON.stringify(obj);
+
+  /* 写接口用种子:u3=victim(可登录的被封对象)、u5=root(super,操作者,
+   * 会话仍由全局 dev-store 验签)、u7=存档 super、u1=boss(env 名单升格用) */
+  const writeSeed = () => [
+    { id: 'u1', username: 'boss', usernameLower: 'boss', nickname: '老板', phone: '13812341234', passHash: null, role: 'admin', playerId: null, status: 'active', createdAt: 't1' },
+    { id: 'u3', username: 'victim', usernameLower: 'victim', phone: '13900000009', passHash: hashPassword('pass12345'), role: 'player', playerId: null, status: 'active', createdAt: 't3' },
+    { id: 'u5', username: 'root', usernameLower: 'root', phone: '13800000000', passHash: null, role: 'super', playerId: null, status: 'active', createdAt: 't5' },
+    { id: 'u7', username: 'root2', usernameLower: 'root2', phone: '13800000001', passHash: null, role: 'super', playerId: null, status: 'active', createdAt: 't7' }
+  ];
+
+  /* ---- POST /api/admin/users/:id/status:封禁→两条登录链 403,解封恢复 ---- */
+  {
+    const audits = [];
+    const store = memoryStorage({
+      'users.json': writeSeed(),
+      'data.json': { tournaments: [], series: [], players: [], activeId: null },
+      'invite-codes.json': []
+    });
+    const admin = apiAdmin.createHandlers({ storage: store, appendAudit: (a, d) => audits.push(a + ' ' + d) });
+    /* 共享同一 store 的 account 实例:封禁落盘后立即在登录链可见 */
+    const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
+    const acc = account.createHandlers(store, { sms: smsSvc });
+    const su = ck('u5');
+    const post = (url, body, cookie) =>
+      call(admin, mockReq('POST', { url, headers: cookie ? { cookie } : undefined, body: jsonBody(body) }));
+    const row = (id) => store._map.get('users.json').find((u) => u.id === id);
+
+    /* ban 普通用户:200 + 落盘 + 审计 */
+    let r = await post('/api/admin/users/u3/status', { banned: true }, su);
+    assert.strictEqual(r.status, 200, 'ban 200');
+    assert.strictEqual(r.body.ok, true);
+    assert.strictEqual(r.body.user.status, 'banned');
+    assert.strictEqual(r.body.user.username, 'victim');
+    assert.strictEqual(row('u3').status, 'banned', 'users.json 落盘 status=banned');
+    assert.ok(audits.includes('admin.ban user=victim by=root'), 'audit admin.ban');
+
+    /* 被封账号:密码/短信两条登录链都 403(Task 1 链路收口) */
+    const pwBan = await call(acc.login, mockReq('POST', { body: jsonBody({ username: 'victim', password: 'pass12345' }) }));
+    assert.strictEqual(pwBan.status, 403, 'banned 密码登录 403');
+    const smsBan = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000009', code: '000000' }) }));
+    assert.strictEqual(smsBan.status, 403, 'banned 短信登录 403');
+
+    /* unban:200 + 落盘 + 登录恢复 */
+    r = await post('/api/admin/users/u3/status', { banned: false }, su);
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.body.user.status, 'active');
+    assert.strictEqual(row('u3').status, 'active');
+    assert.ok(audits.includes('admin.unban user=victim by=root'), 'audit admin.unban');
+    const pwOk = await call(acc.login, mockReq('POST', { body: jsonBody({ username: 'victim', password: 'pass12345' }) }));
+    assert.strictEqual(pwOk.status, 200, '解封后登录恢复 200');
+
+    /* 超管保护:存档 super / env 名单升格 / 操作者本人 → 400,不落盘不审计 */
+    const auditsBefore = audits.length;
+    r = await post('/api/admin/users/u7/status', { banned: true }, su);
+    assert.strictEqual(r.status, 400, '存档 super 不可封');
+    assert.strictEqual(r.body.error, '超管账号不可在此操作');
+    r = await post('/api/admin/users/u5/status', { banned: true }, su);
+    assert.strictEqual(r.status, 400, '不可封自己');
+    try {
+      process.env.SUPER_ADMIN_USERNAMES = 'boss';
+      r = await post('/api/admin/users/u1/status', { banned: true }, su);
+      assert.strictEqual(r.status, 400, 'env 名单升格(effectiveRole=super)不可封');
+    } finally { delete process.env.SUPER_ADMIN_USERNAMES; }
+    assert.strictEqual(audits.length, auditsBefore, '保护命中不写审计');
+    assert.strictEqual(row('u7').status, 'active', '保护命中不落盘');
+
+    /* 404 不存在;banned 非布尔/缺失 400;守卫 admin 403/匿名 401 */
+    assert.strictEqual((await post('/api/admin/users/ghost/status', { banned: true }, su)).status, 404, '账号不存在 404');
+    assert.strictEqual((await post('/api/admin/users/u3/status', { banned: 'yes' }, su)).status, 400, 'banned 非布尔 400');
+    assert.strictEqual((await post('/api/admin/users/u3/status', {}, su)).status, 400, '缺 banned 400');
+    assert.strictEqual((await post('/api/admin/users/u3/status', { banned: true }, ck('u2'))).status, 403, 'admin 角色 403');
+    assert.strictEqual((await post('/api/admin/users/u3/status', { banned: true })).status, 401, '匿名 401');
+
+    console.log('✓ admin 写:ban/unban(超管保护)/登录链 403');
+  }
+
+  /* ---- POST /api/admin/users/:id/role:player↔admin 往返,置 super 400 ---- */
+  {
+    const audits = [];
+    const store = memoryStorage({ 'users.json': writeSeed(), 'data.json': { tournaments: [], series: [], players: [] }, 'invite-codes.json': [] });
+    const admin = apiAdmin.createHandlers({ storage: store, appendAudit: (a, d) => audits.push(a + ' ' + d) });
+    const su = ck('u5');
+    const post = (url, body, cookie) =>
+      call(admin, mockReq('POST', { url, headers: cookie ? { cookie } : undefined, body: jsonBody(body) }));
+    const row = (id) => store._map.get('users.json').find((u) => u.id === id);
+
+    /* admin → player → admin 往返 */
+    let r = await post('/api/admin/users/u1/role', { role: 'player' }, su);
+    assert.strictEqual(r.status, 200, '降级 200');
+    assert.strictEqual(r.body.user.role, 'player');
+    assert.strictEqual(row('u1').role, 'player', '落盘 role=player');
+    assert.ok(audits.includes('admin.role user=boss role=player by=root'), 'audit admin.role');
+    r = await post('/api/admin/users/u1/role', { role: 'admin' }, su);
+    assert.strictEqual(r.status, 200, '升级 200');
+    assert.strictEqual(row('u1').role, 'admin', '落盘 role=admin');
+
+    /* 非法 role:super 不支持,user/数字/null 均 400,且不落盘 */
+    for (const bad of ['super', 'user', 42, null]) {
+      r = await post('/api/admin/users/u1/role', { role: bad }, su);
+      assert.strictEqual(r.status, 400, '非法 role ' + JSON.stringify(bad) + ' → 400');
+    }
+    assert.strictEqual(row('u1').role, 'admin', '非法请求不落盘');
+
+    /* banned 账号可改角色(封禁与角色正交) */
+    row('u3').status = 'banned';
+    r = await post('/api/admin/users/u3/role', { role: 'admin' }, su);
+    assert.strictEqual(r.status, 200, 'banned 账号可改角色');
+    assert.strictEqual(row('u3').role, 'admin');
+
+    /* 保护:存档 super / 本人 / env 名单 → 400;404;守卫;方法 */
+    assert.strictEqual((await post('/api/admin/users/u7/role', { role: 'player' }, su)).status, 400, '存档 super 不可改角色');
+    assert.strictEqual((await post('/api/admin/users/u5/role', { role: 'player' }, su)).status, 400, '不可改自己角色');
+    try {
+      process.env.SUPER_ADMIN_USERNAMES = 'boss';
+      assert.strictEqual((await post('/api/admin/users/u1/role', { role: 'player' }, su)).status, 400, 'env 名单升格不可改角色');
+    } finally { delete process.env.SUPER_ADMIN_USERNAMES; }
+    assert.strictEqual((await post('/api/admin/users/ghost/role', { role: 'player' }, su)).status, 404, '账号不存在 404');
+    assert.strictEqual((await post('/api/admin/users/u1/role', { role: 'player' }, ck('u2'))).status, 403, 'admin 角色 403');
+    assert.strictEqual((await post('/api/admin/users/u1/role', { role: 'player' })).status, 401, '匿名 401');
+    assert.strictEqual((await call(admin, mockReq('GET', { url: '/api/admin/users/u3/status', headers: { cookie: su } }))).status, 405, 'status 仅 POST');
+    assert.strictEqual((await call(admin, mockReq('GET', { url: '/api/admin/users/u3/role', headers: { cookie: su } }))).status, 405, 'role 仅 POST');
+
+    console.log('✓ admin 写:role 降级/升级(player↔admin)');
+  }
+
+  /* ---- POST /api/admin/backup:三件套手工快照,返回 keys ---- */
+  {
+    const audits = [];
+    const calls = [];
+    const TS = 1756543200000;
+    const admin = apiAdmin.createHandlers({
+      storage: memoryStorage({}),
+      appendAudit: (a, d) => audits.push(a + ' ' + d),
+      now: () => TS,
+      backupManual: async (source, ts) => {
+        calls.push([source, ts]);
+        const kind = { 'data.json': 'data', 'users.json': 'users', 'invite-codes.json': 'codes' }[source];
+        return 'backups/manual-' + kind + '-' + ts + '.json';
+      }
+    });
+    const su = ck('u5');
+    const r = await call(admin, mockReq('POST', { url: '/api/admin/backup', headers: { cookie: su } }));
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.body.ok, true);
+    assert.strictEqual(r.body.keys.length, 3, 'data/users/invite-codes 各一份');
+    assert.deepStrictEqual(r.body.keys, [
+      'backups/manual-data-' + TS + '.json',
+      'backups/manual-users-' + TS + '.json',
+      'backups/manual-codes-' + TS + '.json'
+    ]);
+    assert.deepStrictEqual(calls.map((c) => c[0]), ['data.json', 'users.json', 'invite-codes.json'], '按序备份三件套');
+    assert.deepStrictEqual(calls.map((c) => c[1]), [TS, TS, TS], '三件共用同一时间戳(成套)');
+    assert.ok(audits.some((a) => a.startsWith('admin.backup ')), 'audit admin.backup');
+    /* 守卫与方法 */
+    assert.strictEqual((await call(admin, mockReq('POST', { url: '/api/admin/backup', headers: { cookie: ck('u2') } }))).status, 403);
+    assert.strictEqual((await call(admin, mockReq('POST', { url: '/api/admin/backup' }))).status, 401);
+    assert.strictEqual((await call(admin, mockReq('GET', { url: '/api/admin/backup', headers: { cookie: su } }))).status, 405);
+
+    console.log('✓ admin 写:backup 手工三件套');
+  }
+
+  /* ---- POST /api/admin/restore:key 白名单 + 先留底后拷贝 ---- */
+  {
+    const audits = [];
+    const seq = [];
+    const listed = [
+      'backups/data-2026-08-20T00-00-00-000Z.json',
+      'backups/manual-data-2026-08-28T00-00-00-000Z.json',
+      /* 假列表混入的非 data 类(真 listBackups 会滤掉,此处专测服务端再校验) */
+      'backups/users-2026-08-20T00-00-00-000Z.json'
+    ];
+    const admin = apiAdmin.createHandlers({
+      storage: memoryStorage({}),
+      appendAudit: (a, d) => audits.push(a + ' ' + d),
+      listBackups: async () => listed.slice(),
+      backupData: async () => { seq.push('backupData'); },
+      restoreCopy: async (key) => { seq.push('copy:' + key); }
+    });
+    const su = ck('u5');
+    const post = (body, cookie) =>
+      call(admin, mockReq('POST', { url: '/api/admin/restore', headers: cookie ? { cookie } : undefined, body: jsonBody(body) }));
+
+    /* 守卫 */
+    assert.strictEqual((await post({ key: listed[0] }, ck('u2'))).status, 403, 'admin 角色 403');
+    assert.strictEqual((await post({ key: listed[0] })).status, 401, '匿名 401');
+    /* key 白名单:非 backups/ 前缀 / 路径穿越 / 不在备份列表 → 400 */
+    assert.strictEqual((await post({ key: 'users.json' }, su)).status, 400, '非 backups/ 前缀 400');
+    assert.strictEqual((await post({ key: 'backups/../../data.json' }, su)).status, 400, '路径穿越不命中列表 400');
+    assert.strictEqual((await post({ key: 'backups/data-2026-09-01T00-00-00-000Z.json' }, su)).status, 400, '不在列表 400');
+    /* 命中列表但非 data 类 → 400 */
+    assert.strictEqual((await post({ key: listed[2] }, su)).status, 400, '非 data 类 400');
+    /* 缺 key → 400 */
+    assert.strictEqual((await post({}, su)).status, 400, '缺 key 400');
+    /* 校验失败不得触发任何副作用 */
+    assert.deepStrictEqual(seq, [], '校验阶段不触发留底/拷贝');
+
+    /* 正常路径:先 backupData 留底,再 copy 恢复 */
+    let r = await post({ key: listed[0] }, su);
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.body.ok, true);
+    assert.deepStrictEqual(seq, ['backupData', 'copy:' + listed[0]], '先留底后拷贝');
+    /* 手工 data 快照同样可恢复(manual-data-* 含 data- 子串 → listBackups 可见) */
+    r = await post({ key: listed[1] }, su);
+    assert.strictEqual(r.status, 200, 'manual-data 快照可恢复');
+    assert.deepStrictEqual(seq, ['backupData', 'copy:' + listed[0], 'backupData', 'copy:' + listed[1]]);
+    assert.ok(audits.includes('admin.restore key=' + listed[0] + ' by=root'), 'audit admin.restore 含 key');
+    /* GET → 405 */
+    assert.strictEqual((await call(admin, mockReq('GET', { url: '/api/admin/restore', headers: { cookie: su } }))).status, 405);
+
+    console.log('✓ admin 写:restore 白名单/先留底后拷贝');
+  }
+
+  /* ---- manualBackupKey 纯函数:命名与自动备份同构,manual data 类可被恢复命中 ---- */
+  {
+    const t = Date.UTC(2026, 7, 30, 9, 8, 7, 6);
+    assert.strictEqual(apiAdmin.manualBackupKey(t, 'data.json'), 'backups/manual-data-2026-08-30T09-08-07-006Z.json');
+    assert.strictEqual(apiAdmin.manualBackupKey(t, 'users.json'), 'backups/manual-users-2026-08-30T09-08-07-006Z.json');
+    assert.strictEqual(apiAdmin.manualBackupKey(t, 'invite-codes.json'), 'backups/manual-codes-2026-08-30T09-08-07-006Z.json');
+    /* manual data 快照含 'data-' 子串 → 真 listBackups 可见 → 可过 restore 白名单 */
+    assert.ok(apiAdmin.manualBackupKey(t, 'data.json').includes('data-'));
+
+    console.log('✓ admin 写:manualBackupKey 命名');
+  }
+
   delete process.env.SESSION_SECRET;
-  console.log('✓ admin-api: 后台读接口(users 脱敏/audit 流水/health 备份)通过');
+  console.log('✓ admin-api: 后台读+写接口(users 脱敏/audit/health/封禁/角色/备份/恢复)通过');
 })().catch((e) => { console.error(e); process.exit(1); });

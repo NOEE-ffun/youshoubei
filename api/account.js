@@ -227,7 +227,6 @@ function createHandlers(storage, options) {
     if (!PHONE_RE.test(phone)) return sendJson(res, 400, { error: '手机号格式不正确' });
     const v = await sms.verify(phone, code);
     if (!v.ok) { rate.recordFail(ip); return sendJson(res, 401, { error: v.error }); }
-    rate.reset(ip);
     /* users 读改写整段上锁(读→查号→建号→写):自动注册与 me PUT 昵称/redeem/
      * mePhone/mePassword 等 users 写者共用一把锁,防并发交错用旧快照覆盖丢号 */
     await withWorkspaceLock(async () => {
@@ -246,11 +245,14 @@ function createHandlers(storage, options) {
         await backupJson(USERS_KEY, 'users');
         await write(USERS_KEY, users);
       }
-      /* 既有用户已停用 → 403(建号路径 status 恒 active,不可能 banned) */
+      /* 既有用户已停用 → 403(建号路径 status 恒 active,不可能 banned);
+       * 验码已通过但 banned:与密码链对称——不计失败亦不 reset,
+       * 防借停用账号的既知验证码清失败计数助跑爆破 */
       if (user.status === 'banned') {
-        audit('auth.login.banned', 'user=' + user.username);
+        audit('auth.login.banned', 'user=' + user.username + ' ip=' + ip);
         return sendJson(res, 403, { error: '账号已被停用' });
       }
+      rate.reset(ip);
       audit(created ? 'sms.register' : 'sms.login', 'user=' + user.username);
       setSessionCookie(res, issueFor(user.id, pvOf(user), now), req);
       sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
