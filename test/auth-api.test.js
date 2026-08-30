@@ -1,12 +1,13 @@
 'use strict';
 
 /* 账号体系 API 行为测试(内存存储注入,不联网):
- * 会话签名、三种邀请码注册、码核销/重用、用户名冲突、登录限速、
+ * 会话签名、短信验证码登录/自动注册、存量用户归一化、登录限速、
  * /api/me 会话读取、资料白名单更新、修改密码。 */
 
 const assert = require('node:assert');
 const session = require('../api/session');
 const account = require('../api/account');
+const { createSmsService } = require('../api/sms');
 const { hashPassword, verifyPassword, createRateLimiter } = account;
 
 function memoryStorage(seed) {
@@ -54,13 +55,11 @@ async function call(handler, req) {
 
 const jsonBody = (obj) => JSON.stringify(obj);
 
+/* 恒 0 限速器:短信登录用例绕开登录锁,专测验码语义 */
+const noopRate = () => ({ blocked: () => 0, recordFail() {}, reset() {} });
+
 function seedWorld() {
   return {
-    'invite-codes.json': [
-      { code: 'BOUND1', playerId: 'p_old', used: false },
-      { code: 'BOUND2', playerId: 'p_old', used: false },
-      { code: 'BLANK1', playerId: null, used: false }
-    ],
     'users.json': [],
     'data.json': {
       tournaments: [],
@@ -97,53 +96,52 @@ async function main() {
     console.log('✓ password:scrypt 加盐哈希');
   }
 
-  /* ---- 注册:三种码 ---- */
-  const prevAdminCode = process.env.ADMIN_INVITE_CODE;
-  process.env.ADMIN_INVITE_CODE = 'ADMIN-CODE-1';
+  /* ---- 短信登录/自动注册(dev 后门注入) ---- */
   {
-    const audits = [];
-    const h = account.createHandlers(memoryStorage(seedWorld()), {
-      appendAudit: (a, d) => audits.push(a + ' ' + d)
-    });
+    const seed = seedWorld();
+    /* 存量旧用户:无 phone/status/nickname,验证读出归一化 */
+    seed['users.json'] = [{
+      id: 'u_old', username: '老用户', usernameLower: '老用户',
+      passHash: hashPassword('12345678'), role: 'player', playerId: null, createdAt: '2025-01-01T00:00:00Z'
+    }];
+    const store = memoryStorage(seed);
+    const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
+    const acc = account.createHandlers(store, { sms: smsSvc, rateLimiter: noopRate() });
 
-    /* 空白码:建新选手 */
-    const r1 = await call(h.register, mockReq('POST', { body: jsonBody({ code: 'BLANK1', username: '新星', password: '12345678' }) }));
-    assert.strictEqual(r1.status, 200, '空白码注册 200');
-    assert.ok(r1.body.user.playerId, '空白码应新建选手');
-    assert.strictEqual(r1.body.user.role, 'player');
-    assert.ok(r1.headers['Set-Cookie'].includes('sess='), '注册应种会话 cookie');
-    assert.ok(r1.headers['Set-Cookie'].includes('HttpOnly'), 'cookie 需 HttpOnly');
+    const r1 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000001', code: '000000' }) }));
+    assert.strictEqual(r1.status, 200);
+    assert.strictEqual(r1.body.user.role, 'user');
+    assert.strictEqual(r1.body.user.nickname, '用户0001');
+    assert.ok(r1.body.user.id);
+    assert.ok((r1.headers['Set-Cookie'] || '').includes('sess='), '验码登录应种会话 cookie');
 
-    /* 绑定码:继承老选手 */
-    const r2 = await call(h.register, mockReq('POST', { body: jsonBody({ code: 'BOUND1', username: 'yuju', password: '12345678' }) }));
-    assert.strictEqual(r2.status, 200, '绑定码注册 200');
-    assert.strictEqual(r2.body.user.playerId, 'p_old', '绑定码应挂到预写选手');
-    assert.strictEqual(r2.body.player && r2.body.player.name, '雨橘', '/register 响应带继承选手');
+    /* 手机号格式拒绝 */
+    const r2 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '12345', code: '000000' }) }));
+    assert.strictEqual(r2.status, 400);
 
-    /* 码重用 */
-    const r3 = await call(h.register, mockReq('POST', { body: jsonBody({ code: 'BLANK1', username: '别人', password: '12345678' }) }));
-    assert.strictEqual(r3.status, 400, '已用码应 400');
+    /* 码错拒绝 */
+    const r3 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000001', code: '111111' }) }));
+    assert.strictEqual(r3.status, 401);
 
-    /* 同一选手被重复绑定 */
-    const r4 = await call(h.register, mockReq('POST', { body: jsonBody({ code: 'BOUND2', username: '冒充者', password: '12345678' }) }));
-    assert.strictEqual(r4.status, 409, '选手已被绑定时应 409');
+    /* 同手机再次登录=同一账号(不重复建) */
+    const r4 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000001', code: '000000' }) }));
+    assert.strictEqual(r4.body.user.id, r1.body.user.id);
 
-    /* 管理员码 */
-    const r5 = await call(h.register, mockReq('POST', { body: jsonBody({ code: 'ADMIN-CODE-1', username: 'admin', password: '12345678' }) }));
+    /* smsSend:格式校验+dev 透传 */
+    const r5 = await call(acc.smsSend, mockReq('POST', { body: jsonBody({ phone: '13900000001' }) }));
     assert.strictEqual(r5.status, 200);
-    assert.strictEqual(r5.body.user.role, 'admin', '管理员码应授 admin 角色');
-    assert.strictEqual(r5.body.user.playerId, null, '管理员不绑选手');
+    assert.strictEqual(r5.body.dev, true, 'dev 后门应透传');
+    const r6 = await call(acc.smsSend, mockReq('POST', { body: jsonBody({ phone: 'abc' }) }));
+    assert.strictEqual(r6.status, 400);
 
-    /* 用户名冲突(忽略大小写) */
-    const r6 = await call(h.register, mockReq('POST', { body: jsonBody({ code: 'ADMIN-CODE-1', username: 'ADMIN', password: '12345678' }) }));
-    assert.strictEqual(r6.status, 409, '用户名忽略大小写去重');
-
-    /* 弱密码/非法用户名 */
-    assert.strictEqual((await call(h.register, mockReq('POST', { body: jsonBody({ code: 'X', username: 'okname', password: '123' }) }))).status, 400, '短密码 400');
-    assert.strictEqual((await call(h.register, mockReq('POST', { body: jsonBody({ code: 'X', username: 'a', password: '12345678' }) }))).status, 400, '短用户名 400');
-
-    assert.ok(audits.some((a) => a.startsWith('auth.register')), '注册应写审计');
-    console.log('✓ register:空白码/绑定码/管理员码/重用/冲突/校验');
+    /* 存量归一化:旧用户登录链路读出即补 phone/status/nickname,写盘不丢 */
+    const stored = store._map.get('users.json');
+    const oldUser = stored.find((u) => u.id === 'u_old');
+    assert.strictEqual(oldUser.phone, null, '旧用户补 phone:null');
+    assert.strictEqual(oldUser.status, 'active', '旧用户补 status:active');
+    assert.strictEqual(oldUser.nickname, null, '旧用户补 nickname:null');
+    assert.strictEqual(stored.filter((u) => u.phone === '13900000001').length, 1, '同手机号只建一个账号');
+    console.log('✓ sms:登录/自动注册/格式与码错/归一化');
   }
 
   /* ---- 登录 + 限速 + 会话 ---- */
@@ -242,14 +240,7 @@ async function main() {
     const scalar = await call(h.login, mockReq('POST', { body: '123' }));
     assert.strictEqual(scalar.status, 400, '标量 JSON 体应 400');
 
-    /* 开发测试码(env) */
-    process.env.AUTH_DEV_INVITE_CODES = 'DEV1';
-    const dev = await call(h.register, mockReq('POST', { body: jsonBody({ code: 'DEV1', username: 'devuser', password: '12345678' }) }));
-    assert.strictEqual(dev.status, 200, '开发码注册可用');
-    const devAgain = await call(h.register, mockReq('POST', { body: jsonBody({ code: 'DEV1', username: 'devuser2', password: '12345678' }) }));
-    assert.strictEqual(devAgain.status, 400, '开发码一次性');
-    delete process.env.AUTH_DEV_INVITE_CODES;
-    console.log('✓ me/player/password:白名单/越权/备份/改密/开发码');
+    console.log('✓ me/player/password:白名单/越权/备份/改密');
   }
 
   /* ---- 限速器窗口语义(注入时钟) ---- */
@@ -264,8 +255,6 @@ async function main() {
     console.log('✓ rateLimiter:窗口/隔离/重置');
   }
 
-  if (prevAdminCode === undefined) delete process.env.ADMIN_INVITE_CODE;
-  else process.env.ADMIN_INVITE_CODE = prevAdminCode;
   delete process.env.SESSION_SECRET;
   console.log('auth-api 全部通过');
 }
