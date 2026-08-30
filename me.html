@@ -12,8 +12,8 @@
   <link rel="prefetch" href="index.html">
   <link rel="prefetch" href="schedule.html">
   <link rel="prefetch" href="poster.html">
-  <script src="theme-init.js?v=2026090003"></script>
-  <link rel="stylesheet" href="styles.css?v=2026090003">
+  <script src="theme-init.js?v=2026090004"></script>
+  <link rel="stylesheet" href="styles.css?v=2026090004">
 </head>
 <body data-page="me">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -42,6 +42,7 @@
           <button type="button" class="me-tab" id="me-tab-decks" role="tab" aria-controls="me-panel-decks">我的对局</button>
           <button type="button" class="me-tab" id="me-tab-tourneys" role="tab" aria-controls="me-panel-tourneys">我的比赛</button>
           <button type="button" class="me-tab" id="me-tab-profile" role="tab" aria-controls="me-panel-profile">资料与账号</button>
+          <button type="button" class="me-tab" id="me-tab-codes" role="tab" aria-controls="me-panel-codes" hidden>发码中心</button>
         </nav>
 
         <section class="me-panel" id="me-panel-decks" role="tabpanel" aria-labelledby="me-tab-decks" hidden>
@@ -77,9 +78,41 @@
             <button type="button" id="profile-login-btn" class="btn btn-primary" hidden>登录</button>
           </div>
 
+          <section id="redeem-section" aria-labelledby="redeem-title" class="me-subsection" hidden>
+            <h2 id="redeem-title" class="subsection-title">升级与绑定</h2>
+            <form id="redeem-form" class="redeem-form">
+              <label class="form-field">
+                <span class="form-label">验证码</span>
+                <input type="text" id="redeem-code" maxlength="16" placeholder="选手码 / 管理员码" autocomplete="off">
+              </label>
+              <button type="submit" class="btn btn-primary btn-sm">兑换</button>
+              <span class="hint">选手码绑定/创建选手档案;管理员码升级为管理员。</span>
+            </form>
+            <form id="phone-bind-form" class="phone-bind" hidden>
+              <label class="form-field">
+                <span class="form-label">绑定手机号</span>
+                <input type="tel" id="bind-phone" inputmode="numeric" maxlength="11" placeholder="11 位手机号">
+              </label>
+              <label class="form-field">
+                <span class="form-label">验证码</span>
+                <span class="bind-code-row">
+                  <input type="text" id="bind-code" maxlength="6" placeholder="先点右侧获取">
+                  <button type="button" class="btn btn-secondary btn-sm" id="bind-send-btn">获取验证码</button>
+                </span>
+              </label>
+              <button type="submit" class="btn btn-primary btn-sm">绑定</button>
+            </form>
+            <p class="hint" id="redeem-status" role="status" aria-live="polite"></p>
+          </section>
+
           <section id="profile-card" hidden aria-labelledby="profile-card-title">
             <h2 id="profile-card-title" class="visually-hidden">选手资料</h2>
             <p class="hint">账号名 <strong id="profile-username"></strong>(用于登录,不可修改);以下信息全站展示。</p>
+
+            <div class="form-field">
+              <label for="account-nickname">账号昵称</label>
+              <input type="text" id="account-nickname" maxlength="24" placeholder="账号展示名;首次建选手档案时作为默认名">
+            </div>
 
             <div class="form-field">
               <label>头像</label>
@@ -153,16 +186,41 @@
             <button type="button" id="profile-logout" class="btn btn-ghost">退出登录</button>
           </div>
         </section>
+
+        <section class="me-panel" id="me-panel-codes" role="tabpanel" aria-labelledby="me-tab-codes" hidden>
+          <form id="codes-gen-form" class="codes-gen">
+            <label class="form-field">
+              <span class="form-label">码类型</span>
+              <select id="codes-kind" class="header-select">
+                <option value="player">选手码(空白)</option>
+                <option value="player-bound">选手码(绑定指定选手)</option>
+                <option value="admin">管理员码</option>
+              </select>
+            </label>
+            <label class="form-field" id="codes-player-field" hidden>
+              <span class="form-label">绑定选手</span>
+              <select id="codes-player" class="header-select"></select>
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm">生成</button>
+            <output id="codes-gen-out" class="codes-gen-out" aria-live="polite"></output>
+          </form>
+          <div class="table-wrap">
+            <table class="data-table" id="codes-table">
+              <thead><tr><th>码</th><th>类型</th><th>绑定选手</th><th>状态</th><th>使用人</th><th>签发</th></tr></thead>
+              <tbody id="codes-tbody"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </main>
   </div>
 
-  <script src="canvas-model.js?v=2026090003" defer></script>
-  <script src="common.js?v=2026090003" defer></script>
-  <script src="vs-poster/js/upload.js?v=2026090003" defer></script>
-  <script src="my-decks.js?v=2026090003" defer></script>
-  <script src="my-tourneys.js?v=2026090003" defer></script>
-  <script src="profile.js?v=2026090003" defer></script>
-  <script src="me.js?v=2026090003" defer></script>
+  <script src="canvas-model.js?v=2026090004" defer></script>
+  <script src="common.js?v=2026090004" defer></script>
+  <script src="vs-poster/js/upload.js?v=2026090004" defer></script>
+  <script src="my-decks.js?v=2026090004" defer></script>
+  <script src="my-tourneys.js?v=2026090004" defer></script>
+  <script src="profile.js?v=2026090004" defer></script>
+  <script src="me.js?v=2026090004" defer></script>
 </body>
 </html>

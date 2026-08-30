@@ -55,7 +55,9 @@ function newId(prefix) {
 }
 
 function safeUser(user) {
-  return { id: user.id, username: user.username, nickname: user.nickname || null, role: effectiveRole(user), playerId: user.playerId || null, createdAt: user.createdAt };
+  /* hasPhone:只暴露「是否已绑手机」布尔,不回传手机号本身;
+   * 选手中心据此决定是否显示绑手机表单(Task 10) */
+  return { id: user.id, username: user.username, nickname: user.nickname || null, role: effectiveRole(user), playerId: user.playerId || null, hasPhone: Boolean(user.phone), createdAt: user.createdAt };
 }
 
 function isHttpUrl(value) {

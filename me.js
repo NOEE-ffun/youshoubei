@@ -1,9 +1,9 @@
 'use strict';
 
 /**
- * 选手中心:统一登录守卫 + 三 tab(我的对局/我的比赛/资料与账号)。
- * 旧页 my-decks/my-tourneys/profile 已合并到此,hash 路由 #decks/#tourneys/#profile;
- * 未登录显示统一空态;管理员(未绑选手)只开放「资料与账号」。
+ * 选手中心:统一登录守卫 + 四 tab(我的对局/我的比赛/资料与账号/发码中心)。
+ * 旧页 my-decks/my-tourneys/profile 已合并到此,hash 路由 #decks/#tourneys/#profile/#codes;
+ * 未登录显示统一空态;playerOnly 需绑选手,adminOnly(发码中心)需 admin/super 角色。
  */
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -11,10 +11,12 @@
   const TABS = [
     { id: 'decks', btn: 'me-tab-decks', panel: 'me-panel-decks', playerOnly: true },
     { id: 'tourneys', btn: 'me-tab-tourneys', panel: 'me-panel-tourneys', playerOnly: true },
-    { id: 'profile', btn: 'me-tab-profile', panel: 'me-panel-profile', playerOnly: false }
+    { id: 'profile', btn: 'me-tab-profile', panel: 'me-panel-profile', playerOnly: false },
+    { id: 'codes', btn: 'me-tab-codes', panel: 'me-panel-codes', adminOnly: true }
   ];
 
   let activeTab = null;
+  let allowedIds = new Set();
 
   function showTab(id) {
     const tab = TABS.find((t) => t.id === id) || TABS[0];
@@ -49,9 +51,13 @@
     }
     $('me-empty').hidden = true;
     $('me-shell').hidden = false;
-    /* 管理员(未绑选手):仅资料 tab;选手:三 tab 全开 */
-    const allowed = TABS.filter((t) => player || !t.playerOnly);
-    for (const t of TABS) $(t.btn).hidden = !allowed.includes(t);
+    /* tab 门:playerOnly 需已绑选手;adminOnly(发码中心)需 admin/super。
+     * user.role 即后端 effectiveRole(super/admin/player/user) */
+    const role = user.role;
+    const allowed = TABS.filter((t) =>
+      (t.playerOnly ? Boolean(player) : true) && (t.adminOnly ? (role === 'admin' || role === 'super') : true));
+    allowedIds = new Set(allowed.map((t) => t.id));
+    for (const t of TABS) $(t.btn).hidden = !allowedIds.has(t.id);
     const hash = (location.hash || '').slice(1);
     showTab(allowed.some((t) => t.id === hash) ? hash : allowed[0].id);
   }
@@ -59,11 +65,12 @@
   for (const t of TABS) {
     $(t.btn).addEventListener('click', () => showTab(t.id));
   }
-  /* 已在本页时点导航链接是 fragment 导航(不重载),监听 hash 变化切换 tab */
+  /* 已在本页时点导航链接是 fragment 导航(不重载),监听 hash 变化切换 tab;
+   * 仅允许切到本角色可见的 tab(防手改 #codes 越权看隐藏面板) */
   window.addEventListener('hashchange', () => {
     if ($('me-shell').hidden) return;
     const hash = (location.hash || '').slice(1);
-    if (TABS.some((t) => t.id === hash)) showTab(hash);
+    if (allowedIds.has(hash)) showTab(hash);
   });
   $('me-login-btn').addEventListener('click', () => {
     window.TournamentApp.openLoginDialog();
