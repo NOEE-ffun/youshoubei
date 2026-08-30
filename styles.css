@@ -3820,3 +3820,127 @@ body[data-view='canvas'] .list-view {
   font-size: 4vh;
   color: #9ba1a9;
 }
+
+/* ---------- 登录页(居中窄栏,不引 common.js) ---------- */
+
+.login-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 100vh;
+  min-block-size: 100dvh;
+  padding: 1.5rem 1rem;
+}
+
+.login-shell {
+  inline-size: 100%;
+  max-inline-size: 20rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 2rem 1.75rem 1.5rem;
+}
+
+.login-title {
+  margin: 0 0 1.25rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.08em;
+}
+
+/* tab:下划线式,同 .me-tab 写法 */
+.login-tabs {
+  display: flex;
+  gap: 0.2rem;
+  border-block-end: 1px solid var(--border);
+  margin-block-end: 1.25rem;
+}
+
+.login-tab {
+  appearance: none;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.6rem 0.95rem;
+  cursor: pointer;
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+  transition: color var(--dur-ui) var(--ease-out), border-color var(--dur-ui) var(--ease-out);
+}
+
+.login-tab:hover {
+  color: var(--text);
+}
+
+.login-tab.is-active {
+  color: var(--accent);
+  border-block-end-color: var(--accent);
+}
+
+.login-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.login-panel[hidden] {
+  display: none;
+}
+
+/* 登录页字段组织为 label.form-field > span.form-label(弹窗内是 .form-field label) */
+.login-panel .form-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+/* tel 类型不在既有 .form-field input 选择器内,登录面板统一补齐 */
+.login-panel .form-field input {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.75rem;
+  inline-size: 100%;
+}
+
+.login-panel .form-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+.login-code-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.login-code-row input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.login-code-row .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.login-submit {
+  inline-size: 100%;
+}
+
+.login-status {
+  margin: 0.75rem 0 0;
+  min-block-size: 1.4rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.login-status.is-danger {
+  color: var(--danger);
+}
