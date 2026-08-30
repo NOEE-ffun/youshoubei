@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
 
 /* 画布编辑撤销/重做:改卡片属性→Cmd+Z 恢复→Cmd+Shift+Z 重做;
  * 删除卡片→撤销找回。另断言工具栏分组结构。 */
@@ -6,10 +7,12 @@ import { test, expect } from '@playwright/test';
 test.setTimeout(60_000);
 
 test('卡片改名可撤销重做,删除可撤销找回', async ({ page }) => {
-  /* 先行用例(如 auth-flow)在服务器建过选手后,访客上下文会进云模式、编辑被密码锁拦;
-   * 预置前端旧本地管理口令绕开锁,云/本机两种模式都可编辑
-   * (前端口令机制与 E2E 整体改造属后续任务,本处仅沿用旧机制) */
-  await page.addInitScript(() => sessionStorage.setItem('ts:adminToken', 'e2e-admin-token'));
+  /* 登录墙:先 API 登录(cookie 进上下文);reset 清内存存储,
+   * 页面确定性回落本机模式(旧 ts:adminToken 口令机制已随权限重构退役)。
+   * E2E 服务端常驻,API 登录不依赖页面存储模式,本机/云两分支统一走会话。 */
+  const context = page.context();
+  await resetStore(context);
+  await smsLogin(context, ADMIN_PHONE);
 
   await page.goto('/schedule.html');
   await page.waitForSelector('.canvas-card');

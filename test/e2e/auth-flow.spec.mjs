@@ -1,94 +1,79 @@
 import { test, expect } from '@playwright/test';
+import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
 
 /* 登录系统 API 级冒烟(E2E 服务无 OSS,走内存降级存储 + 开发测试码):
- * 管理员码注册 → 会话读取 → 登出失效 → 开发码注册选手账号 → 码一次性 → 错密码 401 */
+ * 短信登录自动注册 → 会话读取 → 登出失效 → 错验证码 401 → 越权写 401/403。
+ * 旧「注册 tab/开发码注册/Bearer 口令」体系已随权限重构退役,断言语义等价迁移到新链路。 */
 
-const BASE = 'http://127.0.0.1:3999';
+test('短信登录 API:自动注册/会话/登出/错码 401', async ({ request }) => {
+  await request.post('/api/dev/reset');
 
-test('登录 API:注册/会话/登出/开发码/一次性', async ({ request }) => {
-  // 1. 管理员码注册
-  const reg = await request.post(BASE + '/api/auth/register', {
-    data: { code: 'e2e-admin-code', username: 'e2e-admin', password: '12345678' }
+  // 1. 未注册手机验码登录 → 自动建号(user 级),不回传敏感字段
+  const login = await request.post('/api/auth/sms/login', {
+    data: { phone: '13811112222', code: '000000' }
   });
-  expect(reg.status()).toBe(200);
-  const regBody = await reg.json();
-  expect(regBody.user.role).toBe('admin');
+  expect(login.status()).toBe(200);
+  const body = await login.json();
+  expect(body.user.role).toBe('user');
+  expect(body.user.username).toBe('13811112222');
+  expect(body.user).not.toHaveProperty('passHash');
 
   // 2. 会话有效(同 request 上下文自动携带 cookie)
-  const me = await request.get(BASE + '/api/me');
+  const me = await request.get('/api/me');
   expect(me.status()).toBe(200);
   const meBody = await me.json();
-  expect(meBody.user.username).toBe('e2e-admin');
-  expect(meBody.user).not.toHaveProperty('passHash');
+  expect(meBody.user.username).toBe('13811112222');
 
   // 3. 登出后 401
-  const out = await request.post(BASE + '/api/auth/logout');
+  const out = await request.post('/api/auth/logout');
   expect(out.status()).toBe(200);
-  const meAfter = await request.get(BASE + '/api/me');
+  const meAfter = await request.get('/api/me');
   expect(meAfter.status()).toBe(401);
 
-  // 4. 开发码注册选手账号(等价空白码:建号且建选手)
-  const regPlayer = await request.post(BASE + '/api/auth/register', {
-    data: { code: 'e2e-dev-1', username: 'e2e-player', password: '12345678' }
-  });
-  expect(regPlayer.status()).toBe(200);
-  const playerBody = await regPlayer.json();
-  expect(playerBody.user.role).toBe('player');
-  expect(playerBody.user.playerId).toBeTruthy();
-  expect(playerBody.player && playerBody.player.name).toBe('e2e-player');
-
-  // 5. 已绑选手账号可自助编辑资料(200)
-  const upd = await request.put(BASE + '/api/me/player', { data: { name: 'x' } });
-  expect(upd.status()).toBe(200);
-
-  // 6. 开发码一次性
-  const again = await request.post(BASE + '/api/auth/register', {
-    data: { code: 'e2e-dev-1', username: 'e2e-player2', password: '12345678' }
-  });
-  expect(again.status()).toBe(400);
-});
-
-test('登录 API:错密码 401、正确登录 200', async ({ request }) => {
-  // 先注册(用第二个开发码)
-  await request.post(BASE + '/api/auth/register', {
-    data: { code: 'e2e-dev-2', username: 'e2e-login-user', password: 'correct-pass-1' }
-  });
-  await request.post(BASE + '/api/auth/logout');
-
-  const bad = await request.post(BASE + '/api/auth/login', {
-    data: { username: 'e2e-login-user', password: 'wrong-pass-123' }
+  // 4. 错验证码 401(开发后门码之外的码一律拒绝)
+  const bad = await request.post('/api/auth/sms/login', {
+    data: { phone: '13811112222', code: '000001' }
   });
   expect(bad.status()).toBe(401);
 
-  const ok = await request.post(BASE + '/api/auth/login', {
-    data: { username: 'E2E-LOGIN-USER', password: 'correct-pass-1' }
+  // 5. 手机号格式不合法 400
+  const badPhone = await request.post('/api/auth/sms/login', {
+    data: { phone: '123', code: '000000' }
   });
-  expect(ok.status()).toBe(200);
-  const body = await ok.json();
-  expect(body.user.username).toBe('e2e-login-user');
+  expect(badPhone.status()).toBe(400);
+
+  await request.post('/api/dev/reset');
 });
 
-test('越权回归:选手会话携带正确管理口令也被拒绝(2026-08-25 紧急加固)', async ({ request }) => {
-  // 1. 仅口令无会话 → 门禁通过(老管理通道保持可用;E2E 无 OSS,写入报 500 属预期)
-  const tokenOnly = await request.put(BASE + '/api/data', {
-    headers: { Authorization: 'Bearer e2e-admin-token' },
+test('越权回归:非管理员会话 PUT /api/data 被拒(2026-08-30 权限重构)', async ({ request }) => {
+  await request.post('/api/dev/reset');
+
+  // 1. 无会话 → 401(旧 Bearer 口令通道已退役,不再有「仅口令放行」)
+  const anon = await request.put('/api/data', {
     data: { tournaments: [], activeId: null }
   });
-  expect(tokenOnly.status()).not.toBe(403);
-  expect(tokenOnly.status()).not.toBe(401);
+  expect(anon.status()).toBe(401);
 
-  // 2. 注册选手(该 request 上下文此后携带其会话 cookie)
-  const reg = await request.post(BASE + '/api/auth/register', {
-    data: { code: 'e2e-dev-3', username: 'e2e-priv-test', password: '12345678' }
+  // 2. 超管会话 → 200(自举通道)
+  const admin = await request.post('/api/auth/sms/login', {
+    data: { phone: ADMIN_PHONE, code: '000000' }
   });
-  expect(reg.status()).toBe(200);
+  expect(admin.status()).toBe(200);
+  expect((await admin.json()).user.role).toBe('super');
+  const seed = await request.put('/api/data', {
+    data: { tournaments: [], players: [], activeId: null }
+  });
+  expect(seed.status()).toBe(200);
 
-  // 3. 选手 cookie + 正确 Bearer 口令 → 403(身份按选手算,口令失效)
-  const denied = await request.put(BASE + '/api/data', {
-    headers: { Authorization: 'Bearer e2e-admin-token' },
-    data: { tournaments: [] }
+  // 3. 普通用户会话 → 403,身份按角色算
+  const user = await request.post('/api/auth/sms/login', {
+    data: { phone: '13833334444', code: '000000' }
   });
+  expect(user.status()).toBe(200);
+  const denied = await request.put('/api/data', { data: { tournaments: [] } });
   expect(denied.status()).toBe(403);
   const deniedBody = await denied.json();
-  expect(deniedBody.error).toContain('选手账号无管理权限');
+  expect(deniedBody.error).toContain('权限不足');
+
+  await request.post('/api/dev/reset');
 });

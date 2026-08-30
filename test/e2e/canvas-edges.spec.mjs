@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
 
 /* 画布边界回归:双指抬起发生在画布外(指针泄漏)、弹窗打开时的键盘撤销、
  * 恢复缩放后数据变更的重定中。均为 2026-08 批次新交互的边界。 */
@@ -6,7 +7,11 @@ import { test, expect } from '@playwright/test';
 test.setTimeout(60_000);
 
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => sessionStorage.setItem('ts:adminToken', 'e2e-admin-token'));
+  /* 登录墙:先 API 登录(cookie 进上下文);reset 清内存存储,
+   * 让 /api/data 500 → 页面回落本机模式(默认画布,不从先行用例继承云数据) */
+  const context = page.context();
+  await resetStore(context);
+  await smsLogin(context, ADMIN_PHONE);
 });
 
 /* 在画布上合成双指手势;liftOutside=true 时 pointerup 派发到 body(画布外);

@@ -1,9 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { createRequire } from 'node:module';
+import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
 
 /* 报名取前 N + 自动填入全链路(开发内存云端,PUT /api/data 自举):
  * 开放期名单编号/候补弱化/自动弹开 → 关报名撤"已报名"留编号 →
- * 设置 N>空位拦截 → 自动填入前 N 覆盖入场卡 */
+ * 设置 N>空位拦截 → 自动填入前 N 覆盖入场卡。
+ * 2026-08-30 权限重构后:自举 PUT 与数据核验走超管会话(旧 Bearer 口令退役);
+ * 登录墙下查看视角也是登录用户(user 级,不涉卡组剥离)。 */
 
 const require = createRequire(import.meta.url);
 const CM = require('../../canvas-model.js');
@@ -23,14 +26,15 @@ function workspace(signup) {
 }
 
 test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入', async ({ browser, request }) => {
-  const put = (data) => request.put('/api/data', {
-    headers: { Authorization: 'Bearer e2e-admin-token' },
-    data
-  });
+  await request.post('/api/dev/reset');
+  const adminCtx = await browser.newContext();
+  await smsLogin(adminCtx, ADMIN_PHONE);
+  const put = (data) => adminCtx.request.put('/api/data', { data });
   await put(workspace({ open: true, players: P, slots: 4 }));
 
-  /* ---- 1. 游客:开放期名单自动弹开,按报名先后编号,第 5 人候补弱化 ---- */
+  /* ---- 1. 登录用户视角:开放期名单自动弹开,按报名先后编号,第 5 人候补弱化 ---- */
   const viewerCtx = await browser.newContext();
+  await smsLogin(viewerCtx, '13800007771');
   const viewer = await viewerCtx.newPage();
   await viewer.goto('/schedule.html');
   await viewer.waitForSelector('.canvas-card');
@@ -53,6 +57,7 @@ test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入',
   /* ---- 2. 关报名:不自动弹开,点开后编号保留、"已报名"标记撤销 ---- */
   await put(workspace({ open: false, players: P, slots: 4 }));
   const viewer2Ctx = await browser.newContext();
+  await smsLogin(viewer2Ctx, '13800007772');
   const viewer2 = await viewer2Ctx.newPage();
   await viewer2.goto('/schedule.html');
   await viewer2.waitForSelector('.canvas-card');
@@ -63,18 +68,9 @@ test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入',
   await viewer2Ctx.close();
 
   /* ---- 3. 管理端:N>空位保存被拦截;改回合法值后自动填入 ---- */
-  const adminCtx = await browser.newContext();
   const admin = await adminCtx.newPage();
   await admin.goto('/schedule.html');
   await admin.waitForTimeout(800);
-  await admin.locator('#settings-btn').click();
-  await admin.fill('#settings-admin-token', 'e2e-admin-token');
-  await admin.locator('#admin-unlock').click();
-  await admin.waitForTimeout(1000);
-  await expect(admin.locator('#admin-status')).toContainText('已解锁');
-  await admin.locator('#settings-form [data-dialog-close]').click();
-  await admin.waitForTimeout(300);
-
   await admin.locator('#settings-btn').click();
   await admin.waitForSelector('#settings-form');
   await expect(admin.locator('#signup-slots')).toHaveValue('4');
@@ -91,10 +87,9 @@ test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入',
   await admin.locator('#signup-autofill').click();
   await expect(admin.getByText('已随机填入 4 名选手')).toBeVisible();
   await admin.waitForTimeout(800);
-  await adminCtx.close();
 
   /* ---- 4. 数据核验:前 4 名洗牌落入场卡,候补第 5 人不上场,报名名单原样 ---- */
-  const resp = await request.get('/api/data');
+  const resp = await adminCtx.request.get('/api/data');
   const data = await resp.json();
   const rec = data.tournaments.find((t) => t.id === 't1');
   const entries = CM.entryCards(rec.canvas);
@@ -106,5 +101,6 @@ test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入',
   expect(rec.roster.sort()).toEqual(['sp1', 'sp2', 'sp3', 'sp4'].sort());
   expect(rec.signup).toEqual({ open: false, players: P, slots: 4 });
 
+  await adminCtx.close();
   await request.post('/api/dev/reset');
 });

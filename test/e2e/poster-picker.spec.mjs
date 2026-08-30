@@ -1,8 +1,14 @@
 import { test, expect } from '@playwright/test';
+import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
 
 /* 海报页选手库驱动冒烟:未选态 → 打开列表 → 选中 → 摘要卡 + SVG 渲染名字 */
 
 test('海报页:从选手库选择左右选手', async ({ page }) => {
+  /* 登录墙:先 API 登录;reset 清内存存储 → 本机模式默认 8 选手 */
+  const context = page.context();
+  await resetStore(context);
+  await smsLogin(context, ADMIN_PHONE);
+
   await page.goto('/poster.html');
   await page.waitForSelector('#left-slot .picker-empty');
   await expect(page.locator('#left-slot .picker-empty')).toContainText('选择左侧选手');

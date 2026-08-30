@@ -1,6 +1,14 @@
 import { test, expect } from '@playwright/test';
+import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
 
 /* 查找定位 + 统计页(先在赛程页布置一局已赛数据,统计页断言其联动) */
+
+test.beforeEach(async ({ page }) => {
+  /* 登录墙:先 API 登录;reset 清内存存储 → 本机模式默认画布 */
+  const context = page.context();
+  await resetStore(context);
+  await smsLogin(context, ADMIN_PHONE);
+});
 
 test('查找:高亮计数、Enter 跳转、Esc 清除', async ({ page }) => {
   await page.goto('/schedule.html');

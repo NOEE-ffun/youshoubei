@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
 
 /* 移动端适配:窄屏默认列表视图(同页画布/列表双视图,会话内可切)、
  * 底部 tab 导航、44px 触控目标、缩放持久化、双指捏合。视口 390×844 贯穿全组。 */
@@ -7,6 +8,10 @@ test.setTimeout(60_000);
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  /* 登录墙:先 API 登录;reset 清内存存储 → 本机模式默认画布,不吃先行用例遗留 */
+  const context = page.context();
+  await resetStore(context);
+  await smsLogin(context, ADMIN_PHONE);
 });
 
 test('窄屏进比赛页默认列表视图,切回画布后会话内保持', async ({ page }) => {

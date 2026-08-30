@@ -1,10 +1,16 @@
 import { test, expect } from '@playwright/test';
+import { ADMIN_PHONE, smsLogin, seedWorkspace, makePlayer, resetStore } from './helpers.mjs';
 
 /* 卡组自助提交全链路(开发内存云端,E2E 无 OSS):
- * 管理员解锁→建赛→指派选手→开窗 ‖ 选手注册→我的对局提交 ‖ 游客看锁→关窗公示。
- * 这是 2026-08-25 "自助提交一团糟" 事故的回归测试集。 */
+ * 管理员建赛→指派选手→开窗 ‖ 选手提交 ‖ 另一登录用户看锁→关窗公示。
+ * 这是 2026-08-25 "自助提交一团糟" 事故的回归测试集。
+ * 2026-08-30 权限重构后:自举 = 超管会话 PUT /api/data + 绑定码造选手会话;
+ * 「游客🔒」视角改为另一登录用户(非该侧选手,stripHiddenDecks 语义不变)。 */
+
+test.setTimeout(90_000);
 
 test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ browser, request }) => {
+  await request.post('/api/dev/reset');
   const adminCtx = await browser.newContext();
   const playerCtx = await browser.newContext();
   const guestCtx = await browser.newContext();
@@ -12,36 +18,22 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
   const player = await playerCtx.newPage();
   const guest = await guestCtx.newPage();
 
-  /* ---- 0. 自举云端状态:本用例依赖云模式(空服务器 GET 500 会退本地、登录钮隐藏),
-   * 不吃先行用例的遗留——用管理口令 PUT 一个空工作区,让 /api/data 可用。
-   * 走口令而非邀请码:开发码共 5 个已被各用例占满,且码是一次性 ---- */
-  await request.put('/api/data', {
-    headers: { Authorization: 'Bearer e2e-admin-token' },
-    data: { tournaments: [], activeId: null, players: [] }
+  /* ---- 0. 自举云端状态:超管直写工作区(种子选手 e2e提交者,绑定码通道要用) ---- */
+  await smsLogin(adminCtx, ADMIN_PHONE);
+  await seedWorkspace(adminCtx, {
+    tournaments: [], activeId: null,
+    players: [
+      { id: 'pz1', name: 'e2e提交者', createdAt: 1, updatedAt: 1 },
+      { id: 'pz2', name: 'e2e对位', createdAt: 1, updatedAt: 1 }
+    ]
   });
 
-  /* ---- 1. 选手注册(空白码:建号且建选手) ---- */
-  await player.goto('/me.html#decks');
-  await player.waitForSelector('#me-login-btn', { state: 'visible' });
-  await player.locator('#me-login-btn').click();
-  await player.locator('[data-login-tab="register"]').click();
-  await player.fill('#login-code', 'e2e-dev-4');
-  await player.fill('#login-username', 'e2e提交者');
-  await player.fill('#login-password', '12345678');
-  await player.locator('#login-submit').click();
-  await player.waitForTimeout(1200); /* 注册 + refreshSession + 本页自动 reload */
+  /* ---- 1. 选手会话:超管发绑定码 → 手机登录 → 兑换继承 pz1 ---- */
+  await makePlayer(playerCtx, '13800003333', 'pz1');
 
-  /* ---- 2. 管理员解锁并建赛 ---- */
+  /* ---- 2. 管理员建赛(会话即身份,旧解锁口令已退役) ---- */
   await admin.goto('/schedule.html');
   await admin.waitForTimeout(800);
-  await admin.locator('#settings-btn').click();
-  await admin.fill('#settings-admin-token', 'e2e-admin-token');
-  await admin.locator('#admin-unlock').click();
-  await admin.waitForTimeout(1000); /* 解锁校验(真实 PUT) */
-  await expect(admin.locator('#admin-status')).toContainText('已解锁');
-  await admin.locator('#settings-form [data-dialog-close]').click();
-  await admin.waitForTimeout(300);
-
   await admin.locator('#manage-btn').click();
   await admin.fill('#new-tournament-name', 'E2E卡组届');
   await admin.selectOption('#new-tournament-template', 'double');
@@ -84,12 +76,13 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
   /* 保存后行内仍可见自己提交的卡组(可编辑回显) */
   await expect(form.locator('.md-text').first()).toHaveValue('进化虫速攻');
 
-  /* ---- 6. 游客视角:未公示 → 🔒 ---- */
+  /* ---- 6. 另一登录用户视角(非该侧选手):未公示 → 🔒 ---- */
+  await smsLogin(guestCtx, '13800009999');
   await guest.goto('/schedule.html');
   await guest.waitForSelector('.canvas-card');
   await guest.waitForTimeout(600);
   expect(await guest.locator('.canvas-card .cl-locked').count()).toBeGreaterThanOrEqual(1);
-  /* 游客不能看到卡组图标本体 */
+  /* 非所属侧看不到卡组图标本体(stripHiddenDecks 剥离) */
   expect(await guest.locator('.canvas-card .class-slot img').count()).toBe(0);
 
   /* ---- 7. 选手本人视角:自己一侧可见,对手一侧锁 ---- */
@@ -115,7 +108,7 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
   expect(await guest.locator('.canvas-card .cl-locked').count()).toBe(0);
   expect(await guest.locator('.canvas-card .class-slot img').count()).toBeGreaterThanOrEqual(1);
 
-  /* ---- 9. 关窗后选手再提交 → 423 且界面回到锁定态 ---- */
+  /* ---- 9. 关窗后选手再提交 → 界面回到锁定态 ---- */
   await player.goto('/me.html#decks');
   await player.reload(); /* 同 URL 含 hash 的 goto 不重载,显式刷新拿新数据 */
   await player.waitForSelector('#my-decks-body', { state: 'visible' });
