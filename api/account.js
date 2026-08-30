@@ -14,11 +14,14 @@ const { createSmsService } = require('./sms');
  *   POST /api/auth/login      用户名密码登录(内存限速:同 IP 15 分钟 5 次失败锁 10 分钟)
  *   POST /api/auth/logout     登出
  *   GET  /api/me              当前会话的用户+绑定选手
- *   PUT  /api/me/player       选手自助改资料(字段白名单)
+ *   PUT  /api/me/player       选手自助改资料(字段白名单;nickname 属账号,落 users.json)
  *   PUT  /api/me/password     修改密码
- * 存储:OSS users.json / data.json(players);测试用 createHandlers(storage) 注入。 */
+ *   POST /api/me/redeem       填码跃迁:空白码建新选手/绑定码继承既有选手/admin 码升格(角色升级唯一入口)
+ *   PUT  /api/me/phone        绑定手机号(验码 + 未被他人占用;已有 phone 拒绝)
+ * 存储:OSS users.json / data.json(players) / invite-codes.json(填码跃迁);测试用 createHandlers(storage) 注入。 */
 const USERS_KEY = 'users.json';
 const DATA_KEY = 'data.json';
+const CODES_KEY = 'invite-codes.json';
 const MAX_BODY = 64 * 1024;
 
 const USERNAME_RE = /^[\w\u4e00-\u9fff-]{2,24}$/;
@@ -330,19 +333,47 @@ function createHandlers(storage, options) {
         }
         patch.tagImgSize = v;
       }
-      if (!Object.keys(patch).length) return sendJson(res, 400, { error: '没有可更新的字段' });
+      /* nickname 是账号展示名(非选手资料):单独摘出,落 users.json */
+      let nickname = null;
+      if ('nickname' in body) {
+        const v = clampText(body.nickname, 24);
+        if (!v) return sendJson(res, 400, { error: '昵称不能为空' });
+        nickname = v;
+      }
+      if (nickname === null && !Object.keys(patch).length) {
+        return sendJson(res, 400, { error: '没有可更新的字段' });
+      }
 
-      /* 读-改-写整段上锁:与提交/报名/管理写共用一把锁 */
+      /* 读-改-写整段上锁:users(昵称)与 players(资料)两段写共用一把锁,
+       * 与提交/报名/管理写互斥,防交错覆盖 */
       await withWorkspaceLock(async () => {
-        const workspace = await readWorkspace();
-        const players = (workspace && workspace.players) || [];
-        const idx = players.findIndex((p) => p && p.id === user.playerId);
-        if (idx < 0) return sendJson(res, 404, { error: '绑定的选手不存在' });
-        players[idx] = Object.assign({}, players[idx], patch, { updatedAt: now() });
-        await backup();
-        await write(DATA_KEY, workspace);
-        audit('me.player', 'user=' + user.username + ' player=' + players[idx].name + ' fields=' + Object.keys(patch).join(','));
-        sendJson(res, 200, { player: players[idx] });
+        const out = { user: safeUser(user) };
+        /* 第一段:昵称 → users.json 读改写 */
+        if (nickname !== null) {
+          const users = await readUsers();
+          const uidx = users.findIndex((u) => u.id === user.id);
+          if (uidx < 0) return sendJson(res, 404, { error: '账号不存在' });
+          users[uidx] = Object.assign({}, users[uidx], { nickname });
+          await backupJson(USERS_KEY, 'users');
+          await write(USERS_KEY, users);
+          audit('me.account', 'user=' + user.username + ' fields=nickname');
+          out.user = safeUser(users[uidx]);
+        }
+        /* 第二段:选手资料 → data.json 读改写(仅剩资料字段时) */
+        if (Object.keys(patch).length) {
+          const workspace = await readWorkspace();
+          const players = (workspace && workspace.players) || [];
+          const idx = players.findIndex((p) => p && p.id === user.playerId);
+          if (idx < 0) return sendJson(res, 404, { error: '绑定的选手不存在' });
+          players[idx] = Object.assign({}, players[idx], patch, { updatedAt: now() });
+          await backup();
+          await write(DATA_KEY, workspace);
+          audit('me.player', 'user=' + user.username + ' player=' + players[idx].name + ' fields=' + Object.keys(patch).join(','));
+          out.player = players[idx];
+        } else {
+          out.player = await playerOf(user);
+        }
+        sendJson(res, 200, out);
       });
       return;
     }
@@ -375,7 +406,88 @@ function createHandlers(storage, options) {
     sendJson(res, 200, { ok: true });
   }
 
-  return { login, logout, me, mePassword, smsSend, smsLogin, currentUser };
+  /* POST /api/me/redeem:填码跃迁——角色升级唯一入口。
+   * 码来自 OSS invite-codes.json(super 发放):
+   *   空白码(无 playerId)→ 建新选手档案(名取 nickname||username 前 24 字),user 升 player
+   *   绑定码(playerId 指向既有选手)→ 账号继承该选手,目标已被他人绑定 409
+   *   admin 码(kind:'admin')→ role 升 admin(保留既有 playerId)
+   * 码单次使用:核销即标 used/usedBy/usedAt 落盘。 */
+  async function redeem(req, res) {
+    if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
+    const user = await currentUser(req);
+    if (!user) return sendJson(res, 401, { error: '未登录' });
+    const body = await readJsonBody(req, res, MAX_BODY);
+    if (body === undefined) return;
+    const code = String(body.code || '').trim();
+    if (!code) return sendJson(res, 400, { error: '请填写验证码' });
+
+    const codes = (await read(CODES_KEY)) || [];
+    const entry = codes.find((c) => c && c.code === code);
+    if (!entry || entry.used) return sendJson(res, 400, { error: '验证码无效或已被使用' });
+
+    if (entry.kind === 'admin') {
+      user.role = 'admin';
+    } else {
+      if (user.playerId) return sendJson(res, 409, { error: '该账号已绑定选手,无需再次填码' });
+      if (entry.playerId) {
+        const workspace = await readWorkspace();
+        const players = (workspace && workspace.players) || [];
+        if (!players.some((p) => p && p.id === entry.playerId)) {
+          return sendJson(res, 400, { error: '验证码绑定的选手不存在' });
+        }
+        const users = await readUsers();
+        if (users.some((u) => u.playerId === entry.playerId && u.id !== user.id)) {
+          return sendJson(res, 409, { error: '该选手已被其他账号绑定' });
+        }
+        user.playerId = entry.playerId;
+      } else {
+        user.playerId = await createPlayerFor(String(user.nickname || user.username).slice(0, 24));
+      }
+      if (user.role === 'user') user.role = 'player';
+    }
+    /* 核销码(单次使用)+ 同步用户表:users[idx] 与 user 对象是两个引用,须整体替换 */
+    entry.used = true;
+    entry.usedBy = user.username;
+    entry.usedAt = t0iso(now);
+    await backupJson(CODES_KEY, 'codes');
+    await write(CODES_KEY, codes);
+    const users = await readUsers();
+    const idx = users.findIndex((u) => u.id === user.id);
+    users[idx] = user;
+    await backupJson(USERS_KEY, 'users');
+    await write(USERS_KEY, users);
+    audit('redeem', 'user=' + user.username + ' kind=' + (entry.kind || 'player') + ' player=' + (user.playerId || '-'));
+    sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
+  }
+
+  /* PUT /api/me/phone:绑定手机号。顺序:格式 → 验码(401)→ 被他人占用(409)
+   * → 本账号已有 phone(400)→ 落盘。占用冲突优先于"已绑定"报出:
+   * 用户换绑试探时 409 比笼统的 400 更可解释,且占用检查需先过验码,不构成枚举泄露。 */
+  async function mePhone(req, res) {
+    if (req.method !== 'PUT') return sendJson(res, 405, { error: 'Method Not Allowed' });
+    const user = await currentUser(req);
+    if (!user) return sendJson(res, 401, { error: '未登录' });
+    const body = await readJsonBody(req, res, MAX_BODY);
+    if (body === undefined) return;
+    const phone = String(body.phone || '').trim();
+    if (!PHONE_RE.test(phone)) return sendJson(res, 400, { error: '手机号格式不正确' });
+    const v = sms.verify(phone, String(body.code || ''));
+    if (!v.ok) return sendJson(res, 401, { error: v.error });
+    const users = await readUsers();
+    if (users.some((u) => u.phone === phone && u.id !== user.id)) {
+      return sendJson(res, 409, { error: '该手机号已被其他账号绑定' });
+    }
+    if (user.phone) return sendJson(res, 400, { error: '该账号已绑定手机号' });
+    const idx = users.findIndex((u) => u.id === user.id);
+    if (idx < 0) return sendJson(res, 401, { error: '账号不存在' });
+    users[idx].phone = phone;
+    await backupJson(USERS_KEY, 'users');
+    await write(USERS_KEY, users);
+    audit('me.phone', 'user=' + user.username);
+    sendJson(res, 200, { user: safeUser(users[idx]) });
+  }
+
+  return { login, logout, me, mePassword, smsSend, smsLogin, currentUser, redeem, mePhone };
 }
 
 function t0iso(now) {

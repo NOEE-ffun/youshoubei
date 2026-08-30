@@ -2,7 +2,8 @@
 
 /* 账号体系 API 行为测试(内存存储注入,不联网):
  * 会话签名、短信验证码登录/自动注册、存量用户归一化、登录限速、
- * /api/me 会话读取、资料白名单更新、修改密码。 */
+ * /api/me 会话读取、资料白名单更新、修改密码、
+ * 填码跃迁(redeem)、账号昵称(nickname)、绑定手机号(mePhone)。 */
 
 const assert = require('node:assert');
 const session = require('../api/session');
@@ -61,6 +62,13 @@ const noopRate = () => ({ blocked: () => 0, recordFail() {}, reset() {} });
 function seedWorld() {
   return {
     'users.json': [],
+    /* 填码跃迁的三种码:空白码(无 playerId,兑后建新选手)、
+     * 绑定码(playerId 指向既有选手)、admin 码(kind:'admin',仅 super 发放) */
+    'invite-codes.json': [
+      { code: 'BLANK1', playerId: null, used: false },
+      { code: 'BOUND1', playerId: 'p_old', used: false },
+      { code: 'ADMIN1', kind: 'admin', used: false }
+    ],
     'data.json': {
       tournaments: [],
       activeId: null,
@@ -241,6 +249,127 @@ async function main() {
     assert.strictEqual(scalar.status, 400, '标量 JSON 体应 400');
 
     console.log('✓ me/player/password:白名单/越权/备份/改密');
+  }
+
+  /* ---- redeem 填码跃迁 + 账号昵称 + 绑手机 ---- */
+  {
+    const seed = seedWorld();
+    /* user2:用户名密码账号(user 级、未绑选手、未绑手机)——mePhone 绑手机用例要求账号尚无 phone,
+     * 故不能经 smsLogin 造(短信注册账号天生带 phone);pv 取 passHash 尾 8 位 */
+    const u2Seed = {
+      id: 'u_2', username: 'user2', usernameLower: 'user2',
+      passHash: hashPassword('pass12345'), role: 'user', playerId: null, createdAt: '2026-01-01T00:00:00Z'
+    };
+    seed['users.json'].push(u2Seed);
+    const store = memoryStorage(seed);
+    const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
+    const acc = account.createHandlers(store, { sms: smsSvc, rateLimiter: noopRate() });
+    /* 会话 cookie 签发:seed 内账号按其 passHash 尾 8 位(pv);运行时短信注册账号 pv 为空串 */
+    const sessCookie = (uid) => {
+      const seeded = seed['users.json'].find((u) => u.id === uid);
+      return 'sess=' + session.issueFor(uid, seeded ? String(seeded.passHash || '').slice(-8) : '');
+    };
+
+    /* r1:短信自动注册的 user 级账号(无 playerId) */
+    const r1 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000001', code: '000000' }) }));
+    assert.strictEqual(r1.status, 200);
+    const user2Id = 'u_2';
+    const anotherUserId = user2Id;
+
+    /* ---- redeem 跃迁 ---- */
+    /* blank: user → player,选手名取昵称 */
+    const rb = await call(acc.redeem, mockReq('POST', {
+      body: jsonBody({ code: 'BLANK1' }),
+      headers: { cookie: sessCookie(r1.body.user.id) }
+    }));
+    assert.strictEqual(rb.status, 200);
+    assert.strictEqual(rb.body.user.role, 'player');
+    assert.ok(rb.body.player.id);
+    assert.strictEqual(rb.body.player.name, '用户0001');
+    /* 兑码即核销:码文件标记 used/usedBy */
+    const usedEntry = store._map.get('invite-codes.json').find((c) => c.code === 'BLANK1');
+    assert.strictEqual(usedEntry.used, true);
+    assert.strictEqual(usedEntry.usedBy, '13900000001');
+
+    /* 码单次使用 */
+    const rb2 = await call(acc.redeem, mockReq('POST', {
+      body: jsonBody({ code: 'BLANK1' }),
+      headers: { cookie: sessCookie(anotherUserId) }
+    }));
+    assert.strictEqual(rb2.status, 400);
+
+    /* 已是选手再兑 → 409 */
+    const rb3 = await call(acc.redeem, mockReq('POST', {
+      body: jsonBody({ code: 'BOUND1' }),
+      headers: { cookie: sessCookie(r1.body.user.id) }
+    }));
+    assert.strictEqual(rb3.status, 409);
+
+    /* bound: user2 继承 p_old */
+    const rb4 = await call(acc.redeem, mockReq('POST', {
+      body: jsonBody({ code: 'BOUND1' }),
+      headers: { cookie: sessCookie(user2Id) }
+    }));
+    assert.strictEqual(rb4.status, 200);
+    assert.strictEqual(rb4.body.user.playerId, 'p_old');
+
+    /* admin 码:player → admin 保留 playerId */
+    const rb5 = await call(acc.redeem, mockReq('POST', {
+      body: jsonBody({ code: 'ADMIN1' }),
+      headers: { cookie: sessCookie(r1.body.user.id) }
+    }));
+    assert.strictEqual(rb5.status, 200);
+    assert.strictEqual(rb5.body.user.role, 'admin');
+    assert.strictEqual(rb5.body.user.playerId, rb.body.player.id);
+
+    /* 未登录 401;不存在码 400 */
+    assert.strictEqual((await call(acc.redeem, mockReq('POST', { body: jsonBody({ code: 'X' }) }))).status, 401);
+    assert.strictEqual((await call(acc.redeem, mockReq('POST', {
+      body: jsonBody({ code: 'X' }),
+      headers: { cookie: sessCookie(user2Id) }
+    }))).status, 400);
+
+    /* ---- 昵称 ---- */
+    const rn = await call(acc.me, mockReq('PUT', {
+      body: jsonBody({ nickname: '新昵称' }),
+      headers: { cookie: sessCookie(user2Id) }
+    }));
+    assert.strictEqual(rn.status, 200);
+    /* nickname 是账号展示名:落 users.json,选手档案名不动 */
+    const storedU2 = store._map.get('users.json').find((u) => u.id === user2Id);
+    assert.strictEqual(storedU2.nickname, '新昵称');
+    assert.strictEqual(seed['data.json'].players.find((p) => p.id === 'p_old').name, '雨橘');
+    assert.strictEqual(rn.body.user.nickname, '新昵称');
+    /* 昵称与选手资料可同请求混改:两处各自落盘 */
+    const rmix = await call(acc.me, mockReq('PUT', {
+      body: jsonBody({ nickname: '混改昵称', name: '雨橘Pro' }),
+      headers: { cookie: sessCookie(user2Id) }
+    }));
+    assert.strictEqual(rmix.status, 200);
+    assert.strictEqual(rmix.body.user.nickname, '混改昵称');
+    assert.strictEqual(rmix.body.player.name, '雨橘Pro');
+    /* 空昵称 400 */
+    const rbad = await call(acc.me, mockReq('PUT', {
+      body: jsonBody({ nickname: '   ' }),
+      headers: { cookie: sessCookie(user2Id) }
+    }));
+    assert.strictEqual(rbad.status, 400);
+
+    /* ---- 绑手机 ---- */
+    const rp = await call(acc.mePhone, mockReq('PUT', {
+      body: jsonBody({ phone: '13911112222', code: '000000' }),
+      headers: { cookie: sessCookie(user2Id) }
+    }));
+    assert.strictEqual(rp.status, 200);
+    assert.strictEqual(store._map.get('users.json').find((u) => u.id === user2Id).phone, '13911112222');
+    /* 手机已被 r1 账号占用 → 409 */
+    const rp2 = await call(acc.mePhone, mockReq('PUT', {
+      body: jsonBody({ phone: '13900000001', code: '000000' }),
+      headers: { cookie: sessCookie(user2Id) }
+    }));
+    assert.strictEqual(rp2.status, 409);
+
+    console.log('✓ redeem/mePhone/nickname:跃迁/码核销/占用冲突/账号昵称');
   }
 
   /* ---- 限速器窗口语义(注入时钟) ---- */
