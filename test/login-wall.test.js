@@ -14,6 +14,10 @@ const apiPosterStage = require('../api/poster-stage');
 const devStore = require('../api/dev-store');
 const { effectiveRole } = require('../api/rbac');
 
+/* 本文件断言「配置好的服务器」的墙语义;设 E2E 压墙开关使 data.js 不触发
+ * 本地开发免墙分支(纯本地进程=无 OSS 且无此开关时匿名放行,见文件末尾专项断言) */
+process.env.YOUSHOUBEI_ENFORCE_WALL = process.env.YOUSHOUBEI_ENFORCE_WALL || '1';
+
 function memoryStorage(seed) {
   const map = new Map(Object.entries(seed || {}));
   return {
@@ -140,6 +144,22 @@ async function call(handler, req) {
     assert.strictEqual(stored.tournaments[0].name, '改名届');
     assert.strictEqual(stored.tournaments[0].createdBy, 'u9', 'createdBy 必须回填存档值,客户端伪造无效');
   } finally { delete process.env.SUPER_ADMIN_PHONES; }
+
+  /* 本地开发免墙专项(2026-08-31):去掉压墙开关后,纯本地进程(无 OSS)
+   * 对匿名放行——空存储返回 500「OSS 配置不完整」而非墙的 401,
+   * 前端据此落本地模式并合成超管(本地超管模式) */
+  {
+    const savedWall = process.env.YOUSHOUBEI_ENFORCE_WALL;
+    delete process.env.YOUSHOUBEI_ENFORCE_WALL;
+    try {
+      await devStore.writeJson('data.json', null);
+      const r = await call(apiData, mockReq('GET'));
+      assert.strictEqual(r.status, 500, '免墙放行后应走到空存储 500,而非登录墙 401');
+      assert.match(r.body.error, /OSS 配置不完整/);
+    } finally {
+      process.env.YOUSHOUBEI_ENFORCE_WALL = savedWall;
+    }
+  }
 
   delete process.env.SESSION_SECRET;
   console.log('✓ login-wall: 数据面登录墙+角色门断言通过');

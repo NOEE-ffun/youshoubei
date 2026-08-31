@@ -59,8 +59,14 @@ function stripHiddenDecks(workspace, viewerPlayerId) {
 
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
-    const user = await requireUser(req, res);
-    if (!user) return;
+    /* 本地开发免墙(2026-08-31):未配 OSS 的纯本地进程对匿名放行——空存储随即
+     * 走下方 500 → 前端落本地模式并合成超管(本地超管模式);生产(OSS 已配)与
+     * E2E(专用 YOUSHOUBEI_ENFORCE_WALL=1,playwright 配置注入)仍严格执行登录墙 */
+    const localDev = !isOssConfigured() && !process.env.YOUSHOUBEI_ENFORCE_WALL;
+    const user = localDev
+      ? await require('./account').currentUser(req).catch(() => null)
+      : await requireUser(req, res);
+    if (!localDev && !user) return;
     try {
       const workspace = await storage.read(DATA_PATH);
       /* 开发存储为空时按"云端不可用"处理(500),页面回落本地模式——
@@ -70,9 +76,10 @@ module.exports = async function handler(req, res) {
         return;
       }
       let payload = workspace || { tournaments: [], activeId: null };
-      /* 管理员(admin/super)原样;其余登录者剥离未公示卡组,自己两侧保留 */
+      /* 管理员(admin/super)原样;其余登录者剥离未公示卡组,自己两侧保留;
+       * localDev 匿名时 user 为 null → 按非管理员剥离(viewer null) */
       if (!isAdminRole(effectiveRole(user))) {
-        payload = stripHiddenDecks(JSON.parse(JSON.stringify(payload)), user.playerId || null);
+        payload = stripHiddenDecks(JSON.parse(JSON.stringify(payload)), (user && user.playerId) || null);
       }
       sendJson(res, 200, payload);
     } catch (error) {

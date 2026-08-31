@@ -2195,6 +2195,14 @@
     return { user: sessionUser, player: sessionPlayer };
   }
 
+  /* 本地超管模式(2026-08-31):未连云(本地 IndexedDB)且未登录时合成超管身份,
+   * 仅驱动前端 UI 权限(isAdmin/canManage/编辑控件);服务端仍无会话——云接口
+   * (/api/me 等)照旧 401,本地数据只落浏览器,不产生任何服务端写入 */
+  function enterLocalSuper() {
+    sessionUser = { id: 'local-super', username: '本地超管', nickname: '本地超管', role: 'super', playerId: null };
+    sessionPlayer = null;
+  }
+
   /* 拉取 /api/me 更新会话态并刷新侧栏按钮;任何失败按未登录处理 */
   async function refreshSession() {
     try {
@@ -2427,15 +2435,18 @@
     };
     window.TournamentApp = appInstance;
     bindSystemThemeChange();
-    /* 登录墙:无会话不加载任何数据,直接跳登录页(带 returnTo 回跳) */
     const sess = await refreshSession();
-    if (!sess.user) {
-      redirectOnExpiredSession();
-      return;
-    }
+    /* 登录墙判定在模式确定之后(2026-08-31 本地超管模式):
+     * - 云模式(缓存命中/探测成功):无会话跳登录;匿名探测配置好的服务器会在
+     *   probeCloud 的 401 分支统一跳登录,墙语义不变
+     * - 本地模式(未连云):免墙,无会话时合成超管身份(enterLocalSuper) */
     try {
       const cached = readWorkspaceCache();
       if (cached) {
+        if (!sess.user) {
+          redirectOnExpiredSession();
+          return;
+        }
         /* 缓存命中:立即以云端模式渲染,过期则后台校新 */
         mode = 'cloud';
         setCloudWorkspace(normalizeWorkspace(cached.workspace));
@@ -2454,6 +2465,7 @@
          * 否则会覆盖用户刚切换的 activeId(主页/赛程显示错乱) */
         mode = 'local';
         await ensureFirstTournament();
+        if (!sess.user) enterLocalSuper();
       }
       appInstance.mode = mode;
       await refreshApp();
