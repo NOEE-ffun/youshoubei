@@ -44,8 +44,11 @@
   --rar-1: #6b4423;
   --rar-2: #6f7680;
   --rar-3: #d9970d;
-  /* 分布条黄段(红/绿/蓝复用语义色变量) */
-  --dist-yellow: #d9a400;
+  /* 分布四色段(Tableau 10 式低饱和均衡明度,兼作百分比小字,对白底≥3:1) */
+  --dist-3: #d4685f;
+  --dist-2: #c8a431;
+  --dist-1: #58a05f;
+  --dist-0: #6390cf;
   /* 圆角系统:控件 8 / 卡片 12 / 大容器 16 / chip 胶囊 */
   --radius-sm: 8px;
   --radius: 12px;
@@ -115,7 +118,10 @@ body.side-expanded {
   --rar-1: #a9743f;
   --rar-2: #b9bfc7;
   --rar-3: #f5bb42;
-  --dist-yellow: #f5c542;
+  --dist-3: #e3907f;
+  --dist-2: #d9bc6a;
+  --dist-1: #82c289;
+  --dist-0: #8fb1ea;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.45);
   --shadow-lg: 0 24px 80px rgb(0 0 0 / 0.6);
@@ -2809,7 +2815,7 @@ body[data-page="me"] #bg-layer {
 }
 
 /* 分布(3·2·1·0)堆叠条:蓝系浓度表示携带张数,浅灰底=不带(0张) */
-/* 分布(3·2·1·0)堆叠条:红3/黄2/绿1/蓝0,卡名列定宽后此列更长,条加粗 */
+/* 分布(3·2·1·0)堆叠条:红3/黄2/绿1/蓝0(Tableau 10 式低饱和),条与百分比文字同源色 */
 .dist-cell { min-width: 16rem; }
 
 /* 费用图标(WB 官方 cost 0-10+,本地化于 icons/cost/;彩色图不吃暗色反白滤镜) */
@@ -2830,10 +2836,10 @@ body[data-page="me"] #bg-layer {
 }
 
 .dist-seg { display: block; inline-size: 0; block-size: 100%; }
-.dist-seg.d3 { background: var(--danger); }
-.dist-seg.d2 { background: var(--dist-yellow); }
-.dist-seg.d1 { background: var(--success); }
-.dist-seg.d0 { background: var(--accent); }
+.dist-seg.d3 { background: var(--dist-3); }
+.dist-seg.d2 { background: var(--dist-2); }
+.dist-seg.d1 { background: var(--dist-1); }
+.dist-seg.d0 { background: var(--dist-0); }
 
 .dist-text {
   font-size: 0.75rem;
@@ -2844,10 +2850,10 @@ body[data-page="me"] #bg-layer {
 
 /* 百分比数字着色:非 0 时用对应段的颜色(红3/黄2/绿1/蓝0),0 保持弱化灰 */
 .dist-pt { font-weight: 600; }
-.dist-pt.p3 { color: var(--danger); }
-.dist-pt.p2 { color: var(--dist-yellow); }
-.dist-pt.p1 { color: var(--success); }
-.dist-pt.p0 { color: var(--accent); }
+.dist-pt.p3 { color: var(--dist-3); }
+.dist-pt.p2 { color: var(--dist-2); }
+.dist-pt.p1 { color: var(--dist-1); }
+.dist-pt.p0 { color: var(--dist-0); }
 
 .stats-player-row {
   cursor: pointer;
