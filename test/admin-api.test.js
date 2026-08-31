@@ -183,10 +183,12 @@ async function call(handler, req) {
   assert.strictEqual((await call(adminAudit, mockReq('GET', { url: '/api/admin/audit' }))).status, 401);
 
   /* ---- GET /api/admin/health:注入假 listBackups ---- */
+  /* 顺序刻意打乱:字典序先比前缀('backups/data-' < 'backups/manual-'),
+   * 会把 manual-data-28 排到最后、latest 错指它——按时间排序才正确 */
   const fakeKeys = [
     'backups/data-2026-08-20T00-00-00-000Z.json',
-    'backups/data-2026-08-28T10-20-30-400Z.json',
-    'backups/data-2026-08-30T09-08-07-006Z.json'
+    'backups/data-2026-08-30T09-08-07-006Z.json',
+    'backups/manual-data-2026-08-28T10-20-30-400Z.json'
   ];
   const adminHealth = apiAdmin.createHandlers({
     storage: memoryStorage({
@@ -199,9 +201,10 @@ async function call(handler, req) {
   assert.strictEqual(r.status, 200);
   assert.strictEqual(r.body.oss, true);
   assert.strictEqual(r.body.backups.count, 3);
-  assert.strictEqual(r.body.backups.latest, fakeKeys[2]);
-  assert.deepStrictEqual(r.body.backups.keys, fakeKeys);
-  /* lastBackupAt 从备份名时间戳解析(名字里 : 与 . 被换成 -) */
+  /* keys 时间序(旧→新):manual-data-28 插在 data-20 与 data-30 之间 */
+  assert.deepStrictEqual(r.body.backups.keys, [fakeKeys[0], fakeKeys[2], fakeKeys[1]]);
+  assert.strictEqual(r.body.backups.latest, fakeKeys[1]);
+  /* lastBackupAt 从备份名时间戳解析(名字里 : 与 . 被换成 -;含 manual- 前缀) */
   assert.strictEqual(r.body.lastBackupAt, '2026-08-30T09:08:07.006Z');
   assert.strictEqual(r.body.users, 1);
   assert.strictEqual(r.body.tournaments, 3);
@@ -397,12 +400,52 @@ async function call(handler, req) {
     assert.deepStrictEqual(calls.map((c) => c[0]), ['data.json', 'users.json', 'invite-codes.json'], '按序备份三件套');
     assert.deepStrictEqual(calls.map((c) => c[1]), [TS, TS, TS], '三件共用同一时间戳(成套)');
     assert.ok(audits.some((a) => a.startsWith('admin.backup ')), 'audit admin.backup');
+
+    /* 部分成功(data 件 throw):仍 200,失败件以 null 占位 */
+    const TS2 = 1756543300000;
+    const adminPartial = apiAdmin.createHandlers({
+      storage: memoryStorage({}),
+      appendAudit: () => {},
+      now: () => TS2,
+      backupManual: async (source) => {
+        if (source === 'data.json') throw new Error('oss down');
+        const kind = { 'users.json': 'users', 'invite-codes.json': 'codes' }[source];
+        return 'backups/manual-' + kind + '-' + TS2 + '.json';
+      }
+    });
+    let rp = await call(adminPartial, mockReq('POST', { url: '/api/admin/backup', headers: { cookie: su } }));
+    assert.strictEqual(rp.status, 200, '部分成功仍 200');
+    assert.deepStrictEqual(rp.body.keys, [
+      null,
+      'backups/manual-users-' + TS2 + '.json',
+      'backups/manual-codes-' + TS2 + '.json'
+    ], '失败件 null 占位');
+
+    /* 全败(keys 全 null,默认真实现未配 OSS 时三件均回 null 同此分支)→ 500 */
+    for (const impl of [
+      async () => null,                     /* 静默跳过 */
+      async () => { throw new Error('oss down'); } /* 抛错 */
+    ]) {
+      const noneAudits = [];
+      const adminNone = apiAdmin.createHandlers({
+        storage: memoryStorage({}),
+        appendAudit: (a, d) => noneAudits.push(a + ' ' + d),
+        now: () => TS2,
+        backupManual: impl
+      });
+      const rn = await call(adminNone, mockReq('POST', { url: '/api/admin/backup', headers: { cookie: su } }));
+      assert.strictEqual(rn.status, 500, '全败 500(impl ' + String(impl) + ')');
+      assert.strictEqual(rn.body.error, '备份全部失败');
+      assert.deepStrictEqual(rn.body.keys, undefined, '500 不带 keys');
+      assert.ok(noneAudits.some((a) => a.startsWith('admin.backup ')), '全败仍写审计(留痕)');
+    }
+
     /* 守卫与方法 */
     assert.strictEqual((await call(admin, mockReq('POST', { url: '/api/admin/backup', headers: { cookie: ck('u2') } }))).status, 403);
     assert.strictEqual((await call(admin, mockReq('POST', { url: '/api/admin/backup' }))).status, 401);
     assert.strictEqual((await call(admin, mockReq('GET', { url: '/api/admin/backup', headers: { cookie: su } }))).status, 405);
 
-    console.log('✓ admin 写:backup 手工三件套');
+    console.log('✓ admin 写:backup 手工三件套(部分成功 200/全败 500)');
   }
 
   /* ---- POST /api/admin/restore:key 白名单 + 先留底后拷贝 ---- */
@@ -464,6 +507,12 @@ async function call(handler, req) {
     assert.strictEqual(apiAdmin.manualBackupKey(t, 'invite-codes.json'), 'backups/manual-codes-2026-08-30T09-08-07-006Z.json');
     /* manual data 快照含 'data-' 子串 → 真 listBackups 可见 → 可过 restore 白名单 */
     assert.ok(apiAdmin.manualBackupKey(t, 'data.json').includes('data-'));
+    /* backupTimeOf 覆盖 manual- 前缀(manual data/users/codes 均可解析,其余 null) */
+    assert.strictEqual(apiAdmin.backupTimeOf(apiAdmin.manualBackupKey(t, 'data.json')), '2026-08-30T09:08:07.006Z');
+    assert.strictEqual(apiAdmin.backupTimeOf(apiAdmin.manualBackupKey(t, 'users.json')), '2026-08-30T09:08:07.006Z');
+    assert.strictEqual(apiAdmin.backupTimeOf(apiAdmin.manualBackupKey(t, 'invite-codes.json')), '2026-08-30T09:08:07.006Z');
+    assert.strictEqual(apiAdmin.backupTimeOf('backups/manual-other-2026-08-30T09-08-07-006Z.json'), null, '未知 kind null');
+    assert.strictEqual(apiAdmin.backupTimeOf('backups/data-not-a-ts.json'), null, '时间戳不合法 null');
 
     console.log('✓ admin 写:manualBackupKey 命名');
   }

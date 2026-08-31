@@ -428,7 +428,7 @@
       body: blob
     });
     if (response.status === 401) throw new Error('登录已过期，请重新登录后再上传');
-    if (response.status === 403) throw new Error('上传功能未配置');
+    if (response.status === 403) throw new Error('上传需要选手或管理员身份');
     if (!response.ok) throw new Error((await apiErrorMessage(response)) || '图片上传失败');
     const data = await response.json();
     return data.url;
@@ -2461,6 +2461,8 @@
         notify('云端数据不可用，已切换到本机数据：' + cloudFallbackReason, 'danger');
       }
     } catch (error) {
+      /* 登录跳转错误不是初始化故障:redirectOnExpiredSession 已在跳页,不再叠横幅 */
+      if (error && error.loginRedirect) return;
       showFatalError(error);
       return;
     }

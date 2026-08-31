@@ -4,7 +4,8 @@
  * 个人中心(选手中心 profile 面板):
  * - 选手自助维护资料(头像/昵称/队伍ID/队标/垃圾话/海报颜色)——PUT /api/me/player 白名单;
  * - 账号昵称(账号级字段,落 users.json)随资料一并提交;
- * - 「升级与绑定」:填码跃迁 POST /api/me/redeem、绑手机 PUT /api/me/phone(120s 发码倒计时);
+ * - 「升级与绑定」:账号昵称保存(PUT /api/me/player 纯昵称请求,未绑选手也可改)、
+ *   填码跃迁 POST /api/me/redeem、绑手机 PUT /api/me/phone(120s 发码倒计时);
  * - 「发码中心」tab 数据:GET/POST /api/codes(admin/super)。
  * 云端模式专用;游客提示登录,未绑选手账号显示升级与绑定+改密。
  */
@@ -226,9 +227,39 @@
     el.classList.toggle('is-danger', Boolean(danger));
   }
 
+  /* 账号昵称保存:昵称输入行已移入「升级与绑定」区,未绑选手的纯 user 账号
+   * 也能改(服务端 /api/me/player 对纯昵称请求放行,不要求 playerId);
+   * 绑选手者此处与「保存资料」同走一个端点,两处均生效 */
+  $('nickname-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const nickname = $('account-nickname').value.trim();
+    if (!nickname) {
+      setRedeemStatus('昵称不能为空', true);
+      return;
+    }
+    try {
+      const resp = await fetch('/api/me/player', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nickname })
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setRedeemStatus((data && data.error) || '保存失败', true);
+        return;
+      }
+      state.user = data.user || state.user;
+      setRedeemStatus('昵称已保存');
+      window.TournamentApp.refreshSession();
+    } catch (error) {
+      setRedeemStatus('网络错误,请稍后再试', true);
+    }
+  });
+
   $('redeem-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const code = $('redeem-code').value.trim();
+    /* 生成码全大写:输入归一(大小写/首尾空白)再提交 */
+    const code = $('redeem-code').value.toUpperCase().trim();
     if (!code) {
       setRedeemStatus('请填写验证码', true);
       return;

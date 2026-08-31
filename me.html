@@ -12,8 +12,8 @@
   <link rel="prefetch" href="index.html">
   <link rel="prefetch" href="schedule.html">
   <link rel="prefetch" href="poster.html">
-  <script src="theme-init.js?v=2026090008"></script>
-  <link rel="stylesheet" href="styles.css?v=2026090008">
+  <script src="theme-init.js?v=2026090009"></script>
+  <link rel="stylesheet" href="styles.css?v=2026090009">
 </head>
 <body data-page="me">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -102,17 +102,19 @@
               </label>
               <button type="submit" class="btn btn-primary btn-sm">绑定</button>
             </form>
+            <form id="nickname-form" class="redeem-form">
+              <label class="form-field">
+                <span class="form-label">账号昵称</span>
+                <input type="text" id="account-nickname" maxlength="24" placeholder="账号展示名;首次建选手档案时作为默认名">
+              </label>
+              <button type="submit" class="btn btn-secondary btn-sm">保存昵称</button>
+            </form>
             <p class="hint" id="redeem-status" role="status" aria-live="polite"></p>
           </section>
 
           <section id="profile-card" hidden aria-labelledby="profile-card-title">
             <h2 id="profile-card-title" class="visually-hidden">选手资料</h2>
             <p class="hint">账号名 <strong id="profile-username"></strong>(用于登录,不可修改);以下信息全站展示。</p>
-
-            <div class="form-field">
-              <label for="account-nickname">账号昵称</label>
-              <input type="text" id="account-nickname" maxlength="24" placeholder="账号展示名;首次建选手档案时作为默认名">
-            </div>
 
             <div class="form-field">
               <label>头像</label>
@@ -215,12 +217,12 @@
     </main>
   </div>
 
-  <script src="canvas-model.js?v=2026090008" defer></script>
-  <script src="common.js?v=2026090008" defer></script>
-  <script src="vs-poster/js/upload.js?v=2026090008" defer></script>
-  <script src="my-decks.js?v=2026090008" defer></script>
-  <script src="my-tourneys.js?v=2026090008" defer></script>
-  <script src="profile.js?v=2026090008" defer></script>
-  <script src="me.js?v=2026090008" defer></script>
+  <script src="canvas-model.js?v=2026090009" defer></script>
+  <script src="common.js?v=2026090009" defer></script>
+  <script src="vs-poster/js/upload.js?v=2026090009" defer></script>
+  <script src="my-decks.js?v=2026090009" defer></script>
+  <script src="my-tourneys.js?v=2026090009" defer></script>
+  <script src="profile.js?v=2026090009" defer></script>
+  <script src="me.js?v=2026090009" defer></script>
 </body>
 </html>

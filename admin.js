@@ -79,6 +79,8 @@
     $('admin-shell').hidden = true;
     $('admin-empty').hidden = false;
     $('admin-empty-text').textContent = text;
+    /* 登录后带回本页,而非落在默认主页 */
+    $('admin-login-btn').href = 'login.html?returnTo=' + encodeURIComponent(location.pathname);
     $('admin-login-btn').hidden = !showLogin;
   }
 
@@ -115,10 +117,12 @@
 
   /* ---------- 审计流水 ---------- */
 
-  /* 近 n 个月(含当月)的 yyyy-mm,UTC 口径与后端 monthKeyNow 同源 */
+  /* 近 n 个月(含当月)的 yyyy-mm,UTC 口径与后端 monthKeyNow 同源;
+   * 先钉到 1 号再回退月:否则 5/31 setUTCMonth(-1) 溢出成 3/31(跳过 4 月) */
   function recentMonths(n) {
     const out = [];
     const d = new Date();
+    d.setUTCDate(1);
     for (let i = 0; i < n; i++) {
       out.push(d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0'));
       d.setUTCMonth(d.getUTCMonth() - 1);

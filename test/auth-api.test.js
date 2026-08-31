@@ -510,7 +510,7 @@ async function main() {
     /* banned sms 命中不得清失败计数(旧实现在验码通过即 reset,会清零):
      * 4 次密码失败 → banned sms 命中(若曾 reset 则计数归 0)→ 第 5 次密码失败
      * 触发锁定 → 第 6 次尝试应 429;若 banned sms 曾 reset,此刻计数仅 1,
-     * 第 6 次应答 401 而非 429,可判别 */
+     * 第 6 次应答 403(banned2 密码正确但账号被封)而非 429,可判别 */
     for (let i = 0; i < 4; i++) {
       const f = await call(acc.login, mockReq('POST', { body: jsonBody({ username: 'banned2', password: 'wrong-' + i }) }));
       assert.strictEqual(f.status, 401, '错误密码 401');

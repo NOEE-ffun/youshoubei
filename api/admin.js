@@ -16,7 +16,8 @@ const oss = require('./oss');
  *   POST /api/admin/users/:id/role    角色降级/升级 player↔admin(audit admin.role);
  *                                    置 super 不支持(角色升级唯一入口是 redeem 填码)
  *   POST /api/admin/backup            手工快照三件套(data/users/invite-codes 各一份,
- *                                    backups/manual-<kind>-<ts>.json,永不自动清理)
+ *                                    backups/manual-<kind>-<ts>.json,永不自动清理;
+ *                                    三件全败 → 500「备份全部失败」,部分成功仍 200)
  *   POST /api/admin/restore           把 backups/ 里的 data 类备份恢复为 data.json
  *                                    (恢复前 backupData 留底;key 白名单校验)
  * 超管保护:目标 effectiveRole==='super'(env 名单命中也算)或目标即操作者本人
@@ -78,13 +79,26 @@ function monthKeyNow(now) {
   return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0');
 }
 
-/** backups/<prefix>-<ts>.json 名内时间戳 → ISO(名里 : 与 . 被 backupKeyNow 换成 -,此处逆变换) */
-const BACKUP_TS_RE = /^backups\/(?:data|users|codes)-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.json$/;
+/** backups/<prefix>-<ts>.json 名内时间戳 → ISO(名里 : 与 . 被 backupKeyNow 换成 -,此处逆变换)。
+ * 前缀覆盖手工快照 manual-<kind>-(与自动 <kind>- 同构),否则 manual-data 的
+ * lastBackupAt 解析不到、排序也插不进时间轴 */
+const BACKUP_TS_RE = /^backups\/(?:manual-)?(?:data|users|codes)-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.json$/;
 function backupTimeOf(key) {
   const m = BACKUP_TS_RE.exec(String(key || ''));
   if (!m) return null;
   const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]), Number(m[7]));
   return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
+
+/** 备份名按时间排序(旧→新):manual-* 前缀长度不同,字典序会把 manual-data-8月
+ * 排到 data-8月 之后、users-1月 之前,时间轴错乱;不可解析的名排在最后(名字序) */
+function backupKeyComparator(a, b) {
+  const ta = backupTimeOf(a);
+  const tb = backupTimeOf(b);
+  if (ta && tb && ta !== tb) return ta < tb ? -1 : 1;
+  if (ta && !tb) return -1;
+  if (!ta && tb) return 1;
+  return String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0;
 }
 
 /** 数组长度(非数组/脏 null 条目按 0 计) */
@@ -224,7 +238,8 @@ function createHandlers(options) {
     const backups = { count: 0, latest: null, keys: [] };
     let lastBackupAt = null;
     try {
-      const keys = ((await listBackups()) || []).slice().sort();
+      /* 时间序(旧→新):字典序在 manual- 与自动前缀混排时会错位 */
+      const keys = ((await listBackups()) || []).slice().sort(backupKeyComparator);
       backups.count = keys.length;
       backups.keys = keys.slice(-BACKUP_KEYS_SHOW); /* 最近 20 */
       backups.latest = keys.length ? keys[keys.length - 1] : null;
@@ -290,7 +305,9 @@ function createHandlers(options) {
   }
 
   /* POST /api/admin/backup:手工快照三件套(data/users/invite-codes 各一份),
-   * 共用同一时间戳成套;逐件 best-effort,失败记日志不阻塞其余 */
+   * 共用同一时间戳成套;逐件 best-effort,失败记日志不阻塞其余;
+   * 三件全败(keys 全 null,含未配 OSS 的静默跳过)→ 500,不让「成功」
+   * 掩盖一份备份都没落下的实情;部分成功仍 200 带部分 keys */
   async function backup(req, res) {
     const operator = await requireRole(req, res, ['super']);
     if (!operator) return;
@@ -305,6 +322,7 @@ function createHandlers(options) {
       }
     }
     appendAudit('admin.backup', 'keys=' + keys.filter(Boolean).join(',') + ' by=' + operator.username);
+    if (!keys.some(Boolean)) return sendJson(res, 500, { error: '备份全部失败' });
     sendJson(res, 200, { ok: true, keys });
   }
 
