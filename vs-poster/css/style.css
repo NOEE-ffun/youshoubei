@@ -442,6 +442,10 @@
   font-weight: 600;
   opacity: 0;
   pointer-events: none;
+  /* 主站 styles.css 通用 .toast 带 toast-in 入场动画,动画期间覆盖此处的
+   * opacity:0——海报页静态空 #toast 每次进页都会闪一个黑底绿边空胶囊 ~300ms;
+   * 本 toast 只靠 toast--show 过渡显隐,入场动画显式关掉 */
+  animation: none;
   transition: opacity var(--dur-ui) var(--ease-out), transform var(--dur-ui) var(--ease-out);
 }
 #poster-app .toast--show {

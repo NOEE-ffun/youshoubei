@@ -3738,8 +3738,10 @@ body[data-view='canvas'] .list-view {
     align-items: stretch;
     padding: 0.2rem 0.35rem calc(0.2rem + env(safe-area-inset-bottom, 0px));
     box-shadow: inset 0 1px 0 var(--border);
-    /* 不设 overflow-x:auto——导航项自适应收缩后不该溢出;若溢出会撑出页面横滚,
-     * 由 e2e(scrollWidth ≤ 视口)兜底拦截;且 auto 会裁掉「更多」向上弹出的浮层 */
+    /* 覆盖桌面 overflow:hidden:底栏本体的裁切会剪掉「更多」向上弹出的浮层
+     * (浮层整块在栏外,曾致点更多无任何视觉反馈);导航自适应收缩后无需裁切,
+     * 溢出由 e2e(scrollWidth ≤ 视口)兜底拦截 */
+    overflow: visible;
   }
 
   #side-toggle {

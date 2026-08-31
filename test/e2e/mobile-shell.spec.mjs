@@ -69,6 +69,17 @@ test('底栏「更多」收纳:不溢出,菜单项完整可达,Escape 关闭', a
   await more.click();
   await expect(page.locator('.side-more-menu')).toBeVisible();
   await expect(more).toHaveAttribute('aria-expanded', 'true');
+  /* 真渲染断言:elementFromPoint 命中菜单自身——toBeVisible/boundingBox 测不出
+   * overflow:hidden 裁切(曾致点更多无任何视觉反馈而 e2e 照绿) */
+  const hitOk = await page.evaluate(() =>
+    [...document.querySelectorAll('.side-more-menu .side-action')]
+      .filter((el) => el.offsetParent !== null)
+      .every((el) => {
+        const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return top && top.closest('.side-more-menu') !== null;
+      }));
+  expect(hitOk).toBeTruthy();
   const items = await page.evaluate(() =>
     [...document.querySelectorAll('.side-more-menu .side-action')]
       .filter((el) => el.offsetParent !== null)
@@ -87,6 +98,31 @@ test('底栏「更多」收纳:不溢出,菜单项完整可达,Escape 关闭', a
   const lc = await page.locator('.list-class').first().boundingBox();
   expect(lc.height).toBeGreaterThanOrEqual(44);
   expect(lc.width).toBeGreaterThanOrEqual(44);
+});
+
+test('海报页:「更多」浮层不被内容遮挡;静态空 toast 不闪入场动画', async ({ page }) => {
+  await page.goto('/poster.html');
+  await page.waitForSelector('#poster-theme-picker');
+
+  /* vs-poster 面板内容曾叠在浮层之上(elementFromPoint 落到 .field-row) */
+  await page.locator('#side-more-btn').click();
+  await expect(page.locator('.side-more-menu')).toBeVisible();
+  const hitOk = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('.side-more-menu .side-action')].filter((el) => el.offsetParent !== null);
+    return items.length >= 1 && items.every((el) => {
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return top && top.closest('.side-more-menu') !== null;
+    });
+  });
+  expect(hitOk).toBeTruthy();
+
+  /* 主站通用 .toast 的 toast-in 动画不得作用到海报页静态 #toast(黑底绿边空胶囊闪现) */
+  const anim = await page.evaluate(() => {
+    const t = document.getElementById('toast');
+    return t ? getComputedStyle(t).animationName : 'no-toast';
+  });
+  expect(anim).toBe('none');
 });
 
 test('me#profile:隐藏 file 输入不撑宽视口,底栏贴底', async ({ browser, page }) => {
