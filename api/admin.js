@@ -15,6 +15,9 @@ const oss = require('./oss');
  *   POST /api/admin/users/:id/status  封禁/解封(audit admin.ban/admin.unban)
  *   POST /api/admin/users/:id/role    角色降级/升级 player↔admin(audit admin.role);
  *                                    置 super 不支持(角色升级唯一入口是 redeem 填码)
+ *   POST /api/admin/users/:id/delete  删除账号(audit admin.delete):手机号随记录
+ *                                    消失即释放可重新注册;绑定选手档案保留仅解绑;
+ *                                    超管/本人不可删;既有会话自然失效
  *   POST /api/admin/backup            手工快照三件套(data/users/invite-codes 各一份,
  *                                    backups/manual-<kind>-<ts>.json,永不自动清理;
  *                                    三件全败 → 500「备份全部失败」,部分成功仍 200)
@@ -304,6 +307,34 @@ function createHandlers(options) {
     });
   }
 
+  /* POST /api/admin/users/:id/delete:删除账号(2026-08-31)。
+   * 语义:users.json 记录移除——手机号随记录消失即释放(同号可重新短信注册建新号);
+   * 绑定的选手档案保留在 data.json players(可经绑定码重新认领),仅解除账号归属;
+   * 既有会话随 uid 查无此人自然失效(currentUser null);超管/操作者本人不可删。
+   * 与封禁/降级不同走独立实现(mutateUser 是改写,删除要 splice 掉条目) */
+  async function userDelete(req, res, id) {
+    const operator = await requireRole(req, res, ['super']);
+    if (!operator) return;
+    await withWorkspaceLock(async () => {
+      const users = (await read(USERS_KEY)) || [];
+      const idx = users.findIndex((u) => u && u.id === id);
+      if (idx < 0) return sendJson(res, 404, { error: '账号不存在' });
+      if (isSuperProtected(users[idx], operator)) {
+        return sendJson(res, 400, { error: '超管账号不可在此操作' });
+      }
+      const target = users[idx];
+      users.splice(idx, 1);
+      await oss.backupJson(USERS_KEY, 'users');
+      await write(USERS_KEY, users);
+      appendAudit('admin.delete',
+        'user=' + (target.username || '-') +
+        (target.phone ? ' phone=***' + String(target.phone).slice(-4) : '') +
+        (target.playerId ? ' player=' + target.playerId + '(档案保留解绑)' : '') +
+        ' by=' + operator.username);
+      sendJson(res, 200, { ok: true, deleted: adminUserView(target) });
+    });
+  }
+
   /* POST /api/admin/backup:手工快照三件套(data/users/invite-codes 各一份),
    * 共用同一时间戳成套;逐件 best-effort,失败记日志不阻塞其余;
    * 三件全败(keys 全 null,含未配 OSS 的静默跳过)→ 500,不让「成功」
@@ -380,6 +411,10 @@ function createHandlers(options) {
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
       return userRole(req, res, w[1]);
     }
+    if ((w = /^users\/([^/]+)\/delete$/.exec(tail))) {
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
+      return userDelete(req, res, w[1]);
+    }
     if (tail === 'backup' || tail === 'restore') {
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
       return tail === 'backup' ? backup(req, res) : restore(req, res);
@@ -397,6 +432,7 @@ function createHandlers(options) {
   handler.health = health;
   handler.userStatus = userStatus;
   handler.userRole = userRole;
+  handler.userDelete = userDelete;
   handler.backup = backup;
   handler.restore = restore;
   return handler;

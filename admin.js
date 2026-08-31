@@ -181,7 +181,8 @@
       const actions = protectedRow
         ? '—'
         : '<button type="button" class="btn ' + (banned ? 'btn-secondary' : 'btn-danger') + ' btn-sm" data-act="status" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-banned="' + (banned ? '0' : '1') + '">' + (banned ? '解封' : '封禁') + '</button> ' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-act="role" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-role="' + (u.role === 'admin' ? 'player' : 'admin') + '">' + (u.role === 'admin' ? '降为选手' : '升为管理员') + '</button>';
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="role" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-role="' + (u.role === 'admin' ? 'player' : 'admin') + '">' + (u.role === 'admin' ? '降为选手' : '升为管理员') + '</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="delete" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-player="' + escapeHtml(u.playerName || (u.playerId || '')) + '">删除</button>';
       return '<tr><td>' + escapeHtml(u.username || '—') + '</td>' +
         '<td>' + escapeHtml(u.nickname || '—') + '</td>' +
         '<td>' + escapeHtml(ROLE_LABELS[u.role] || u.role || '—') + '</td>' +
@@ -231,7 +232,7 @@
     setStatus(status, codes.length ? '共 ' + codes.length + ' 个码(新在前)。' : '暂无邀请码。', false);
   }
 
-  /* 行内操作:封禁/解封、降级/升管理员,confirm 二次确认后提交并整表刷新 */
+  /* 行内操作:封禁/解封、降级/升管理员(confirm 确认)、删除(confirm 双重确认) */
   $('admin-users-tbody').addEventListener('click', async (event) => {
     const btn = event.target.closest('button[data-act]');
     if (!btn) return;
@@ -270,6 +271,27 @@
         return;
       }
       setStatus(status, '已把「' + name + '」' + verb + '。', false);
+      loadUsers();
+      return;
+    }
+    if (btn.dataset.act === 'delete') {
+      /* 删除不可逆,双重确认:第二重需输入用户名(与恢复的 RESTORE 同风格) */
+      const player = btn.dataset.player || '';
+      const summary = player ? '其绑定的选手档案「' + player + '」将保留并解除绑定,' : '';
+      if (!window.confirm('确认删除账号「' + name + '」?' + summary + '手机号将被释放(可重新注册)。此操作不可逆。')) return;
+      const typed = window.prompt('删除不可逆。请输入该账号在表格中显示的用户名(手机号账号为脱敏形态)以确认:');
+      if (typed == null) return;
+      if (typed.trim() !== name) {
+        setStatus($('admin-users-status'), '输入的用户名不一致,已取消删除。', true);
+        return;
+      }
+      const result = await api('/api/admin/users/' + encodeURIComponent(id) + '/delete', { method: 'POST' });
+      const status = $('admin-users-status');
+      if (!result.ok) {
+        setStatus(status, '删除失败:' + (result.data.error || result.status), true);
+        return;
+      }
+      setStatus(status, '已删除「' + name + '」' + (player ? ',选手档案已解绑保留。' : ',手机号已释放。'), false);
       loadUsers();
     }
   });

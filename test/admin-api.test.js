@@ -517,6 +517,37 @@ async function call(handler, req) {
     console.log('✓ admin 写:manualBackupKey 命名');
   }
 
+  /* ---- 删除账号:手机号释放/选手档案保留解绑/超管本人保护/404 ---- */
+  {
+    /* 走模块默认 handler(与 requireRole→account 单例同读全局 dev-store 种子):
+     * u5=root(super) 操作,u2=admin1(admin,绑 p1) 被删 */
+    const del = (id, cookie) =>
+      call(apiAdmin, mockReq('POST', { url: '/api/admin/users/' + id + '/delete', headers: cookie ? { cookie } : undefined }));
+
+    /* 守卫:匿名 401;非 super 403(u4=user) */
+    assert.strictEqual((await del('u2')).status, 401);
+    assert.strictEqual((await del('u2', ck('u4'))).status, 403);
+    /* super 删 u2 → 200 且响应带被删者视图 */
+    r = await del('u2', ck('u5'));
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(r.body.deleted.id, 'u2');
+
+    /* 手机号随记录消失即释放(同号可重新短信注册建新号) */
+    const usersAfter = await devStore.readJson('users.json');
+    assert.ok(!usersAfter.some((u) => u.phone === '13900000002'), '手机号应随账号删除释放');
+    /* 选手档案保留在 players,且无人再持有该 playerId(可经绑定码重新认领) */
+    const dataAfter = await devStore.readJson('data.json');
+    assert.ok(dataAfter.players.some((p) => p.id === 'p1'), '选手档案必须保留');
+    assert.ok(!usersAfter.some((u) => u.playerId === 'p1'), '账号对档案的绑定应解除');
+
+    /* 保护与 404:操作者本人(超管)400;不存在 404;重复删 404 */
+    assert.strictEqual((await del('u5', ck('u5'))).status, 400, '超管自身不可删');
+    assert.strictEqual((await del('u_none', ck('u5'))).status, 404);
+    assert.strictEqual((await del('u2', ck('u5'))).status, 404, '已删账号再删 404');
+
+    console.log('✓ admin 写:删除账号(手机释放/档案保留/保护/404)');
+  }
+
   delete process.env.SESSION_SECRET;
-  console.log('✓ admin-api: 后台读+写接口(users 脱敏/audit/health/封禁/角色/备份/恢复)通过');
+  console.log('✓ admin-api: 后台读+写接口(users 脱敏/audit/health/封禁/角色/备份/恢复/删除)通过');
 })().catch((e) => { console.error(e); process.exit(1); });

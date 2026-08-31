@@ -108,6 +108,28 @@ test('封禁降级链路:封禁后登录 403,解封恢复,admin 降 player 失�
   const codes = await contextA.request.get('/api/codes');
   expect(codes.status(), '降级后码表应 403').toBe(403);
 
+  /* 删除账号(双重确认:confirm+prompt 输入脱敏用户名)→ 表行消失,同手机号可重新注册 */
+  const delBtnU = rowU.locator('button[data-act="delete"]');
+  const handleDialog = (d) => {
+    if (d.type() === 'prompt') d.accept('138****3333'); /* 表格显示的脱敏形态 */
+    else d.accept();
+  };
+  page.on('dialog', handleDialog);
+  await delBtnU.click();
+  await expect(rowU, '删除成功后整表刷新,该行消失').toBeHidden({ timeout: 5000 });
+  page.off('dialog', handleDialog);
+
+  const usersList = await context.request.get('/api/admin/users');
+  const usersJson = await usersList.json();
+  expect(usersJson.users.some((u) => u.phoneMasked === '138****3333'), '手机号随删除释放').toBe(false);
+  /* 同手机号重新短信登录 = 全新账号(自动注册),角色回到 user */
+  const reLogin = await contextU.request.post('/api/auth/sms/login', {
+    data: { phone: PHONE_USER, code: '000000' }
+  });
+  expect(reLogin.status(), '手机号释放后应能重新注册登录').toBe(200);
+  const reUser = (await reLogin.json()).user;
+  expect(reUser.role).toBe('user');
+
   await contextA.close();
   await contextU.close();
   await resetStore(context);
