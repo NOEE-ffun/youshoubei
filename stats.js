@@ -293,11 +293,15 @@
       const pct = (n) => (total ? Math.round(n / total * 100) : 0);
       const seg = (cls, n) => '<i class="dist-seg ' + cls + '" style="width:' + (total ? (n / total * 100) : 0) + '%"></i>';
       const rows = deckCompRows(agg);
+      const costIcon = (cost) => {
+        const n = Math.max(0, Math.min(10, Number(cost) || 0));
+        return '<img class="cost-icon" src="icons/cost/cost-' + n + '.png" alt="' + n + '费" title="' + n + ' 费" width="20" height="20" loading="lazy">';
+      };
       tbody.innerHTML = rows.map((c) => {
         const d3 = c.dist[2], d2 = c.dist[1], d1 = c.dist[0];
         const d0 = Math.max(0, total - (d3 + d2 + d1));
         return '<tr><td><span class="deck-name-r' + c.rarity + '">' + escapeHtml(c.name) + '</span></td>' +
-          '<td class="num">' + c.cost + '</td>' +
+          '<td class="num">' + costIcon(c.cost) + '</td>' +
           '<td class="dist-cell num">' +
             '<div class="dist-bar" role="img" aria-label="3张' + pct(d3) + '%,2张' + pct(d2) + '%,1张' + pct(d1) + '%,0张' + pct(d0) + '%">' +
               seg('d3', d3) + seg('d2', d2) + seg('d1', d1) +

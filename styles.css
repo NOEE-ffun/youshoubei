@@ -2751,6 +2751,14 @@ body[data-page="me"] #bg-layer {
 /* 分布(3·2·1·0)堆叠条:蓝系浓度表示携带张数,浅灰底=不带(0张) */
 .dist-cell { min-width: 11rem; }
 
+/* 费用图标(WB 官方 cost 0-10+,本地化于 icons/cost/;彩色图不吃暗色反白滤镜) */
+.cost-icon {
+  block-size: 20px;
+  inline-size: 20px;
+  vertical-align: -4px;
+  display: inline-block;
+}
+
 .dist-bar {
   display: flex;
   block-size: 7px;

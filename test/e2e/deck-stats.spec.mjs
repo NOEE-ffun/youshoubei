@@ -70,6 +70,7 @@ test('统计页:快照聚合携带率表格 + 稀有度着色 + 未解析计数'
   await expect(rows).toHaveCount(3, '三种卡');
   /* 排序:费用升序 → 稀有度升序(须臾1费 → 焦灼4费 → 统音5费) */
   await expect(rows.nth(0).locator('.deck-name-r1')).toContainText('须臾剑士');
+  await expect(rows.nth(0).locator('.cost-icon')).toHaveAttribute('src', 'icons/cost/cost-1.png');
   await expect(rows.nth(0)).toContainText('50%·50%·0%·0%');
   await expect(rows.nth(0).locator('.dist-bar')).toBeVisible();
   await expect(rows.nth(1).locator('.deck-name-r4')).toContainText('焦灼炎将·玛尔斯');
