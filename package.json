@@ -2,7 +2,7 @@
   "name": "youshoubei",
   "version": "1.0.0",
   "private": true,
-  "description": "右手杯——8 人 BO3 双败淘汰赛制与卡组展示网站（浏览器应用）",
+  "description": "右手杯——卡牌赛事一站式平台:自由画布赛程、系列赛、报名、卡组提交、海报与投屏(浏览器应用)",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
