@@ -35,6 +35,14 @@
       + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
 
+  /* 码表 usedBy 是兑码者 username——短信注册账号 username=手机号,
+   * 与账号表脱敏承诺同口径(规则同 api/admin.js maskUsername):11 位手机形态
+   * → 138****1234,其余用户名原样 */
+  function maskPhoneUsername(username) {
+    const s = String(username == null ? '' : username);
+    return /^1\d{10}$/.test(s) ? s.slice(0, 3) + '****' + s.slice(7) : s;
+  }
+
   /* 统一请求:回 {ok, status, data};网络异常按 0 + 空对象处理 */
   async function api(url, options) {
     try {
@@ -217,7 +225,7 @@
       '<td>' + (c.kind === 'admin' ? '管理员码' : '选手码') + '</td>' +
       '<td>' + escapeHtml(c.playerName || (c.playerId || '—')) + '</td>' +
       '<td>' + (c.used ? chip('已使用', 'admin-chip-muted') : chip('未使用', 'admin-chip-ok')) + '</td>' +
-      '<td>' + escapeHtml(c.usedBy || '—') + '</td>' +
+      '<td>' + escapeHtml(c.usedBy ? maskPhoneUsername(c.usedBy) : '—') + '</td>' +
       '<td>' + escapeHtml(fmtDateTime(c.createdAt)) + '</td></tr>'
     ).join('');
     setStatus(status, codes.length ? '共 ' + codes.length + ' 个码(新在前)。' : '暂无邀请码。', false);

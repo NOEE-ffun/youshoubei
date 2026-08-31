@@ -4,7 +4,8 @@ import { ADMIN_PHONE, smsLogin, seedWorkspace, resetStore, makeAdmin } from './h
 /* 超管后台页(admin.html)E2E:
  * 1) 权限门:匿名跳登录、非 super 管理员无权提示、super 见四 tab。
  * 2) 封禁降级:封禁 → 该账号短信登录 403;解封恢复;admin 降 player 后失去码表权;
- *    账号表手机号全程脱敏(不见完整 11 位)。
+ *    账号表手机号全程脱敏,码表 usedBy(兑码者 username=手机号)渲染侧同款脱敏,
+ *    整页可见文本不见完整手机号。
  * 3) 健康与备份:健康块计数渲染;dev 无 OSS → 一键备份红字降级提示、
  *    恢复输入非法 key → 400 红字提示(断言降级形态而非成功形态)。 */
 
@@ -63,6 +64,17 @@ test('封禁降级链路:封禁后登录 403,解封恢复,admin 降 player 失�
   expect(tableText).toContain('138****2222');
   expect(tableText).not.toContain(PHONE_USER);
   expect(tableText).not.toContain(PHONE_ADMIN);
+
+  /* 码表:makeAdmin 兑过的码 usedBy=手机号用户名(13800002222),渲染侧须脱敏 */
+  await page.waitForSelector('#admin-codes-tbody tr');
+  const codesText = await page.locator('#admin-codes-tbody').innerText();
+  expect(codesText).toContain('138****2222');
+  expect(codesText).not.toContain(PHONE_ADMIN);
+
+  /* 整页可见文本不见完整手机号(脱敏断言从账号表扩到全页,兜住码表等一切角落) */
+  const pageText = await page.evaluate(() => document.body.innerText);
+  expect(pageText).not.toContain(PHONE_USER);
+  expect(pageText).not.toContain(PHONE_ADMIN);
 
   const rowU = page.locator('#admin-users-tbody tr', { hasText: '138****3333' });
   const statusBtnU = rowU.locator('button[data-act="status"]');

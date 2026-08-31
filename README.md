@@ -73,7 +73,7 @@ npm start
 
 ## 数据怎么存
 
-浏览器本地模式下数据存在 IndexedDB;部署后,`server.js` 同时提供静态站点和 `api/` 接口,比赛数据写入阿里云 OSS 的 `data.json`、选手账号写入 `users.json`、邀请码写入 `invite-codes.json`、图片写入 `images/`,任何设备打开网址看到的都是同一份内容。`data.json` 内是"系列 → 届"两级:顶层 `series` 数组存系列(名称、简介、封面、创建者),每届 tournament 携带 `seriesId` 指向所属系列、`createdBy` 记录创建者(归属判定依据,由服务端盖章);没有系列的届显示在"未分组"。三类 JSON 文件每次写入前都会自动备份到 `backups/`(各保留 20 份;后台手工快照为 `manual-` 前缀,永不自动清理),操作审计按月追加。登录会话是签名 httpOnly cookie(30 天),改密码即全网下线;短信验证码与限速计数只在进程内存,重启即清。图片上传以文件魔数校验类型(PNG/JPEG/WebP/GIF),不信任客户端声明。阿里云 ECS 部署步骤见 [`deploy/README.md`](deploy/README.md);升级到系列赛版本时,上线先在服务器跑 `node scripts/migrate-series.js --dry` 预览、确认后去掉 `--dry` 实跑(存量届挂入默认系列"历届比赛"),再启动/重启服务——不迁移存量届会全部落在"未分组"且仅超管可编辑。
+浏览器本地模式下数据存在 IndexedDB;部署后,`server.js` 同时提供静态站点和 `api/` 接口,比赛数据写入阿里云 OSS 的 `data.json`、选手账号写入 `users.json`、邀请码写入 `invite-codes.json`、图片写入 `images/`,任何设备打开网址看到的都是同一份内容。`data.json` 内是"系列 → 届"两级:顶层 `series` 数组存系列(名称、简介、创建者),每届 tournament 携带 `seriesId` 指向所属系列、`createdBy` 记录创建者(归属判定依据,由服务端盖章);没有系列的届显示在"未分组"。三类 JSON 文件每次写入前都会自动备份到 `backups/`(各保留 20 份;后台手工快照为 `manual-` 前缀,永不自动清理),操作审计按月追加。登录会话是签名 httpOnly cookie(30 天),改密码即全网下线;短信验证码与限速计数只在进程内存,重启即清。图片上传以文件魔数校验类型(PNG/JPEG/WebP/GIF),不信任客户端声明。阿里云 ECS 部署步骤见 [`deploy/README.md`](deploy/README.md);升级到系列赛版本时,上线先在服务器跑 `node scripts/migrate-series.js --dry` 预览、确认后去掉 `--dry` 实跑(存量届挂入默认系列"历届比赛"),再启动/重启服务——不迁移存量届会全部落在"未分组"且仅超管可编辑。
 
 ## 代码结构
 
