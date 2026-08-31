@@ -4,6 +4,7 @@ const { sendJson, readJsonBody, createStorage } = require('./helpers');
 const { DATA_PATH, backupData, appendAudit } = require('./oss');
 const account = require('./account');
 const { withWorkspaceLock } = require('./workspace-lock');
+const { parseDeckHash, resolveDeck: defaultResolveDeck } = require('./deck-resolve');
 const { CLASS_LIST, resolveCanvas, getResult, isWindowOpen } = require('../canvas-model');
 
 /* 卡组提交窗口(二期):
@@ -33,6 +34,7 @@ function createHandler(storage, options) {
   const now = typeof o.now === 'function' ? o.now : Date.now;
   const audit = typeof o.appendAudit === 'function' ? o.appendAudit : appendAudit;
   const backup = typeof o.backupData === 'function' ? o.backupData : backupData;
+  const resolveDeck = typeof o.resolveDeck === 'function' ? o.resolveDeck : defaultResolveDeck;
   /* 会话→用户解析默认走全局 account(共用其存储降级);测试可注入 */
   const currentUser = typeof o.currentUser === 'function' ? o.currentUser : (req) => account.currentUser(req);
   const { read, write } = createStorage(storage);
@@ -61,6 +63,26 @@ function createHandler(storage, options) {
     if (links === null) {
       sendJson(res, 400, { error: 'links 必须是数组' });
       return;
+    }
+
+    /* WB 链接解析:锁外完成(网络 IO 绝不进锁)。成功附快照并以卡组真实职业纠错 cls,
+     * 失败静默降级(仅存链接,无 deck 字段),绝不阻塞提交。 */
+    const parsedLinks = links.map((entry) => ({ entry, parsed: entry.url ? parseDeckHash(entry.url) : null }));
+    const wbCount = parsedLinks.reduce((s, p) => s + (p.parsed ? 1 : 0), 0);
+    let resolvedCount = 0;
+    if (wbCount) {
+      await Promise.all(parsedLinks.map(async ({ entry, parsed }) => {
+        if (!parsed) return;
+        try {
+          const r = await resolveDeck(parsed.hash);
+          const cls = r && r.ok && r.deck ? CLASS_LIST[r.deck.classId - 1] : null;
+          if (cls) {
+            entry.deck = r.deck;
+            entry.cls = cls;
+            resolvedCount++;
+          }
+        } catch (e) { /* 解析器异常=降级 */ }
+      }));
     }
 
     /* 读-改-写整段上锁:并发提交互斥,防止后写者的旧快照覆盖前者的提交 */
@@ -102,7 +124,7 @@ function createHandler(storage, options) {
       record.updatedAt = now();
       await backup();
       await write(DATA_PATH, workspace);
-      audit('deck.submit', 'user=' + user.username + ' card=' + cardId + ' side=' + side + ' n=' + links.length);
+      audit('deck.submit', 'user=' + user.username + ' card=' + cardId + ' side=' + side + ' n=' + links.length + (wbCount ? ' resolved=' + resolvedCount + '/' + wbCount : ''));
       sendJson(res, 200, { ok: true, links });
     });
   }

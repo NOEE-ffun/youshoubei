@@ -210,15 +210,14 @@
         if (resp.status === 423) render(); /* 状态变了,重绘刷新锁定态 */
         return;
       }
-      /* 乐观更新本地 record,立即重绘 */
+      /* 乐观更新本地 record,立即重绘;用响应里的 links(含解析快照与纠错后的 cls) */
       const record = findRecord(state.tournamentId);
       const card = record && (record.canvas.cards || []).find((c) => c.id === form.dataset.card);
       if (card) {
         if (!card.classLinks) card.classLinks = { a: [], b: [] };
-        card.classLinks[form.dataset.side] = links;
+        card.classLinks[form.dataset.side] = Array.isArray(data.links) ? data.links : links;
       }
-      notify('卡组已保存');
-      /* 拉服务器最新并回写缓存:切到赛程页立刻能看到自己提交的卡组 */
+      /* 无感提交:成功不提示,静默拉服务器最新回写缓存 */
       if (typeof window.TournamentApp.revalidateWorkspace === 'function') {
         await window.TournamentApp.revalidateWorkspace();
       }

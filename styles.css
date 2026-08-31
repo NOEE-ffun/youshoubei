@@ -40,6 +40,10 @@
   --success-soft: #e2efdf;
   --warning: #c97a1b;
   --warning-soft: #f7ebdb;
+  /* 稀有度(卡组构成分析:卡名着色,铜/银/金;彩=固定六色渐变不走变量) */
+  --rar-1: #8a5a34;
+  --rar-2: #6f7680;
+  --rar-3: #a3720a;
   /* 圆角系统:控件 8 / 卡片 12 / 大容器 16 / chip 胶囊 */
   --radius-sm: 8px;
   --radius: 12px;
@@ -106,6 +110,9 @@ body.side-expanded {
   --success-soft: #243524;
   --warning: #f0a75a;
   --warning-soft: #3e2f1e;
+  --rar-1: #c98f5f;
+  --rar-2: #b9bfc7;
+  --rar-3: #e0a93e;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.45);
   --shadow-lg: 0 24px 80px rgb(0 0 0 / 0.6);
@@ -2663,6 +2670,89 @@ body[data-page="me"] #bg-layer {
   text-align: center;
   color: var(--text-muted);
   padding-block: 1.25rem !important;
+}
+
+/* ---------- 卡组构成分析(统计页第三区) ---------- */
+
+/* 页头控件行:标题在 h2,职业分段+回填按钮跟随其右侧,紧凑无盒 */
+.deck-comp-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-block: 0.35rem 0.5rem;
+}
+
+.deck-comp-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0;
+  border: none;
+}
+
+.deck-comp-tab {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  line-height: 1;
+  padding: 0.32rem 0.7rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.deck-comp-tab:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.deck-comp-tab[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.deck-comp-tab:disabled {
+  opacity: 0.45;
+  cursor: default;
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+.deck-comp-tab .num {
+  margin-inline-start: 0.25rem;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.deck-comp-foot {
+  margin-block-start: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* 卡名稀有度着色:铜/银/金用变量;彩=紫-白-橙-黄-绿-蓝 六色横向渐变文字 */
+.deck-name-r1 { color: var(--rar-1); }
+.deck-name-r2 { color: var(--rar-2); }
+.deck-name-r3 { color: var(--rar-3); }
+
+.deck-name-r4 {
+  background: linear-gradient(90deg, #8b5cf6, #ffffff, #ff9d45, #ffd94a, #4cc26e, #3d8bff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* 浅色主题渐变中的白色段需细描边兜底可读;暗底无此问题 */
+:root .deck-name-r4 {
+  -webkit-text-stroke: 0.35px rgb(36 41 46 / 0.58);
+}
+
+[data-theme='dark'] .deck-name-r4 {
+  -webkit-text-stroke: 0;
 }
 
 .stats-player-row {

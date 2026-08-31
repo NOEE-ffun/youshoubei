@@ -263,6 +263,71 @@ async function main() {
   }
   console.log('✓ submit:窗口关/旧会话');
 
+  /* ---- WB 链接解析集成(注入 resolveDeck,不出网) ---- */
+  const WB_URL = 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.aaaa.bbbb.cccc';
+  const SNAPSHOT = { v: 1, resolvedAt: 'T', classId: 2, format: 1, cards: [[10021110, '须臾剑士', 1, 1, 1, 3]] };
+
+  {
+    const storage = memoryStorage(seedWorld({ manual: 'open' }));
+    const calls = [];
+    const h = createHandler(storage, {
+      appendAudit: (a, d) => audits.push(a + ' ' + d),
+      currentUser: makeFindUser(storage),
+      resolveDeck: async (hash) => { calls.push(hash); return { ok: true, deck: SNAPSHOT }; }
+    });
+    const r = await call(h.submit, mockReq('PUT', {
+      headers: auth,
+      body: json({ tournamentId: 't1', cardId: 'c1', side: 'a', links: [
+        { cls: '精灵', url: WB_URL, text: '' },
+        { cls: '法师', url: 'https://other', text: '' },
+        { cls: '龙族', text: '备注' }
+      ] })
+    }));
+    assert.strictEqual(r.status, 200, '解析成功也 200');
+    const saved = storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks.a;
+    assert.strictEqual(saved[0].cls, '皇家', 'cls 以解析结果纠错');
+    assert.deepStrictEqual(saved[0].deck, SNAPSHOT, '快照内嵌');
+    assert.ok(!('deck' in saved[1]) && !('deck' in saved[2]), '非 WB/无 url 条目无快照');
+    assert.deepStrictEqual(calls, ['1.2.aaaa.bbbb.cccc'], '仅 WB hash 进解析器');
+    assert.ok(audits.some((a) => a.includes('resolved=1/1')), '审计含 resolved');
+    assert.ok(Array.isArray(r.body.links) && r.body.links[0].deck, '响应带快照');
+    console.log('✓ submit:WB 解析成功/cls 纠错/非 WB 跳过/审计 resolved');
+  }
+
+  {
+    const storage = memoryStorage(seedWorld({ manual: 'open' }));
+    const h = createHandler(storage, {
+      appendAudit: () => {},
+      currentUser: makeFindUser(storage),
+      resolveDeck: async () => { throw new Error('resolver boom'); }
+    });
+    const r = await call(h.submit, mockReq('PUT', {
+      headers: auth,
+      body: json({ tournamentId: 't1', cardId: 'c1', side: 'a', links: [{ cls: '皇家', url: WB_URL, text: '' }] })
+    }));
+    assert.strictEqual(r.status, 200, '解析器抛错不阻塞提交');
+    const saved = storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks.a;
+    assert.strictEqual(saved[0].cls, '皇家', '失败保留手选 cls');
+    assert.ok(!('deck' in saved[0]), '失败无快照=静默降级');
+    console.log('✓ submit:解析器异常静默降级');
+  }
+
+  {
+    const storage = memoryStorage(seedWorld({ manual: 'closed' }));
+    let called = 0;
+    const h = createHandler(storage, {
+      currentUser: makeFindUser(storage),
+      resolveDeck: async () => { called++; return { ok: true, deck: SNAPSHOT }; }
+    });
+    const r = await call(h.submit, mockReq('PUT', {
+      headers: auth,
+      body: json({ tournamentId: 't1', cardId: 'c1', side: 'a', links: [{ cls: '皇家', url: WB_URL, text: '' }] })
+    }));
+    assert.strictEqual(r.status, 423, '窗口关仍 423(解析白做但语义不变)');
+    assert.strictEqual(called, 1, '锁外解析确实执行');
+    console.log('✓ submit:窗口关 423 不受解析影响');
+  }
+
   /* ---- stripHiddenDecks(GET 剥离) ---- */
   {
     const ws = seedWorld({ manual: 'open' })['data.json'];

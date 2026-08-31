@@ -5,10 +5,12 @@
    * 数据源全部现算:resolveCanvas(胜场/小局)、deriveStandings(名次)、
    * canvas.cards 的 classLinks.a/b(职业登场,按选手位归属,支持按选手筛选)。 */
 
-  const { escapeHtml, avatarMarkup } = window.TournamentUtils;
+  const { escapeHtml, avatarMarkup, notify } = window.TournamentUtils;
 
   let selectedIds = new Set();  // 选中的届;空集 = 不统计任何数据
   let selectedPlayerId = null;
+  let selectedDeckClass = null; // 卡组构成分析:当前职业
+  let lastDeckRecords = [];     // 供职业切换重渲,不重新拉数据
 
   function playerNameMap(players) {
     return new Map((players || []).map((p) => [p.id, p.name || p.id]));
@@ -190,6 +192,140 @@
       .sort((x, y) => y.s.wins - x.s.wins || (x.best ?? 99) - (y.best ?? 99));
   }
 
+  /* ---------- 卡组构成分析(职业 × 卡牌携带率) ---------- */
+
+  /* 聚合 scope 内所有已解析快照:按 deck.classId 分职业(写入时已纠错,cls 兜底以快照为准)。
+   * 继承链路(resolveEffectiveClassLinks)与职业登场同口径:同副卡组被继承到多场计多次。 */
+  function computeDeckComposition(records) {
+    const byClass = new Map(); // cls -> { decks, cards: Map(id -> row) }
+    const unresolved = new Map(); // cls -> count(有 url 无快照的条目)
+    for (const record of records || []) {
+      if (!record || !record.canvas) continue;
+      const eff = CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {});
+      for (const card of record.canvas.cards || []) {
+        const sides = eff.get(card.id) || {};
+        for (const side of ['a', 'b']) {
+          const list = Array.isArray(sides[side]) ? sides[side] : [];
+          for (let idx = 0; idx < list.length; idx++) {
+            const entry = list[idx];
+            if (!entry || !entry.cls) continue;
+            const deck = entry.deck;
+            if (deck && deck.classId >= 1 && deck.classId <= 7 && Array.isArray(deck.cards) && deck.cards.length) {
+              const cls = CanvasModel.CLASS_LIST[deck.classId - 1];
+              let agg = byClass.get(cls);
+              if (!agg) { agg = { decks: 0, cards: new Map() }; byClass.set(cls, agg); }
+              agg.decks += 1;
+              /* 副数去重键含条目下标:同侧多副卡组各自计一副 */
+              const key = record.id + ':' + card.id + ':' + side + ':' + idx;
+              for (const row of deck.cards) {
+                const [id, name, cost, rarity, , n] = row;
+                let c = agg.cards.get(id);
+                if (!c) {
+                  c = { id, name: String(name || '?'), cost: Number(cost) || 0, rarity: Math.min(4, Math.max(1, Number(rarity) || 1)), decks: new Set(), dist: [0, 0, 0] };
+                  agg.cards.set(id, c);
+                }
+                c.decks.add(key);
+                const copies = Number(n);
+                if (copies >= 1 && copies <= 3) c.dist[copies - 1] += 1;
+              }
+            } else if (entry.url) {
+              unresolved.set(entry.cls, (unresolved.get(entry.cls) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+    return { byClass, unresolved };
+  }
+
+  function deckCompRows(agg) {
+    const rows = [...agg.cards.values()].map((c) => ({
+      c,
+      deckCount: c.decks.size,
+      total: c.dist[0] + c.dist[1] * 2 + c.dist[2] * 3
+    }));
+    /* 携带率降序 → 总张数降序 → 费用升序 → 卡名 */
+    rows.sort((x, y) => y.deckCount - x.deckCount || y.total - x.total || x.c.cost - y.c.cost || x.c.name.localeCompare(y.c.name, 'zh'));
+    return rows;
+  }
+
+  function renderDeckComposition(records) {
+    const tabsEl = document.getElementById('deck-class-tabs');
+    const tbody = document.querySelector('#deck-comp-table tbody');
+    const foot = document.getElementById('deck-comp-foot');
+    const backfillBtn = document.getElementById('deck-backfill-btn');
+    if (!tabsEl || !tbody) return;
+    const comp = computeDeckComposition(records);
+
+    /* 默认选第一个有卡组的职业(先定选择,再渲染分段,首渲即有按下态) */
+    if (!selectedDeckClass || !comp.byClass.has(selectedDeckClass)) {
+      selectedDeckClass = CanvasModel.CLASS_LIST.find((cls) => comp.byClass.has(cls)) || null;
+    }
+
+    /* 职业分段:含副数;无卡组的职业禁用 */
+    const tabItems = CanvasModel.CLASS_LIST.map((cls) => ({ cls, n: (comp.byClass.get(cls) || { decks: 0 }).decks }));
+    const sig = tabItems.map((t) => t.cls + t.n).join('|') + (selectedDeckClass || '');
+    if (tabsEl.dataset.sig !== sig) {
+      tabsEl.dataset.sig = sig;
+      tabsEl.innerHTML = tabItems.map((t) =>
+        '<button type="button" class="deck-comp-tab" data-cls="' + escapeHtml(t.cls) + '"' +
+        (t.n ? '' : ' disabled') +
+        (selectedDeckClass === t.cls ? ' aria-pressed="true"' : ' aria-pressed="false"') +
+        '>' + escapeHtml(t.cls) + (t.n ? ' <span class="num">' + t.n + '</span>' : '') + '</button>'
+      ).join('');
+    } else {
+      tabsEl.querySelectorAll('.deck-comp-tab').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.cls === selectedDeckClass)));
+    }
+
+    const agg = selectedDeckClass ? comp.byClass.get(selectedDeckClass) : null;
+    if (!agg) {
+      tbody.innerHTML = '<tr><td colspan="4" class="stats-empty">暂无已解析的卡组快照</td></tr>';
+      foot.hidden = true;
+    } else {
+      const rows = deckCompRows(agg);
+      tbody.innerHTML = rows.map(({ c, deckCount }) => {
+        const pct = agg.decks ? Math.round(deckCount / agg.decks * 100) : 0;
+        return '<tr><td><span class="deck-name-r' + c.rarity + '">' + escapeHtml(c.name) + '</span></td>' +
+          '<td class="num">' + c.cost + '</td>' +
+          '<td class="num">' + deckCount + '/' + agg.decks + ' ' + pct + '%</td>' +
+          '<td class="num">' + c.dist[2] + '·' + c.dist[1] + '·' + c.dist[0] + '</td></tr>';
+      }).join('');
+      const miss = comp.unresolved.get(selectedDeckClass) || 0;
+      foot.textContent = '共 ' + agg.decks + ' 副 · 卡名颜色 = 稀有度(铜/银/金/彩)' + (miss ? ' · 另有 ' + miss + ' 条链接未解析,不计入' : '');
+      foot.hidden = false;
+    }
+
+    const app = window.TournamentApp;
+    backfillBtn.hidden = !(app && typeof app.isAdmin === 'function' && app.isAdmin());
+  }
+
+  async function backfillDecks() {
+    const btn = document.getElementById('deck-backfill-btn');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '解析中…';
+    try {
+      const res = await fetch('/api/admin/decks/backfill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      const failed = data.failed ? data.failed.length : 0;
+      notify('解析完成:成功 ' + data.resolved + ' · 失败 ' + failed + (data.skipped ? ' · 待分批 ' + data.skipped : ''));
+      const app = window.TournamentApp;
+      if (app && app.revalidateWorkspace) await app.revalidateWorkspace();
+    } catch (error) {
+      notify('解析失败:' + error.message, 'danger');
+      btn.disabled = false;
+      btn.textContent = '解析存量卡组';
+      return;
+    }
+    btn.disabled = false;
+    btn.textContent = '解析存量卡组';
+  }
+
   async function render() {
     const app = window.TournamentApp;
     if (!app) return;
@@ -213,6 +349,8 @@
     renderPodium(lastStats.podiums);
     renderClasses(lastStats, lastPlayers);
     renderPlayerTable(lastRows);
+    lastDeckRecords = records;
+    renderDeckComposition(lastDeckRecords);
   }
 
   function selectPlayer(pid) {
@@ -403,6 +541,17 @@
     const txtBtn = document.getElementById('stats-export-text');
     if (imgBtn) imgBtn.addEventListener('click', exportImage);
     if (txtBtn) txtBtn.addEventListener('click', exportText);
+    const deckTabs = document.getElementById('deck-class-tabs');
+    if (deckTabs) {
+      deckTabs.addEventListener('click', (event) => {
+        const btn = event.target.closest('.deck-comp-tab');
+        if (!btn || btn.disabled || !btn.dataset.cls) return;
+        selectedDeckClass = btn.dataset.cls;
+        renderDeckComposition(lastDeckRecords);
+      });
+    }
+    const backfillBtn = document.getElementById('deck-backfill-btn');
+    if (backfillBtn) backfillBtn.addEventListener('click', backfillDecks);
     const list = document.getElementById('stats-check-list');
     const all = document.getElementById('stats-check-all');
     if (list) {

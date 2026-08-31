@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import path from 'node:path';
 
 export default defineConfig({
   testDir: 'test/e2e',
@@ -24,7 +25,9 @@ export default defineConfig({
       YOUSHOUBEI_ENFORCE_WALL: '1',
       AUTH_DEV_SMS_CODE: '000000',
       SUPER_ADMIN_PHONES: '13900000000',
-      SESSION_SECRET: 'e2e-session-secret'
+      SESSION_SECRET: 'e2e-session-secret',
+      /* 卡组解析 fixture 后门:WB 链接读本地文件不出网(生产硬闸在 api/deck-resolve.js) */
+      DECK_RESOLVE_FIXTURE_DIR: path.resolve('test/e2e/fixtures/decks')
     }
   }
 });

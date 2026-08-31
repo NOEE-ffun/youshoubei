@@ -124,6 +124,36 @@ function edgePath(p1, n1, p2, n2) {
   const CLASS_LIST = ['精灵', '皇家', '法师', '龙族', '梦魇', '主教', '复仇者'];
 
   /* 单条职业卡组链接:cls 在名单内、url/text 截断字符串;无效项返回 null */
+  /* 卡组构成分析快照:紧凑结构做边界校验,非法整体丢弃(降级为无快照,不阻塞链接本身) */
+  function normalizeDeckSnapshot(deck) {
+    if (!deck || typeof deck !== 'object' || Number(deck.v) !== 1) return null;
+    const classId = Number(deck.classId);
+    if (!(classId >= 1 && classId <= 7)) return null;
+    if (!Array.isArray(deck.cards)) return null;
+    const cards = [];
+    for (const row of deck.cards.slice(0, 60)) {
+      if (!Array.isArray(row) || row.length < 6) continue;
+      const name = String(row[1] || '').trim().slice(0, 60);
+      if (!name) continue;
+      cards.push([
+        Number(row[0]) || 0,
+        name,
+        Number(row[2]) || 0,
+        Math.min(4, Math.max(1, Number(row[3]) || 1)),
+        Number(row[4]) || 0,
+        Math.min(3, Math.max(1, Number(row[5]) || 1))
+      ]);
+    }
+    if (!cards.length) return null;
+    return {
+      v: 1,
+      resolvedAt: typeof deck.resolvedAt === 'string' ? deck.resolvedAt.slice(0, 40) : null,
+      classId,
+      format: Number(deck.format) || null,
+      cards
+    };
+  }
+
   function normalizeClassLink(entry) {
     if (!entry && entry !== null) entry = null;
     if (!entry || typeof entry !== 'object') return null;
@@ -131,7 +161,10 @@ function edgePath(p1, n1, p2, n2) {
     const url = typeof entry.url === 'string' ? entry.url.trim().slice(0, 500) : '';
     const text = typeof entry.text === 'string' ? entry.text.trim().slice(0, 60) : '';
     if (!url && !text) return null;
-    return { cls: entry.cls, url, text };
+    const out = { cls: entry.cls, url, text };
+    const deck = normalizeDeckSnapshot(entry.deck);
+    if (deck) out.deck = deck;
+    return out;
   }
 
   function normalizeClassLinkGroup(list) {

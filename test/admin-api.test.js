@@ -548,6 +548,115 @@ async function call(handler, req) {
     console.log('✓ admin 写:删除账号(手机释放/档案保留/保护/404)');
   }
 
+  /* ---- POST /api/admin/decks/backfill:存量 WB 链接补解析(三段式) ---- */
+  {
+    const WB_URL_1 = 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.aaaa.bbbb';
+    const WB_URL_2 = 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.3.cccc.dddd';
+    const SNAP_ROYAL = { v: 1, resolvedAt: 'T', classId: 2, format: 1, cards: [[10021110, '须臾剑士', 1, 1, 1, 3]] };
+
+    function backfillWorld() {
+      return {
+        'data.json': {
+          activeId: 't1',
+          players: [],
+          tournaments: [{
+            id: 't1', name: '回填届', updatedAt: 1,
+            canvas: {
+              cards: [{
+                id: 'c1', label: '首场',
+                classLinks: {
+                  a: [
+                    { cls: '精灵', url: WB_URL_1, text: '' },
+                    { cls: '法师', url: WB_URL_2, text: '' },
+                    { cls: '皇家', url: 'https://other', text: '非WB' },
+                    { cls: '龙族', text: '纯备注' },
+                    { cls: '皇家', url: WB_URL_1, text: '', deck: SNAP_ROYAL }
+                  ],
+                  b: []
+                }
+              }]
+            }
+          }]
+        }
+      };
+    }
+
+    const audits = [];
+    let backups = 0;
+    const storage = memoryStorage(backfillWorld());
+    const admin = apiAdmin.createHandlers({
+      storage,
+      appendAudit: (a, d) => audits.push(a + ' ' + d),
+      backupData: async () => { backups++; },
+      backfillGapMs: 0,
+      resolveDeck: async (hash) => hash.startsWith('1.2.')
+        ? { ok: true, deck: { ...SNAP_ROYAL, cards: SNAP_ROYAL.cards.slice() } }
+        : { ok: false, reason: 'fetch-failed:x' }
+    });
+    const su = ck('u5');
+    const post = (body, cookie) =>
+      call(admin, mockReq('POST', { url: '/api/admin/decks/backfill', headers: cookie ? { cookie } : undefined, body: jsonBody(body) }));
+
+    /* 守卫与方法:player 403 / 匿名 401 / GET 405 */
+    assert.strictEqual((await post({}, ck('u4'))).status, 403, 'user 角色 403');
+    assert.strictEqual((await post({}, )).status, 401, '匿名 401');
+    assert.strictEqual((await call(admin, mockReq('GET', { url: '/api/admin/decks/backfill', headers: { cookie: su } }))).status, 405);
+
+    /* 首跑:2 个候选(同 hash 去重为 1 次解析),1 成功 1 失败 */
+    let rb = await post({}, su);
+    assert.strictEqual(rb.status, 200);
+    assert.strictEqual(rb.body.resolved, 1, '成功 1(另一 WB 失败)');
+    assert.strictEqual(rb.body.skipped, 0);
+    assert.strictEqual(rb.body.failed.length, 1, '失败明细');
+    assert.strictEqual(rb.body.failed[0].reason, 'fetch-failed:x');
+    assert.strictEqual(rb.body.failed[0].cardId, 'c1');
+    const saved = storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks.a;
+    assert.strictEqual(saved[0].cls, '皇家', '成功条目 cls 纠错');
+    assert.ok(saved[0].deck && saved[0].deck.classId === 2, '成功条目快照内嵌');
+    assert.ok(!saved[1].deck && saved[1].cls === '法师', '失败条目保留原状');
+    assert.ok(!saved[2].deck && !saved[3].deck, '非 WB/纯备注不入候选');
+    assert.ok(storage._map.get('data.json').tournaments[0].updatedAt > 1, 'bump updatedAt');
+    assert.strictEqual(backups, 1, '写盘前备份');
+    assert.ok(audits.some((a) => a.startsWith('admin.deckBackfill ') && a.includes('resolved=1') && a.includes('failed=1')), '审计 resolved/failed');
+
+    /* 二跑:成功条目已有 deck 不再候选,仅剩失败条目重试(仍失败)→ resolved=0 不写盘 */
+    backups = 0;
+    rb = await post({}, su);
+    assert.strictEqual(rb.body.resolved, 0, '幂等:成功条目不重复处理');
+    assert.strictEqual(rb.body.failed.length, 1);
+    assert.strictEqual(backups, 0, '无写盘不备份');
+
+    /* tournamentId 过滤:不存在的届 → 0 候选 */
+    rb = await post({ tournamentId: 't_none' }, su);
+    assert.strictEqual(rb.body.resolved, 0);
+    assert.deepStrictEqual(rb.body.failed, []);
+
+    console.log('✓ admin 写:decks/backfill 三段式(成功/失败明细/幂等/过滤/审计)');
+  }
+
+  /* ---- decks/backfill 超 30 候选分批 ---- */
+  {
+    const links = [];
+    for (let i = 0; i < 32; i++) links.push({ cls: '皇家', url: 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.h' + i + '.x', text: '' });
+    const storage = memoryStorage({
+      'data.json': {
+        tournaments: [{ id: 't1', canvas: { cards: [{ id: 'c1', classLinks: { a: links, b: [] } }] } }]
+      }
+    });
+    const admin = apiAdmin.createHandlers({
+      storage,
+      appendAudit: () => {},
+      backupData: async () => {},
+      backfillGapMs: 0,
+      resolveDeck: async () => ({ ok: false, reason: 'down' })
+    });
+    const rb = await call(admin, mockReq('POST', { url: '/api/admin/decks/backfill', headers: { cookie: ck('u5') }, body: jsonBody({}) }));
+    assert.strictEqual(rb.status, 200);
+    assert.strictEqual(rb.body.failed.length, 30, '单批上限 30');
+    assert.strictEqual(rb.body.skipped, 2, '超出计入 skipped 提示分批');
+    console.log('✓ admin 写:decks/backfill 批次上限');
+  }
+
   delete process.env.SESSION_SECRET;
-  console.log('✓ admin-api: 后台读+写接口(users 脱敏/audit/health/封禁/角色/备份/恢复/删除)通过');
+  console.log('✓ admin-api: 后台读+写接口(users 脱敏/audit/health/封禁/角色/备份/恢复/删除/回填)通过');
 })().catch((e) => { console.error(e); process.exit(1); });

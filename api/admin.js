@@ -5,6 +5,8 @@ const { effectiveRole } = require('./rbac');
 const { sendJson, readJsonBody, createStorage } = require('./helpers');
 const { withWorkspaceLock } = require('./workspace-lock');
 const oss = require('./oss');
+const { parseDeckHash, resolveDeck: defaultResolveDeck } = require('./deck-resolve');
+const { CLASS_LIST } = require('../canvas-model');
 
 /* 后台接口(仅超管 super;写操作全部审计):
  * 读:
@@ -22,7 +24,10 @@ const oss = require('./oss');
  *                                    backups/manual-<kind>-<ts>.json,永不自动清理;
  *                                    三件全败 → 500「备份全部失败」,部分成功仍 200)
  *   POST /api/admin/restore           把 backups/ 里的 data 类备份恢复为 data.json
- *                                    (恢复前 backupData 留底;key 白名单校验)
+  *                                    (恢复前 backupData 留底;key 白名单校验)
+ *   POST /api/admin/decks/backfill    存量 WB 卡组链接补解析快照(body {tournamentId?},
+ *                                    admin/super;三段式:无锁收集→锁外解析→进锁回填,
+ *                                    单次 ≤30 副、间隔 300ms,幂等可重入)
  * 超管保护:目标 effectiveRole==='super'(env 名单命中也算)或目标即操作者本人
  * → 400「超管账号不可在此操作」;目标不存在 → 404。
  * 子路径分发:按 req.url 尾段路由(/api/admin/<tail>,tail 可多段);裸 /api/admin 与
@@ -40,6 +45,7 @@ const MAX_LIMIT = 1000;
 const BACKUP_KEYS_SHOW = 20;
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const MAX_BODY = 64 * 1024;
+const BACKFILL_MAX = 30; /* 单次回填上限,超出提示分批 */
 
 /* 手工快照三件套:与自动备份的 data/users/codes 前缀一一对应。
  * manual-<kind>-<ts> 命名两得:自动清理的保留窗口只按各自 kind 前缀
@@ -155,6 +161,8 @@ function createHandlers(options) {
   const backupManual = typeof o.backupManual === 'function' ? o.backupManual : defaultBackupManual;
   const backupData = typeof o.backupData === 'function' ? o.backupData : oss.backupData;
   const restoreCopy = typeof o.restoreCopy === 'function' ? o.restoreCopy : defaultRestoreCopy;
+  const resolveDeck = typeof o.resolveDeck === 'function' ? o.resolveDeck : defaultResolveDeck;
+  const backfillGapMs = Number.isFinite(Number(o.backfillGapMs)) ? Number(o.backfillGapMs) : 300;
   const { read, write } = createStorage(o.storage);
 
   /* GET /api/admin/users:账号总览(role 用 effectiveRole,env 升格即时生效) */
@@ -389,6 +397,92 @@ function createHandlers(options) {
     });
   }
 
+  /* POST /api/admin/decks/backfill:存量 WB 链接补解析。三段式:
+   * ①无锁读收集"有 WB 链接且无 deck"候选;②锁外逐副 resolveDeck(同 hash 去重,
+   *   间隔 backfillGapMs 防压,超 BACKFILL_MAX 本批不做、skipped 返回分批);
+   * ③进锁重读,按 hash 匹配回填快照+cls 纠错,期间被选手改掉的条目记 'changed'。
+   * resolved=0 不写盘不备份;审计记录本次尝试。 */
+  async function deckBackfill(req, res) {
+    const operator = await requireRole(req, res, ['admin', 'super']);
+    if (!operator) return;
+    const body = await readJsonBody(req, res, MAX_BODY);
+    if (body === undefined) return;
+    const tournamentId = typeof body.tournamentId === 'string' ? body.tournamentId : null;
+
+    const workspace = await read(DATA_KEY);
+    const candidates = [];
+    for (const record of (workspace && workspace.tournaments) || []) {
+      if (!record || !record.canvas) continue;
+      if (tournamentId && record.id !== tournamentId) continue;
+      for (const card of record.canvas.cards || []) {
+        if (!card || !card.classLinks || typeof card.classLinks !== 'object') continue;
+        for (const side of ['a', 'b']) {
+          for (const entry of Array.isArray(card.classLinks[side]) ? card.classLinks[side] : []) {
+            if (!entry || entry.deck || !entry.url) continue;
+            const parsed = parseDeckHash(entry.url);
+            if (parsed) candidates.push({ tournamentId: record.id, cardId: card.id, side, hash: parsed.hash });
+          }
+        }
+      }
+    }
+    const skipped = Math.max(0, candidates.length - BACKFILL_MAX);
+    const batch = candidates.slice(0, BACKFILL_MAX);
+
+    const results = new Map();
+    for (const c of batch) {
+      if (results.has(c.hash)) continue;
+      try {
+        results.set(c.hash, await resolveDeck(c.hash));
+      } catch (error) {
+        results.set(c.hash, { ok: false, reason: 'resolver-error' });
+      }
+      await new Promise((r) => setTimeout(r, backfillGapMs));
+    }
+
+    return withWorkspaceLock(async () => {
+      const ws = await read(DATA_KEY);
+      const records = new Map(((ws && ws.tournaments) || []).map((r) => [r && r.id, r]));
+      let resolved = 0;
+      const failed = [];
+      const touched = new Set();
+      for (const c of batch) {
+        const r = results.get(c.hash);
+        const cls = r && r.ok && r.deck ? CLASS_LIST[r.deck.classId - 1] : null;
+        const record = records.get(c.tournamentId);
+        const card = record && record.canvas && (record.canvas.cards || []).find((x) => x && x.id === c.cardId);
+        const entry = card && card.classLinks && Array.isArray(card.classLinks[c.side])
+          ? card.classLinks[c.side].find((e) => {
+              if (!e || e.deck || !e.url) return false;
+              const p = parseDeckHash(e.url);
+              return !!p && p.hash === c.hash;
+            })
+          : null;
+        if (!entry) {
+          failed.push({ tournamentId: c.tournamentId, cardId: c.cardId, side: c.side, reason: 'changed' });
+          continue;
+        }
+        if (cls) {
+          entry.deck = r.deck;
+          entry.cls = cls;
+          resolved++;
+          touched.add(c.tournamentId);
+        } else {
+          failed.push({ tournamentId: c.tournamentId, cardId: c.cardId, side: c.side, reason: (r && r.reason) || 'unknown' });
+        }
+      }
+      if (resolved) {
+        for (const id of touched) {
+          const record = records.get(id);
+          if (record) record.updatedAt = now();
+        }
+        await backupData();
+        await write(DATA_KEY, ws);
+      }
+      appendAudit('admin.deckBackfill', 'resolved=' + resolved + ' failed=' + failed.length + ' skipped=' + skipped + ' by=' + operator.username);
+      sendJson(res, 200, { ok: true, resolved, failed, skipped });
+    });
+  }
+
   /* 子路径分发:/api/admin/<tail>(tail 可多段)。
    * 读:users/audit/health(仅 GET);写:users/<id>/status|role、backup、restore(仅 POST);
    * 裸路径/未知段 → 404;已知段方法不符 → 405 */
@@ -419,6 +513,10 @@ function createHandlers(options) {
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
       return tail === 'backup' ? backup(req, res) : restore(req, res);
     }
+    if (tail === 'decks/backfill') {
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
+      return deckBackfill(req, res);
+    }
     if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method Not Allowed' });
     if (tail === 'users') return listUsers(req, res);
     if (tail === 'audit') return audit(req, res);
@@ -435,6 +533,7 @@ function createHandlers(options) {
   handler.userDelete = userDelete;
   handler.backup = backup;
   handler.restore = restore;
+  handler.deckBackfill = deckBackfill;
   return handler;
 }
 

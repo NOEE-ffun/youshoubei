@@ -156,6 +156,25 @@ const model = require('../canvas-model.js');
 
   const empty = model.normalizeCanvas({ cards: [{ id: 'c3' }] });
   assert.deepEqual(empty.cards[0].classLinks, { a: [], b: [] }, '缺省应为空双组');
+
+  // 11b. deck 快照随条目透传:合法快照保留(边界钳制),非法整体丢弃不拖累链接
+  const SNAP = { v: 1, resolvedAt: '2026-08-31T00:00:00.000Z', classId: 2, format: 1,
+    cards: [[10021110, '须臾剑士', 1, 1, 1, 3], [10724110, '统音的安纳提玛', 5, 4, 1, 2]] };
+  const withDeck = model.normalizeCanvas({
+    cards: [{
+      id: 'c4',
+      classLinks: { a: [
+        { cls: '皇家', url: 'https://wb/deck', text: '', deck: SNAP },
+        { cls: '皇家', url: 'https://wb/bad', text: '', deck: { v: 1, classId: 9, cards: SNAP.cards } },
+        { cls: '皇家', url: 'https://wb/empty', text: '', deck: { v: 1, classId: 2, cards: [] } }
+      ], b: [] }
+    }]
+  });
+  const a4 = withDeck.cards[0].classLinks.a;
+  assert.equal(a4.length, 3, 'deck 非法不丢条目');
+  assert.deepEqual(a4[0].deck, { v: 1, resolvedAt: '2026-08-31T00:00:00.000Z', classId: 2, format: 1,
+    cards: [[10021110, '须臾剑士', 1, 1, 1, 3], [10724110, '统音的安纳提玛', 5, 4, 1, 2]] }, '合法快照原样透传');
+  assert.ok(!('deck' in a4[1]) && !('deck' in a4[2]), '非法快照(classId 越界/空卡表)整体丢弃');
 }
 
 // 12. 卡组继承(有效链接 = 自己填的,否则沿连线继承来源卡中该选手一侧)
