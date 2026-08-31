@@ -17,6 +17,14 @@ kb/.obsidian/
 kb/
 docs/
 
+# 站点层(2026-09-01 起与 GitHub 解耦):部署脚本/连接配置/备案页脚真号/内部更新日志
+deploy/
+CHANGELOG.md
+icons/ghs.png
+
+# IDE
+.vscode/
+
 # SSH 直推连接配置(含生产地址,不入公开仓库)
 deploy/ecs.env
 
