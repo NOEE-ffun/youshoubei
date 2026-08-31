@@ -2734,25 +2734,16 @@ body[data-page="me"] #bg-layer {
   color: var(--text-muted);
 }
 
-/* 卡名稀有度着色:铜/银/金用变量;彩=紫-白-橙-黄-绿-蓝 六色横向渐变文字 */
+/* 卡名稀有度着色:铜/银/金用变量;彩=紫-红-橙-黄-绿-蓝 六色横向渐变文字 */
 .deck-name-r1 { color: var(--rar-1); }
 .deck-name-r2 { color: var(--rar-2); }
 .deck-name-r3 { color: var(--rar-3); }
 
 .deck-name-r4 {
-  background: linear-gradient(90deg, #8b5cf6, #ffffff, #ff9d45, #ffd94a, #4cc26e, #3d8bff);
+  background: linear-gradient(90deg, #8b5cf6, #ff4b4b, #ff9d45, #ffd94a, #4cc26e, #3d8bff);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-}
-
-/* 浅色主题渐变中的白色段需细描边兜底可读;暗底无此问题 */
-:root .deck-name-r4 {
-  -webkit-text-stroke: 0.35px rgb(36 41 46 / 0.58);
-}
-
-[data-theme='dark'] .deck-name-r4 {
-  -webkit-text-stroke: 0;
 }
 
 .stats-player-row {
