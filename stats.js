@@ -300,17 +300,17 @@
       tbody.innerHTML = rows.map((c) => {
         const d3 = c.dist[2], d2 = c.dist[1], d1 = c.dist[0];
         const d0 = Math.max(0, total - (d3 + d2 + d1));
-        return '<tr><td><span class="deck-name-r' + c.rarity + '">' + escapeHtml(c.name) + '</span></td>' +
-          '<td class="num">' + costIcon(c.cost) + '</td>' +
-          '<td class="dist-cell num">' +
+        return '<tr><td class="dc-cost">' + costIcon(c.cost) + '</td>' +
+          '<td class="dc-name" title="' + escapeHtml(c.name) + '"><span class="deck-name-r' + c.rarity + '">' + escapeHtml(c.name) + '</span></td>' +
+          '<td class="dist-cell">' +
             '<div class="dist-bar" role="img" aria-label="3张' + pct(d3) + '%,2张' + pct(d2) + '%,1张' + pct(d1) + '%,0张' + pct(d0) + '%">' +
-              seg('d3', d3) + seg('d2', d2) + seg('d1', d1) +
+              seg('d3', d3) + seg('d2', d2) + seg('d1', d1) + seg('d0', d0) +
             '</div>' +
             '<span class="dist-text">' + pct(d3) + '%·' + pct(d2) + '%·' + pct(d1) + '%·' + pct(d0) + '%</span>' +
           '</td></tr>';
       }).join('');
       const miss = comp.unresolved.get(selectedDeckClass) || 0;
-      foot.textContent = '共 ' + total + ' 副 · 卡名颜色 = 稀有度(铜/银/金/彩) · 分布 = 带 3/2/1/0 张的卡组占比' + (miss ? ' · 另有 ' + miss + ' 条链接未解析,不计入' : '');
+      foot.textContent = '共 ' + total + ' 副 · 卡名颜色 = 稀有度(铜/银/金/彩) · 分布 = 红3/黄2/绿1/蓝0 张的卡组占比' + (miss ? ' · 另有 ' + miss + ' 条链接未解析,不计入' : '');
       foot.hidden = false;
     }
 

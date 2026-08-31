@@ -44,6 +44,8 @@
   --rar-1: #6b4423;
   --rar-2: #6f7680;
   --rar-3: #d9970d;
+  /* 分布条黄段(红/绿/蓝复用语义色变量) */
+  --dist-yellow: #d9a400;
   /* 圆角系统:控件 8 / 卡片 12 / 大容器 16 / chip 胶囊 */
   --radius-sm: 8px;
   --radius: 12px;
@@ -113,6 +115,7 @@ body.side-expanded {
   --rar-1: #a9743f;
   --rar-2: #b9bfc7;
   --rar-3: #f5bb42;
+  --dist-yellow: #f5c542;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.45);
   --shadow-lg: 0 24px 80px rgb(0 0 0 / 0.6);
@@ -2674,6 +2677,25 @@ body[data-page="me"] #bg-layer {
 
 /* ---------- 卡组构成分析(统计页第三区) ---------- */
 
+/* 列序:费用图标|卡名|分布:前两列左对齐(图标与卡名紧凑相邻),仅分布列右对齐 */
+#deck-comp-table th:not(:nth-child(3)),
+#deck-comp-table td:not(:nth-child(3)) {
+  text-align: left;
+}
+
+.dc-cost {
+  padding-inline-end: 0.15rem !important;
+  white-space: nowrap;
+}
+
+.dc-name {
+  padding-inline-start: 0.15rem !important;
+  max-width: 20em;      /* 卡名预留 20 字,超长截断(title 悬浮全名) */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 页头控件行:标题在 h2,职业分段+回填按钮跟随其右侧,紧凑无盒 */
 .deck-comp-bar {
   display: flex;
@@ -2749,7 +2771,8 @@ body[data-page="me"] #bg-layer {
 }
 
 /* 分布(3·2·1·0)堆叠条:蓝系浓度表示携带张数,浅灰底=不带(0张) */
-.dist-cell { min-width: 11rem; }
+/* 分布(3·2·1·0)堆叠条:红3/黄2/绿1/蓝0,卡名列定宽后此列更长,条加粗 */
+.dist-cell { min-width: 16rem; }
 
 /* 费用图标(WB 官方 cost 0-10+,本地化于 icons/cost/;彩色图不吃暗色反白滤镜) */
 .cost-icon {
@@ -2761,17 +2784,18 @@ body[data-page="me"] #bg-layer {
 
 .dist-bar {
   display: flex;
-  block-size: 7px;
-  border-radius: 4px;
+  block-size: 12px;
+  border-radius: 6px;
   overflow: hidden;
   background: var(--surface-3);
   margin-block-end: 3px;
 }
 
 .dist-seg { display: block; inline-size: 0; block-size: 100%; }
-.dist-seg.d3 { background: var(--accent); }
-.dist-seg.d2 { background: var(--accent); opacity: 0.55; }
-.dist-seg.d1 { background: var(--accent); opacity: 0.28; }
+.dist-seg.d3 { background: var(--danger); }
+.dist-seg.d2 { background: var(--dist-yellow); }
+.dist-seg.d1 { background: var(--success); }
+.dist-seg.d0 { background: var(--accent); }
 
 .dist-text {
   font-size: 0.75rem;
