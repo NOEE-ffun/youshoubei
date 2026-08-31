@@ -2683,13 +2683,29 @@ body[data-page="me"] #bg-layer {
   text-align: left;
 }
 
+/* fixed 布局定死列宽:费用列=图标+5.6px 左内距(26px),卡名 20em,分布吃剩余 */
+#deck-comp-table {
+  table-layout: fixed;
+}
+
+#deck-comp-table th:first-child {
+  width: 26px;
+  padding-inline: 0.35rem 0;
+  white-space: normal;   /* 「费用」窄列竖排两行 */
+  line-height: 1.15;
+}
+
+#deck-comp-table th:nth-child(2) {
+  width: 20em;
+}
+
 .dc-cost {
-  padding-inline-end: 0.15rem !important;
+  padding-inline: 0.35rem 0 !important;
   white-space: nowrap;
 }
 
 .dc-name {
-  padding-inline-start: 0.15rem !important;
+  padding-inline-start: 10px !important;  /* 图标与卡名固定 10px 间距 */
   max-width: 20em;      /* 卡名预留 20 字,超长截断(title 悬浮全名) */
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2803,6 +2819,13 @@ body[data-page="me"] #bg-layer {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+/* 百分比数字着色:非 0 时用对应段的颜色(红3/黄2/绿1/蓝0),0 保持弱化灰 */
+.dist-pt { font-weight: 600; }
+.dist-pt.p3 { color: var(--danger); }
+.dist-pt.p2 { color: var(--dist-yellow); }
+.dist-pt.p1 { color: var(--success); }
+.dist-pt.p0 { color: var(--accent); }
 
 .stats-player-row {
   cursor: pointer;

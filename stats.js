@@ -297,6 +297,8 @@
         const n = Math.max(0, Math.min(10, Number(cost) || 0));
         return '<img class="cost-icon" src="icons/cost/cost-' + n + '.png" alt="' + n + '费" title="' + n + ' 费" width="20" height="20" loading="lazy">';
       };
+      /* 百分比文字:非 0 时套对应段颜色(红3/黄2/绿1/蓝0),0 保持灰 */
+      const pt = (n, cls) => '<span' + (n ? ' class="dist-pt ' + cls + '"' : '') + '>' + pct(n) + '%</span>';
       tbody.innerHTML = rows.map((c) => {
         const d3 = c.dist[2], d2 = c.dist[1], d1 = c.dist[0];
         const d0 = Math.max(0, total - (d3 + d2 + d1));
@@ -306,7 +308,7 @@
             '<div class="dist-bar" role="img" aria-label="3张' + pct(d3) + '%,2张' + pct(d2) + '%,1张' + pct(d1) + '%,0张' + pct(d0) + '%">' +
               seg('d3', d3) + seg('d2', d2) + seg('d1', d1) + seg('d0', d0) +
             '</div>' +
-            '<span class="dist-text">' + pct(d3) + '%·' + pct(d2) + '%·' + pct(d1) + '%·' + pct(d0) + '%</span>' +
+            '<span class="dist-text">' + pt(d3, 'p3') + '·' + pt(d2, 'p2') + '·' + pt(d1, 'p1') + '·' + pt(d0, 'p0') + '</span>' +
           '</td></tr>';
       }).join('');
       const miss = comp.unresolved.get(selectedDeckClass) || 0;
