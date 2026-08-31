@@ -12,8 +12,31 @@
   <link rel="prefetch" href="schedule.html">
   <link rel="prefetch" href="players.html">
   <link rel="prefetch" href="stats.html">
-  <script src="theme-init.js?v=2026090006"></script>
-  <link rel="stylesheet" href="styles.css?v=2026090006">
+  <script src="theme-init.js?v=2026090007"></script>
+  <link rel="stylesheet" href="styles.css?v=2026090007">
+  <style>
+    /* 比赛总览系列分组小节(T9):系列名小标题+届数计数;仅主页使用,样式留在页内 */
+    .ov-t-group {
+      margin-block-start: 0.9rem;
+    }
+
+    .ov-t-group-title {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      margin: 0.6rem 0 0.1rem;
+      font-size: 0.86rem;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    .ov-t-group-count {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+  </style>
 </head>
 <body data-page="home">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -54,8 +77,8 @@
     </main>
   </div>
 
-  <script src="canvas-model.js?v=2026090006" defer></script>
-  <script src="common.js?v=2026090006" defer></script>
-  <script src="home.js?v=2026090006" defer></script>
+  <script src="canvas-model.js?v=2026090007" defer></script>
+  <script src="common.js?v=2026090007" defer></script>
+  <script src="home.js?v=2026090007" defer></script>
 </body>
 </html>

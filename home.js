@@ -5,7 +5,7 @@
  * 不引入新的数据源。布局与入场动效见 styles.css 的 ov-* 段。
  */
 (function () {
-  const { escapeHtml, avatarMarkup, formatStartTime, notify, errMsg } = window.TournamentUtils;
+  const { escapeHtml, avatarMarkup, formatStartTime, notify, errMsg, groupTournamentsBySeries } = window.TournamentUtils;
 
   const STATUS = {
     upcoming: { text: '未开始', cls: 'status-upcoming' },
@@ -136,7 +136,29 @@
     $('ov-grid').hidden = false;
   }
 
-  /* 比赛总览:全部届的行式列表(状况 + 进度),点击行切换 */
+  /* 比赛总览单行(状况 + 进度),行内排序与点击切换行为与旧版一致 */
+  function tournamentRow(t, currentId) {
+    const st = STATUS[t.status] || STATUS.upcoming;
+    const meta = [];
+    if (t.canvas && t.canvas.cards && t.canvas.cards.length) {
+      const { played, total } = splitCards(t);
+      meta.push(played.length + '/' + total + ' 场已结束');
+    } else {
+      meta.push('未编排');
+    }
+    if (t.startTime) meta.push('开赛 ' + formatStartTime(t.startTime));
+    const cur = t.id === currentId;
+    return '<button type="button" class="ov-t-row' + (cur ? ' is-current' : '') + '" data-id="' + escapeHtml(t.id) + '"' +
+      (cur ? ' aria-current="true"' : '') + ' title="' + (cur ? '当前比赛' : '点击切换到该比赛') + '">' +
+      '<span class="ov-t-name">' + escapeHtml(t.name || t.id) + '</span>' +
+      '<span class="status-badge ' + st.cls + '"><span class="status-dot" aria-hidden="true"></span>' + st.text + '</span>' +
+      '<span class="ov-t-meta">' + escapeHtml(meta.join(' · ')) + '</span>' +
+      '</button>';
+  }
+
+  /* 比赛总览:按系列分组的嵌套列表(系列名小节标题+届数计数),
+   * 无 seriesId / 孤儿 seriesId / 系列名为空的届归末尾「未分组」;
+   * 系列顺序 = workspace.series 数组序,届行排序与点击行为不变 */
   function renderTournaments(currentId) {
     const list = (window.TournamentApp.list || []).filter((t) => t && t.id);
     const box = $('ov-tournaments');
@@ -146,24 +168,13 @@
     }
     box.innerHTML =
       '<h2>比赛总览</h2>' +
-      list.map((t) => {
-        const st = STATUS[t.status] || STATUS.upcoming;
-        const meta = [];
-        if (t.canvas && t.canvas.cards && t.canvas.cards.length) {
-          const { played, total } = splitCards(t);
-          meta.push(played.length + '/' + total + ' 场已结束');
-        } else {
-          meta.push('未编排');
-        }
-        if (t.startTime) meta.push('开赛 ' + formatStartTime(t.startTime));
-        const cur = t.id === currentId;
-        return '<button type="button" class="ov-t-row' + (cur ? ' is-current' : '') + '" data-id="' + escapeHtml(t.id) + '"' +
-          (cur ? ' aria-current="true"' : '') + ' title="' + (cur ? '当前比赛' : '点击切换到该比赛') + '">' +
-          '<span class="ov-t-name">' + escapeHtml(t.name || t.id) + '</span>' +
-          '<span class="status-badge ' + st.cls + '"><span class="status-dot" aria-hidden="true"></span>' + st.text + '</span>' +
-          '<span class="ov-t-meta">' + escapeHtml(meta.join(' · ')) + '</span>' +
-          '</button>';
-      }).join('');
+      groupTournamentsBySeries(list, window.TournamentApp.series).map((group) =>
+        '<section class="ov-t-group">' +
+        '<h3 class="ov-t-group-title">' + escapeHtml(group.label) +
+        '<span class="ov-t-group-count">' + group.count + ' 届</span></h3>' +
+        group.items.map((t) => tournamentRow(t, currentId)).join('') +
+        '</section>'
+      ).join('');
     box.hidden = false;
   }
 

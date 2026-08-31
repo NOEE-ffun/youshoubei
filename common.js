@@ -222,14 +222,17 @@
     }
   }
 
-  /* 补齐 workspace 缺省字段:players/tournaments 为空时造默认数据,activeId 兜底到第一场 */
+  /* 补齐 workspace 缺省字段:players/tournaments 为空时造默认数据,activeId 兜底到第一场。
+   * series 全链路透传:非数组统一补 [](条目保留原样,结构由服务端 PUT 守卫校验),
+   * 否则管理端任一次整库保存会把云端系列列表洗掉 */
   function normalizeWorkspace(workspace) {
+    workspace.series = Array.isArray(workspace.series) ? workspace.series : [];
     if (!workspace.players) workspace.players = [];
     if (!workspace.tournaments || !workspace.tournaments.length) {
       const list = workspace.players.length ? workspace.players : makeDefaultPlayers();
       workspace.players = list;
       const fresh = makeDefaultTournament('我的赛事', list.map((p) => p.id));
-      workspace = { players: workspace.players, tournaments: [fresh], activeId: fresh.id };
+      workspace = { series: workspace.series, players: workspace.players, tournaments: [fresh], activeId: fresh.id };
     }
     if (!workspace.activeId || !workspace.tournaments.some((t) => t.id === workspace.activeId)) {
       workspace.activeId = workspace.tournaments[0].id;
@@ -307,7 +310,7 @@
 
   async function cloudGetWorkspace() {
     const response = await fetch('/api/data', { headers: cloudGetHeaders() });
-    if (response.status === 404) return { tournaments: [], activeId: null };
+    if (response.status === 404) return { tournaments: [], series: [], players: [], activeId: null };
     if (!response.ok) throw new Error((await apiErrorMessage(response)) || '读取云端数据失败');
     return response.json();
   }
@@ -329,10 +332,20 @@
       const remote = playerMap.get(p.id);
       if (!remote || (p.updatedAt || 0) >= (remote.updatedAt || 0)) playerMap.set(p.id, p);
     }
+    /* series 按 id 并集、字段以云端为准:系列的建/改/删走后台专用接口,不随整库快照合并;
+     * 本地快照里独有的系列追加在后,避免合并路径把云端系列列表剥掉 */
+    const seriesMap = new Map();
+    for (const s of (latest && latest.series) || []) {
+      if (s && s.id != null) seriesMap.set(s.id, s);
+    }
+    for (const s of (local && local.series) || []) {
+      if (s && s.id != null && !seriesMap.has(s.id)) seriesMap.set(s.id, s);
+    }
     return {
       activeId: (local && local.activeId) || (latest && latest.activeId) || null,
       players: [...playerMap.values()],
-      tournaments: [...byId.values()]
+      tournaments: [...byId.values()],
+      series: [...seriesMap.values()]
     };
   }
 
@@ -545,6 +558,7 @@
     }
 
     const workspace = {
+      series: [],
       players,
       tournaments,
       activeId: localStorage.getItem(LS_ACTIVE) || (tournaments[0] || {}).id || null
@@ -1455,6 +1469,31 @@
       item.text + '</span>';
   }
 
+  /* 系列-届分组(主页总览与页头届切换下拉共用),返回 [{ id, label, count, items }]:
+   * - 系列顺序 = workspace.series 数组序(后端/种子决定);
+   * - 无 seriesId、seriesId 指向不存在的系列(孤儿)、系列名为空 → 归末尾「未分组」;
+   * - 届行保持传入顺序,排序与点击行为由调用方决定;
+   * - 没有任何届的系列不产出空组。 */
+  function groupTournamentsBySeries(tournaments, series) {
+    const groups = [];
+    const byId = new Map();
+    for (const s of (series || []).filter(Boolean)) {
+      if (!s.name) continue; /* 系列名为空:其届归「未分组」 */
+      const group = { id: s.id, label: s.name, count: 0, items: [] };
+      groups.push(group);
+      if (s.id != null && !byId.has(s.id)) byId.set(s.id, group);
+    }
+    const ungrouped = { id: null, label: '未分组', count: 0, items: [] };
+    for (const t of (tournaments || []).filter((x) => x && x.id)) {
+      const group = (t.seriesId != null && byId.get(t.seriesId)) || ungrouped;
+      group.items.push(t);
+      group.count += 1;
+    }
+    const result = groups.filter((g) => g.count > 0);
+    if (ungrouped.count > 0) result.push(ungrouped);
+    return result;
+  }
+
   /* 赛程页的浮动缩放控件绑定 */
   function bindZoomDock(handlers) {
     const dock = document.getElementById('zoom-dock');
@@ -1515,7 +1554,8 @@
     uiConfirm,
     bindZoomDock,
     bindZoomFitOnResize,
-    requirePlayerSession
+    requirePlayerSession,
+    groupTournamentsBySeries
   };
 
   function applyBackground(record) {
@@ -1785,16 +1825,22 @@
         }
       }
 
-      /* 切换比赛下拉:列表签名变化才重建 options,否则只同步选中值 */
+      /* 切换比赛下拉:按系列 optgroup 分组(未分组最后),签名变化才重建 options,
+       * 否则只同步选中值;签名含系列列表与各届 seriesId,分组变动也会触发重建 */
       const switchSelect = header.querySelector('#tournament-switch');
       if (switchSelect) {
-        const signature = app.list.map((item) => item.id + ':' + item.name).join('|');
+        const signature = app.list.map((item) => item.id + ':' + item.name + ':' + (item.seriesId || '')).join('|')
+          + '#' + (app.series || []).map((s) => (s && s.id) + ':' + (s && s.name)).join('|');
         if (switchSelect.dataset.sig !== signature) {
           switchSelect.dataset.sig = signature;
-          switchSelect.innerHTML = app.list.map((item) =>
-            '<option value="' + item.id + '"' + (item.id === active.id ? ' selected' : '') + '>' +
-            escapeHtml(item.name) +
-            '</option>'
+          switchSelect.innerHTML = groupTournamentsBySeries(app.list, app.series).map((group) =>
+            '<optgroup label="' + escapeHtml(group.label) + '">' +
+            group.items.map((item) =>
+              '<option value="' + escapeHtml(item.id) + '"' + (item.id === active.id ? ' selected' : '') + '>' +
+              escapeHtml(item.name) +
+              '</option>'
+            ).join('') +
+            '</optgroup>'
           ).join('');
         } else if (switchSelect.value !== active.id) {
           switchSelect.value = active.id;
@@ -2141,7 +2187,11 @@
       : localStorage.getItem(LS_ACTIVE);
     const record = all.find((t) => t.id === activeId) || all[0];
     appInstance.current = record;
-    appInstance.list = all.map((t) => ({ id: t.id, name: t.name, updatedAt: t.updatedAt }));
+    /* seriesId 供主页总览/页头下拉按系列分组;series 数组序即分组顺序(云端为权威) */
+    appInstance.list = all.map((t) => ({ id: t.id, name: t.name, updatedAt: t.updatedAt, seriesId: t.seriesId || null }));
+    appInstance.series = (mode === 'cloud' && cloudWorkspace && Array.isArray(cloudWorkspace.series))
+      ? cloudWorkspace.series
+      : [];
     appInstance.players = players;
     applyBackground(record);
     renderHeader();
@@ -2172,6 +2222,7 @@
       activePage,
       current: null,
       list: [],
+      series: [],
       players: [],
       mode: 'local',
       blobUrl,
