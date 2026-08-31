@@ -4516,3 +4516,43 @@ body[data-view='canvas'] .list-view {
   box-shadow: var(--focus-ring);
 }
 
+
+/* —— 备案页脚(工信部 ICP + 公安联网备案,法规要求悬挂于主页底部,随内容滚动)—— */
+.site-footer {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-soft);
+  text-align: center;
+}
+
+.site-filing {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.25rem 1rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.site-filing a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-filing a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.ga-filing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ga-filing img {
+  width: 0.875rem;
+  height: 0.875rem;
+}

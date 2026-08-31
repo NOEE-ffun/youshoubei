@@ -7,8 +7,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>登录 - 右手杯</title>
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=2026090022">
-  <script src="theme-init.js?v=2026090022" defer></script>
+  <link rel="stylesheet" href="styles.css?v=2026090023">
+  <script src="theme-init.js?v=2026090023" defer></script>
 </head>
 <body class="login-body">
   <main class="login-shell" id="login-shell">
@@ -45,7 +45,15 @@
       <p class="hint">账号密码登录仅对早期账号开放。</p>
     </form>
     <p class="login-status" id="login-status" role="status" aria-live="polite"></p>
+
+    <!-- TODO(备案上线):均为占位号,部署前必须替换——ICP 填工信部真实备案号;公安填地区简称+纯数字,recordcode 参数同步改为纯数字 -->
+    <footer class="site-footer">
+      <p class="site-filing">
+        <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">X ICP备XXXXXXXXXX号-X</a>
+        <a class="ga-filing" href="https://beian.gov.cn/portal/registerSystemInfo?recordcode=XXXXXXXXXXXXX" target="_blank" rel="noopener"><img src="icons/ghs.png" width="14" height="14" alt="" aria-hidden="true">X公网安备 XXXXXXXXXXXXX号</a>
+      </p>
+    </footer>
   </main>
-  <script src="login.js?v=2026090022" defer></script>
+  <script src="login.js?v=2026090023" defer></script>
 </body>
 </html>
