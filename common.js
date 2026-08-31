@@ -513,6 +513,16 @@
     return Boolean(sessionUser && (sessionUser.role === 'admin' || sessionUser.role === 'super'));
   }
 
+  /* 归属管理权(与服务端 api/acl.js canManageResource 同口径):super 恒 true;
+   * admin 需 resource.createdBy === 本人 id;createdBy 缺失/null(系统资源/未回读)
+   * 仅 super 可管;其余角色恒 false。本地模式无归属概念,调用方以 mode!=='cloud' 短路。 */
+  function canManage(resource) {
+    if (!sessionUser) return false;
+    if (sessionUser.role === 'super') return true;
+    if (sessionUser.role !== 'admin') return false;
+    return Boolean(resource && resource.createdBy != null && resource.createdBy === sessionUser.id);
+  }
+
   async function migrateLocalToCloud() {
     const local = await idbGetAll();
     const localPlayers = (await idbGetMeta(META_PLAYERS)) || [];
@@ -815,6 +825,8 @@
 
   let manageDialog = null;
   let settingsDialog = null;
+  let seriesDialog = null;
+  let seriesEditing = null; /* 系列弹窗当前编辑对象;null=新建模式 */
   let pendingBackground = null;
 
   /* ---------- 管理弹窗 ---------- */
@@ -836,8 +848,16 @@
       '      <option value="blank">空白画布</option>' +
       '      <option value="double">8 人双败模板</option>' +
       '    </select>' +
+      '    <select id="new-tournament-series" aria-label="所属系列" hidden></select>' +
       '    <button type="submit" class="btn btn-primary btn-sm">新建比赛</button>' +
       '  </form>' +
+      '  <div class="manage-subsection" id="series-subsection" hidden>' +
+      '    <h3>系列</h3>' +
+      '    <div class="dialog-actions">' +
+      '      <span class="hint">系列用于主页与切换下拉的分组;创建后可在主页小节标题旁编辑名称与简介。</span>' +
+      '      <button type="button" id="manage-new-series-btn" class="btn btn-secondary btn-sm">新建系列</button>' +
+      '    </div>' +
+      '  </div>' +
       '  <div class="manage-subsection">' +
       '    <h3>比赛列表</h3>' +
       '    <div id="manage-list" class="manage-list" aria-label="已有比赛列表"></div>' +
@@ -849,6 +869,7 @@
       event.preventDefault();
       const input = manageDialog.querySelector('#new-tournament-name');
       const template = manageDialog.querySelector('#new-tournament-template');
+      const seriesSelect = manageDialog.querySelector('#new-tournament-series');
       const name = input.value.trim() || '我的赛事';
       let record;
       if (template && template.value === 'double') {
@@ -856,6 +877,9 @@
       } else {
         record = makeBlankTournament(name);
       }
+      /* 所属系列:下拉值写入 seriesId,「未分组」= null;
+       * createdBy 由服务端整库守卫盖章,前端不管 */
+      record.seriesId = (seriesSelect && !seriesSelect.hidden && seriesSelect.value) || null;
       try {
         await storagePut(record);
       } catch (error) {
@@ -864,9 +888,137 @@
       }
       await setActiveId(record.id);
       input.value = '';
+      if (seriesSelect) seriesSelect.value = '';
       renderManageList();
       document.dispatchEvent(new CustomEvent(EVT_CHANGED));
     });
+
+    manageDialog.querySelector('#manage-new-series-btn').addEventListener('click', () => {
+      openSeriesDialog(null);
+    });
+  }
+
+  /* 管理弹窗系列控件:新建届的所属系列下拉(全部系列+未分组)与「新建系列」入口,
+   * 仅云端管理员可见——series 只存在于云端 workspace,本地模式恒隐藏 */
+  function renderSeriesControls() {
+    if (!manageDialog) return;
+    const subsection = manageDialog.querySelector('#series-subsection');
+    const select = manageDialog.querySelector('#new-tournament-series');
+    const adminCloud = mode === 'cloud' && isAdmin();
+    const list = adminCloud
+      ? ((appInstance && appInstance.series) || []).filter((s) => s && s.id != null && s.name)
+      : [];
+    if (subsection) subsection.hidden = !adminCloud;
+    if (!select) return;
+    select.hidden = !adminCloud || !list.length;
+    const sig = list.map((s) => s.id + ':' + s.name).join('|');
+    if (select.dataset.sig !== sig) {
+      select.dataset.sig = sig;
+      select.innerHTML = '<option value="">未分组</option>' +
+        list.map((s) =>
+          '<option value="' + escapeHtml(s.id) + '">' + escapeHtml(s.name) + '</option>'
+        ).join('');
+    }
+  }
+
+  /* ---------- 系列弹窗(新建/编辑共用) ----------
+   * 系列建/改一律走 noMerge 精确流:GET 服务端原始 JSON → 就地改 series →
+   * PUT {noMerge:true} → 回读拿服务端盖章的 createdBy。
+   * 绝不能改 cloudWorkspace.series 后走默认 merge:mergeWorkspace 对 series
+   * 是"云端权威+并集",本地改名会被静默抹掉(与 storageDelete 同理)。
+   * 删除系列本期不做(YAGNI,届的迁移去向需产品决策)。 */
+  function buildSeriesDialog() {
+    seriesDialog = document.createElement('dialog');
+    seriesDialog.id = 'series-dialog';
+    seriesDialog.setAttribute('aria-labelledby', 'series-dialog-title');
+    seriesDialog.innerHTML =
+      '<div class="dialog-head">' +
+      '  <h2 id="series-dialog-title">系列</h2>' +
+      '  <button type="button" class="btn btn-ghost btn-sm" data-dialog-close>关闭</button>' +
+      '</div>' +
+      '<form id="series-form">' +
+      '  <div class="dialog-body">' +
+      '    <div class="form-field">' +
+      '      <label for="series-name-input">系列名称</label>' +
+      '      <input type="text" id="series-name-input" required maxlength="32" autocomplete="off">' +
+      '    </div>' +
+      '    <div class="form-field">' +
+      '      <label for="series-desc-input">简介(可选)</label>' +
+      '      <textarea id="series-desc-input" placeholder="一句话介绍该系列,留空亦可"></textarea>' +
+      '    </div>' +
+      '    <div class="dialog-actions">' +
+      '      <button type="button" class="btn btn-secondary" data-dialog-close>取消</button>' +
+      '      <button type="submit" class="btn btn-primary" id="series-save-btn">保存</button>' +
+      '    </div>' +
+      '  </div>' +
+      '</form>';
+    document.body.appendChild(seriesDialog);
+    seriesDialog.querySelector('#series-form').addEventListener('submit', saveSeriesFromDialog);
+  }
+
+  /* series 传系列对象=编辑模式;null/undefined=新建模式 */
+  function openSeriesDialog(series) {
+    buildDialogs();
+    const target = series && series.id != null
+      ? (((appInstance && appInstance.series) || []).find((s) => s && s.id === series.id) || series)
+      : null;
+    seriesEditing = target;
+    seriesDialog.querySelector('#series-dialog-title').textContent = target ? '编辑系列' : '新建系列';
+    seriesDialog.querySelector('#series-name-input').value = target ? (target.name || '') : '';
+    seriesDialog.querySelector('#series-desc-input').value = target ? (target.desc || '') : '';
+    seriesDialog.showModal();
+    const nameInput = seriesDialog.querySelector('#series-name-input');
+    nameInput.focus();
+    nameInput.select();
+  }
+
+  async function saveSeriesFromDialog(event) {
+    event.preventDefault();
+    if (mode !== 'cloud' || !isAdmin()) {
+      notify('系列管理需要管理员账号(云端模式)', 'danger');
+      return;
+    }
+    const nameInput = seriesDialog.querySelector('#series-name-input');
+    const descInput = seriesDialog.querySelector('#series-desc-input');
+    const name = nameInput.value.trim();
+    if (!name) {
+      notify('请填写系列名称', 'danger');
+      return;
+    }
+    const desc = descInput.value.trim();
+    const editing = Boolean(seriesEditing);
+    const saveBtn = seriesDialog.querySelector('#series-save-btn');
+    saveBtn.disabled = true;
+    try {
+      const latest = await cloudGetWorkspace(); /* 服务端原始 JSON */
+      latest.series = Array.isArray(latest.series) ? latest.series : [];
+      if (editing) {
+        const target = latest.series.find((s) => s && s.id === seriesEditing.id);
+        if (!target) throw new Error('该系列已不存在，请刷新后重试');
+        /* 前端预判归属,服务端整库守卫仍是权威兜底 */
+        if (!canManage(target)) throw new Error('无权修改该系列');
+        target.name = name;
+        target.desc = desc;
+      } else {
+        latest.series.push({ id: uid('s'), name: name, desc: desc, createdAt: Date.now() });
+      }
+      await cloudPutWorkspace(latest, { noMerge: true });
+      /* 回读服务端盖章的 createdBy(新建必经;编辑统一同口径) */
+      try {
+        setCloudWorkspace(normalizeWorkspace(await cloudGetWorkspace()));
+      } catch (error) {
+        notify('已保存，但回读最新数据失败：' + errMsg(error), 'danger');
+      }
+      await refreshApp();
+      renderSeriesControls();
+      seriesDialog.close();
+      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+      notify(editing ? '系列已更新' : '系列已创建');
+    } catch (error) {
+      notify((editing ? '保存系列失败：' : '新建系列失败：') + errMsg(error), 'danger');
+    } finally {
+      saveBtn.disabled = false;
+    }
   }
 
   /* ---------- 设置弹窗 ---------- */
@@ -1157,7 +1309,8 @@
     if (manageDialog) return;
     buildManageDialog();
     buildSettingsDialog();
-    for (const dialog of [manageDialog, settingsDialog]) {
+    buildSeriesDialog();
+    for (const dialog of [manageDialog, settingsDialog, seriesDialog]) {
       dialog.querySelectorAll('[data-dialog-close]').forEach((btn) => {
         btn.addEventListener('click', () => dialog.close());
       });
@@ -1328,6 +1481,7 @@
 
   function openManageDialog() {
     buildDialogs();
+    renderSeriesControls();
     renderManageList();
     manageDialog.showModal();
   }
@@ -1545,6 +1699,7 @@
     cssUrl,
     debounce,
     canEdit,
+    canManage,
     save,
     formatStartTime,
     medalMap,
@@ -1665,6 +1820,9 @@
     if (sideActionsBuilt) appendSideLabel(link, '后台');
     nav.appendChild(link);
   }
+
+  /* 非 owner 管理员浏览他人届的一次性提示台账(每届一次,页面生命周期内) */
+  const ownershipNoticed = new Set();
 
   let headerHeightBound = false;
 
@@ -1822,6 +1980,25 @@
           group.insertAdjacentHTML('beforeend', statusBadgeMarkup(active.status));
           badge = group.querySelector('.status-badge');
           if (badge) badge.dataset.status = statusKey;
+        }
+      }
+
+      /* 编辑/设置按钮按当前届归属显隐:云端需 admin 且本人可管理该届
+       * (super 恒可;非 owner 管理员=选手视角,编辑器进入路径隐藏即只读);
+       * 本地模式无归属概念,不设限。画布工具栏/录比分入口都在编辑模式内,
+       * 入口按钮隐藏后不可达,无需单独判定 */
+      if (app.activePage === 'schedule') {
+        const ownerEditable = mode !== 'cloud' || (isAdmin() && canManage(active));
+        const editEntryBtn = header.querySelector('#header-edit-btn');
+        if (editEntryBtn) editEntryBtn.hidden = !ownerEditable;
+        const settingsEntryBtn = header.querySelector('#settings-btn');
+        if (settingsEntryBtn) settingsEntryBtn.hidden = !ownerEditable;
+        /* 非 owner 管理员打开他人届:顶部一次性提示(每届每页一次) */
+        if (mode === 'cloud' && !ownerEditable && isAdmin() && !ownershipNoticed.has(active.id)) {
+          ownershipNoticed.add(active.id);
+          notify(sessionUser && sessionUser.playerId
+            ? '该届由他人创建，你以选手身份浏览'
+            : '该届由他人创建，无编辑权限');
         }
       }
 
@@ -2237,6 +2414,8 @@
       storagePutPlayers,
       storageDeletePlayer,
       isAdmin,
+      canManage,
+      openSeriesDialog,
       setActiveId,
       refreshSession,
       getSession,
