@@ -39,6 +39,23 @@ export async function makePlayer(context, phone, playerId) {
   expect(redeem.ok(), 'redeem ' + code).toBeTruthy();
 }
 
+/* 造一个管理员会话:超管发管理员码(仅 super 可发)→ 该手机登录 → 兑换升 admin。
+ * 返回 /api/me 的 user(含 id——归属种子里作 createdBy 的真实用户 id)。 */
+export async function makeAdmin(context, phone) {
+  const admin = await context.browser().newContext();
+  await smsLogin(admin, ADMIN_PHONE);
+  const gen = await admin.request.post('/api/codes', { data: { kind: 'admin' } });
+  expect(gen.ok(), 'makeAdmin 发管理员码').toBeTruthy();
+  const { code } = await gen.json();
+  await admin.close();
+  await smsLogin(context, phone);
+  const redeem = await context.request.post('/api/me/redeem', { data: { code } });
+  expect(redeem.ok(), 'makeAdmin 兑换 ' + code).toBeTruthy();
+  const me = await context.request.get('/api/me');
+  expect(me.ok()).toBeTruthy();
+  return (await me.json()).user;
+}
+
 export async function resetStore(context) {
   await context.request.post('/api/dev/reset');
 }
