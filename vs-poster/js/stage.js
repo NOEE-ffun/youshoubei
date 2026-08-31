@@ -53,6 +53,13 @@
     if (loginRequired) return;
     if (!id) {
       showError("缺少 id 参数");
+      /* 误入/分享丢参时给条出路,别让投屏停在黑屏一行字 */
+      var back = document.createElement("a");
+      back.href = "/poster.html";
+      back.className = "stage-back";
+      back.textContent = "去海报页生成 OBS 投屏链接";
+      errorEl.appendChild(document.createElement("br"));
+      errorEl.appendChild(back);
       return;
     }
     fetch("/api/poster-stage?id=" + encodeURIComponent(id))

@@ -192,16 +192,18 @@ body {
   display: none !important;
 }
 
+/* 工具类硬藏:!important 防被更高优先级的宽度规则(如 .me-panel .form-field input
+ * 的 inline-size:100%)覆盖成实体盒,把布局视口撑宽(me#profile 409px 事故根因) */
 .visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0 0 0 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }
 
 .skip-link {
@@ -685,6 +687,15 @@ body.side-expanded .side-action .side-label {
 .side-action .icon {
   width: 1.2rem;
   height: 1.2rem;
+}
+
+/* 桌面无「更多」钮;登录/主题/管理三钮经 .side-more-menu 原位渲染(移动端才收进弹出层) */
+#side-more-btn {
+  display: none;
+}
+
+.side-more-menu {
+  display: contents;
 }
 
 .side-toggle {
@@ -2151,6 +2162,17 @@ body.canvas-editing #bg-layer {
 .tint-row input[type="color"] {
   inline-size: 2.4rem;
   block-size: 2rem;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+/* 选手资料「海报颜色」色块(同 tint-row 先例,避免裸 input 细线观感) */
+#profile-color {
+  inline-size: 3rem;
+  block-size: 2.35rem;
   padding: 0;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -3710,12 +3732,8 @@ body[data-view='canvas'] .list-view {
     align-items: stretch;
     padding: 0.2rem 0.35rem calc(0.2rem + env(safe-area-inset-bottom, 0px));
     box-shadow: inset 0 1px 0 var(--border);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .app-sidebar::-webkit-scrollbar {
-    display: none;
+    /* 不设 overflow-x:auto——导航项自适应收缩后不该溢出;若溢出会撑出页面横滚,
+     * 由 e2e(scrollWidth ≤ 视口)兜底拦截;且 auto 会裁掉「更多」向上弹出的浮层 */
   }
 
   #side-toggle {
@@ -3723,6 +3741,7 @@ body[data-view='canvas'] .list-view {
   }
 
   .side-nav {
+    flex: 1 1 auto;
     flex-direction: row;
     align-items: stretch;
     gap: 0;
@@ -3730,13 +3749,14 @@ body[data-view='canvas'] .list-view {
   }
 
   .side-link {
+    flex: 1 1 0;
     flex-direction: column;
     justify-content: center;
     gap: 0.2rem;
     width: auto;
-    min-inline-size: 3.4rem;
+    min-inline-size: 2.75rem;
     min-block-size: 2.75rem;
-    padding: 0.25rem 0.4rem;
+    padding: 0.25rem 0.2rem;
   }
 
   /* 底栏形态:指示条移到顶部 */
@@ -3754,11 +3774,14 @@ body[data-view='canvas'] .list-view {
 
   .side-link .side-label {
     display: block;
-    font-size: 0.6rem;
-    line-height: 1;
+    font-size: 0.625rem;
+    line-height: 1.15;
+    text-overflow: ellipsis;
   }
 
+  /* 「更多」弹出层收纳登录/主题/管理,底栏不再溢出裁切 */
   .side-actions {
+    position: relative;
     flex-direction: row;
     align-items: stretch;
     gap: 0;
@@ -3766,6 +3789,46 @@ body[data-view='canvas'] .list-view {
     margin-inline-start: auto;
     padding-inline-start: 0.35rem;
     border-inline-start: 1px solid var(--border);
+  }
+
+  .side-more-menu {
+    display: none;
+  }
+
+  #side-more-btn {
+    display: flex;
+  }
+
+  body.side-more-open .side-more-menu {
+    display: flex;
+    position: absolute;
+    inset-block-end: calc(100% + 0.5rem);
+    inset-inline-end: 0;
+    z-index: 40;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    padding: 0.35rem;
+    background: var(--surface-float, var(--surface));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg, var(--shadow-sm));
+  }
+
+  body.side-more-open .side-more-menu .side-action {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    width: auto;
+    min-inline-size: 7rem;
+    min-block-size: 2.75rem;
+    padding: 0.25rem 0.6rem;
+  }
+
+  body.side-more-open .side-more-menu .side-action .side-label {
+    display: block;
+    font-size: 0.6875rem;
+    line-height: 1.15;
   }
 
   .side-action {
@@ -3780,8 +3843,8 @@ body[data-view='canvas'] .list-view {
 
   .side-action .side-label {
     display: block;
-    font-size: 0.6rem;
-    line-height: 1;
+    font-size: 0.625rem;
+    line-height: 1.15;
   }
 
   .layout-body:not(.layout-body-canvas) > main {
@@ -3807,6 +3870,61 @@ body[data-view='canvas'] .list-view {
 
   .canvas-scroll {
     touch-action: none;
+  }
+
+  /* ---------- 触控目标(对齐移动端顶栏 .btn 2.35rem 先例,核心行内操作 44px) ---------- */
+
+  .btn-sm {
+    min-block-size: 2.35rem;
+  }
+
+  .header-select {
+    min-block-size: 2.35rem;
+  }
+
+  .header-search input,
+  .header-add input {
+    min-block-size: 2.35rem;
+  }
+
+  .row-del {
+    inline-size: 2.75rem;
+    block-size: 2.75rem;
+  }
+
+  .avatar-btn {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+  }
+
+  .list-class {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+    padding: 0.35rem;
+    justify-content: center;
+  }
+
+  .deck-comp-tab {
+    min-block-size: 2.35rem;
+  }
+
+  #profile-color {
+    block-size: 2.75rem;
+  }
+
+  /* ---------- 卡组构成:窄屏分布列换行,表格回 390 内不再横溢 ---------- */
+
+  #deck-comp-table th:nth-child(2) {
+    width: 42%;
+  }
+
+  .dist-cell {
+    min-width: 0;
+  }
+
+  .dist-text {
+    white-space: normal;
+    line-height: 1.35;
   }
 }
 

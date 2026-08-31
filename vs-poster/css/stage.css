@@ -55,6 +55,22 @@ body {
   display: none;
 }
 
+/* 缺 id 参数时的出路链接(同登录墙自包含样式,不依赖站点 styles.css) */
+.stage-back {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.45rem 1.2rem;
+  border-radius: 8px;
+  background: #6ba0ff;
+  color: #1b1f24;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.stage-back:hover {
+  background: #89b4ff;
+}
+
 /* 大屏 401 登录墙:全屏居中提示 + 去登录按钮(替代报错横幅)。
  * 由 vs-poster/js/stage.js 在 /api/poster-stage 返回 401 时整页注入;
  * 本页不引站点 styles.css(无 CSS 变量与 .btn 样式),按钮样式在此自包含。 */

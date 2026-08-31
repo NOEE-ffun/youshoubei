@@ -2150,12 +2150,47 @@
 
     const group = document.createElement('div');
     group.className = 'side-actions';
-    group.innerHTML =
+    /* 桌面:.side-more-menu 为 display:contents,三钮原位列出;
+     * 移动端:收进「更多」弹出层,底栏只留更多钮,不再溢出 */
+    const moreMenu = document.createElement('div');
+    moreMenu.className = 'side-more-menu';
+    moreMenu.innerHTML =
       '<button type="button" id="header-login-btn" class="side-action" title="登录" aria-label="登录"></button>' +
       '<button type="button" id="header-theme-btn" class="side-action" aria-label="切换主题"></button>' +
       '<button type="button" id="manage-btn" class="side-action" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>';
+    group.appendChild(moreMenu);
     sidebar.appendChild(group);
-    appendSideLabel(group.querySelector('#manage-btn'), '管理');
+    appendSideLabel(moreMenu.querySelector('#manage-btn'), '管理');
+
+    /* 移动端底栏「更多」:登录/主题/管理三钮收进弹出层,底栏不再溢出(桌面隐藏) */
+    const moreBtn = document.createElement('button');
+    moreBtn.type = 'button';
+    moreBtn.id = 'side-more-btn';
+    moreBtn.className = 'side-action';
+    moreBtn.setAttribute('aria-label', '更多');
+    moreBtn.setAttribute('aria-expanded', 'false');
+    moreBtn.innerHTML = iconMarkup('menu', '更多');
+    appendSideLabel(moreBtn, '更多');
+    group.insertBefore(moreBtn, group.firstChild);
+    const closeSideMore = () => {
+      document.body.classList.remove('side-more-open');
+      moreBtn.setAttribute('aria-expanded', 'false');
+    };
+    moreBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const open = document.body.classList.toggle('side-more-open');
+      moreBtn.setAttribute('aria-expanded', String(open));
+    });
+    moreMenu.querySelectorAll('.side-action').forEach((btn) => {
+      btn.addEventListener('click', closeSideMore);
+    });
+    document.addEventListener('click', (event) => {
+      if (document.body.classList.contains('side-more-open') && !group.contains(event.target)) closeSideMore();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeSideMore();
+    });
+
     group.querySelector('#header-login-btn').addEventListener('click', () => {
       if (sessionUser) location.href = 'me.html#profile';
       else openLoginDialog();
