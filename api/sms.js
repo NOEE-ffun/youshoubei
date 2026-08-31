@@ -69,7 +69,10 @@ async function realSender(phone) {
       phoneNumber: phone,
       signName: process.env.SMS_SIGN_NAME,
       templateCode: process.env.SMS_TEMPLATE_CODE,
-      templateParam: JSON.stringify({ code: '##code##' }),
+      /* 模板参数按 SDK 官方两形态:${code} 型系统模板传 {"code":"##code##"}(默认);
+       * ${content} 等自定义变量型模板须传整段正文 {"content":"您的验证码为##code##…"},
+       * 由 env SMS_TEMPLATE_PARAM 整体覆盖(值为合法 JSON 字符串),变量名随模板而定 */
+      templateParam: process.env.SMS_TEMPLATE_PARAM || JSON.stringify({ code: '##code##' }),
       codeLength: 6,        /* 平台生成 6 位码(4-8 可选),对齐本地模式口径 */
       codeType: 1,          /* 纯数字 */
       validTime: 300,       /* 平台侧 5 分钟有效,同本地 ttlMs */

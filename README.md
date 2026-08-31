@@ -64,6 +64,7 @@ npm start
 短信登录走阿里云号码认证服务的「短信认证服务」(`@alicloud/dypnsapi20170525`,首个外部运行时依赖,lazy require 缺库不阻断启动;官方签名/模板,个人无需自有短信签名):
 
 - `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE`:控制台「系统赠送签名/模板」的签名名称与模板 CODE,两者配齐才算真通道开通(未配置时发送接口返回明确报错,站点其余功能不受影响)
+- `SMS_TEMPLATE_PARAM`:可选,模板参数整体覆盖——模板变量名为 `${code}` 时无需配置(默认 `{"code":"##code##"}`);若赠送模板变量是 `${content}` 等其他名字,按模板正文填如 `{"content":"您的验证码为##code##,5分钟内有效"}`(整串须为合法 JSON,`##code##` 为平台验码占位符)
 - `SMS_ACCESS_KEY_ID` / `SMS_ACCESS_KEY_SECRET`:独立的短信 AK(建议与 OSS 分权,如仅授 AliyunDypnsFullAccess 的专用 RAM 用户);缺省回落复用 `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`
 - `AUTH_DEV_SMS_CODE`:开发后门验证码——单码(如 `123456`)或 `phone:code` 逗号列表;显式配置即最高优先(本地 .env 配齐签名/模板也不影响开发/E2E 走后门),`NODE_ENV=production` 时一律失效(生产仍勿配置);真发联调时临时注释本行
 - `SESSION_SECRET`:登录会话签名密钥,生产必须固定(不设则每次重启全员掉线)
