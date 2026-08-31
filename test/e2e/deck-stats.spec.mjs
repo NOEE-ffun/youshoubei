@@ -68,15 +68,14 @@ test('统计页:快照聚合携带率表格 + 稀有度着色 + 未解析计数'
 
   const rows = page.locator('#deck-comp-table tbody tr');
   await expect(rows).toHaveCount(3, '三种卡');
-  /* 排序:携带率(2/2) → 张数(3>1) */
+  /* 排序:费用升序 → 稀有度升序(须臾1费 → 焦灼4费 → 统音5费) */
   await expect(rows.nth(0).locator('.deck-name-r1')).toContainText('须臾剑士');
-  await expect(rows.nth(0)).toContainText('2/2 100%');
-  await expect(rows.nth(0)).toContainText('1·1·0');
-  await expect(rows.nth(1).locator('.deck-name-r4')).toContainText('统音的安纳提玛');
-  await expect(rows.nth(1)).toContainText('1/2 50%');
-  await expect(rows.nth(1)).toContainText('1·0·0');
-  await expect(rows.nth(2)).toContainText('焦灼炎将·玛尔斯');
-  await expect(rows.nth(2)).toContainText('0·0·1');
+  await expect(rows.nth(0)).toContainText('50%·50%·0%·0%');
+  await expect(rows.nth(0).locator('.dist-bar')).toBeVisible();
+  await expect(rows.nth(1).locator('.deck-name-r4')).toContainText('焦灼炎将·玛尔斯');
+  await expect(rows.nth(1)).toContainText('0%·0%·50%·50%');
+  await expect(rows.nth(2).locator('.deck-name-r4')).toContainText('统音的安纳提玛');
+  await expect(rows.nth(2)).toContainText('50%·0%·0%·50%');
 
   await expect(page.locator('#deck-comp-foot')).toContainText('共 2 副');
   await expect(page.locator('#deck-comp-foot')).toContainText('1 条链接未解析');
@@ -163,8 +162,7 @@ test('晋级继承去重:选手流动未换卡组,同一副只计一副', async 
   const rows = page.locator('#deck-comp-table tbody tr');
   await expect(rows).toHaveCount(2, 'SNAP_A 两种卡');
   await expect(rows.nth(0)).toContainText('须臾剑士');
-  await expect(rows.nth(0)).toContainText('1/1 100%');
-  await expect(rows.nth(0)).toContainText('1·0·0');
+  await expect(rows.nth(0)).toContainText('100%·0%·0%·0%');
   await expect(rows.nth(1)).toContainText('统音的安纳提玛');
   await expect(page.locator('#deck-comp-foot')).toContainText('共 1 副');
   await adminCtx.close();

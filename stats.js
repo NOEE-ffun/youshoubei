@@ -227,15 +227,13 @@
               let agg = byClass.get(cls);
               if (!agg) { agg = { decks: 0, cards: new Map() }; byClass.set(cls, agg); }
               agg.decks += 1;
-              const key = record.id + ':' + card.id + ':' + side + ':' + idx;
               for (const row of deck.cards) {
                 const [id, name, cost, rarity, , n] = row;
                 let c = agg.cards.get(id);
                 if (!c) {
-                  c = { id, name: String(name || '?'), cost: Number(cost) || 0, rarity: Math.min(4, Math.max(1, Number(rarity) || 1)), decks: new Set(), dist: [0, 0, 0] };
+                  c = { id, name: String(name || '?'), cost: Number(cost) || 0, rarity: Math.min(4, Math.max(1, Number(rarity) || 1)), dist: [0, 0, 0] };
                   agg.cards.set(id, c);
                 }
-                c.decks.add(key);
                 const copies = Number(n);
                 if (copies >= 1 && copies <= 3) c.dist[copies - 1] += 1;
               }
@@ -252,15 +250,10 @@
     return { byClass, unresolved };
   }
 
+  /* 行序:费用升序 → 稀有度升序(铜→银→金→彩) → 卡名 */
   function deckCompRows(agg) {
-    const rows = [...agg.cards.values()].map((c) => ({
-      c,
-      deckCount: c.decks.size,
-      total: c.dist[0] + c.dist[1] * 2 + c.dist[2] * 3
-    }));
-    /* 携带率降序 → 总张数降序 → 费用升序 → 卡名 */
-    rows.sort((x, y) => y.deckCount - x.deckCount || y.total - x.total || x.c.cost - y.c.cost || x.c.name.localeCompare(y.c.name, 'zh'));
-    return rows;
+    return [...agg.cards.values()].sort((x, y) =>
+      x.cost - y.cost || x.rarity - y.rarity || x.name.localeCompare(y.name, 'zh'));
   }
 
   function renderDeckComposition(records) {
@@ -293,19 +286,27 @@
 
     const agg = selectedDeckClass ? comp.byClass.get(selectedDeckClass) : null;
     if (!agg) {
-      tbody.innerHTML = '<tr><td colspan="4" class="stats-empty">暂无已解析的卡组快照</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="3" class="stats-empty">暂无已解析的卡组快照</td></tr>';
       foot.hidden = true;
     } else {
+      const total = agg.decks || 0;
+      const pct = (n) => (total ? Math.round(n / total * 100) : 0);
+      const seg = (cls, n) => '<i class="dist-seg ' + cls + '" style="width:' + (total ? (n / total * 100) : 0) + '%"></i>';
       const rows = deckCompRows(agg);
-      tbody.innerHTML = rows.map(({ c, deckCount }) => {
-        const pct = agg.decks ? Math.round(deckCount / agg.decks * 100) : 0;
+      tbody.innerHTML = rows.map((c) => {
+        const d3 = c.dist[2], d2 = c.dist[1], d1 = c.dist[0];
+        const d0 = Math.max(0, total - (d3 + d2 + d1));
         return '<tr><td><span class="deck-name-r' + c.rarity + '">' + escapeHtml(c.name) + '</span></td>' +
           '<td class="num">' + c.cost + '</td>' +
-          '<td class="num">' + deckCount + '/' + agg.decks + ' ' + pct + '%</td>' +
-          '<td class="num">' + c.dist[2] + '·' + c.dist[1] + '·' + c.dist[0] + '</td></tr>';
+          '<td class="dist-cell num">' +
+            '<div class="dist-bar" role="img" aria-label="3张' + pct(d3) + '%,2张' + pct(d2) + '%,1张' + pct(d1) + '%,0张' + pct(d0) + '%">' +
+              seg('d3', d3) + seg('d2', d2) + seg('d1', d1) +
+            '</div>' +
+            '<span class="dist-text">' + pct(d3) + '%·' + pct(d2) + '%·' + pct(d1) + '%·' + pct(d0) + '%</span>' +
+          '</td></tr>';
       }).join('');
       const miss = comp.unresolved.get(selectedDeckClass) || 0;
-      foot.textContent = '共 ' + agg.decks + ' 副 · 卡名颜色 = 稀有度(铜/银/金/彩)' + (miss ? ' · 另有 ' + miss + ' 条链接未解析,不计入' : '');
+      foot.textContent = '共 ' + total + ' 副 · 卡名颜色 = 稀有度(铜/银/金/彩) · 分布 = 带 3/2/1/0 张的卡组占比' + (miss ? ' · 另有 ' + miss + ' 条链接未解析,不计入' : '');
       foot.hidden = false;
     }
 

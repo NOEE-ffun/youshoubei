@@ -41,9 +41,9 @@
   --warning: #c97a1b;
   --warning-soft: #f7ebdb;
   /* 稀有度(卡组构成分析:卡名着色,铜/银/金;彩=固定六色渐变不走变量) */
-  --rar-1: #8a5a34;
+  --rar-1: #6b4423;
   --rar-2: #6f7680;
-  --rar-3: #a3720a;
+  --rar-3: #d9970d;
   /* 圆角系统:控件 8 / 卡片 12 / 大容器 16 / chip 胶囊 */
   --radius-sm: 8px;
   --radius: 12px;
@@ -110,9 +110,9 @@ body.side-expanded {
   --success-soft: #243524;
   --warning: #f0a75a;
   --warning-soft: #3e2f1e;
-  --rar-1: #c98f5f;
+  --rar-1: #a9743f;
   --rar-2: #b9bfc7;
-  --rar-3: #e0a93e;
+  --rar-3: #f5bb42;
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 32px rgb(0 0 0 / 0.45);
   --shadow-lg: 0 24px 80px rgb(0 0 0 / 0.6);
@@ -2734,7 +2734,9 @@ body[data-page="me"] #bg-layer {
   color: var(--text-muted);
 }
 
-/* 卡名稀有度着色:铜/银/金用变量;彩=紫-红-橙-黄-绿-蓝 六色横向渐变文字 */
+/* 卡名稀有度着色:铜/银/金用变量;彩=紫-红-橙-黄-绿-蓝 六色横向渐变文字;统一加粗突出颜色 */
+.deck-name-r1, .deck-name-r2, .deck-name-r3, .deck-name-r4 { font-weight: 600; }
+
 .deck-name-r1 { color: var(--rar-1); }
 .deck-name-r2 { color: var(--rar-2); }
 .deck-name-r3 { color: var(--rar-3); }
@@ -2744,6 +2746,30 @@ body[data-page="me"] #bg-layer {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* 分布(3·2·1·0)堆叠条:蓝系浓度表示携带张数,浅灰底=不带(0张) */
+.dist-cell { min-width: 11rem; }
+
+.dist-bar {
+  display: flex;
+  block-size: 7px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface-3);
+  margin-block-end: 3px;
+}
+
+.dist-seg { display: block; inline-size: 0; block-size: 100%; }
+.dist-seg.d3 { background: var(--accent); }
+.dist-seg.d2 { background: var(--accent); opacity: 0.55; }
+.dist-seg.d1 { background: var(--accent); opacity: 0.28; }
+
+.dist-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .stats-player-row {
