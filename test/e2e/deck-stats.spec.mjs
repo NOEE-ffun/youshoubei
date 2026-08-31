@@ -15,7 +15,8 @@ const SNAP_A = {
   v: 1, resolvedAt: '2026-08-31T00:00:00.000Z', classId: 2, format: 1,
   cards: [
     [10021110, '须臾剑士', 1, 1, 1, 3],
-    [10724110, '统音的安纳提玛·吉尔达利娅', 5, 4, 1, 3]
+    [10724110, '统音的安纳提玛·吉尔达利娅', 5, 4, 1, 3],
+    [10999120, '超费验证卡', 12, 1, 1, 1]
   ]
 };
 const SNAP_B = {
@@ -67,16 +68,25 @@ test('统计页:快照聚合携带率表格 + 稀有度着色 + 未解析计数'
   await expect(activeTab).toContainText('2');
 
   const rows = page.locator('#deck-comp-table tbody tr');
-  await expect(rows).toHaveCount(3, '三种卡');
-  /* 排序:费用升序 → 稀有度升序(须臾1费 → 焦灼4费 → 统音5费) */
+  await expect(rows).toHaveCount(4, '四种卡');
+  /* 表头三列:费用(竖排窄列)|卡名|分布 */
+  await expect(page.locator('#deck-comp-table thead th')).toHaveText(['费用', '卡名', '分布(3·2·1·0)']);
+  /* 排序:费用升序 → 稀有度升序(须臾1费 → 焦灼4费 → 统音5费 → 超费12费) */
   await expect(rows.nth(0).locator('.deck-name-r1')).toContainText('须臾剑士');
   await expect(rows.nth(0).locator('.cost-icon')).toHaveAttribute('src', 'icons/cost/cost-1.png');
   await expect(rows.nth(0)).toContainText('50%·50%·0%·0%');
   await expect(rows.nth(0).locator('.dist-bar')).toBeVisible();
+  /* 百分比着色:非 0 段按红3/黄2 着色加粗,0 段保持弱化灰 */
+  await expect(rows.nth(0).locator('.dist-text .dist-pt')).toHaveCount(2);
+  await expect(rows.nth(0).locator('.dist-text .dist-pt').first()).toHaveClass(/p3/);
+  await expect(rows.nth(0).locator('.dist-text .dist-pt').nth(1)).toHaveClass(/p2/);
   await expect(rows.nth(1).locator('.deck-name-r4')).toContainText('焦灼炎将·玛尔斯');
   await expect(rows.nth(1)).toContainText('0%·0%·50%·50%');
   await expect(rows.nth(2).locator('.deck-name-r4')).toContainText('统音的安纳提玛');
   await expect(rows.nth(2)).toContainText('50%·0%·0%·50%');
+  /* 费用 ≥10 统一用 10+ 图标(渲染层钳制,排序仍按真实费用) */
+  await expect(rows.nth(3).locator('.deck-name-r1')).toContainText('超费验证卡');
+  await expect(rows.nth(3).locator('.cost-icon')).toHaveAttribute('src', 'icons/cost/cost-10.png');
 
   await expect(page.locator('#deck-comp-foot')).toContainText('共 2 副');
   await expect(page.locator('#deck-comp-foot')).toContainText('1 条链接未解析');
@@ -128,7 +138,7 @@ test('公示锁:窗口开他人卡组不入统计,关窗后出现', async ({ bro
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.waitForSelector('#deck-comp-table');
-  await expect(page.locator('#deck-comp-table tbody tr')).toHaveCount(2);
+  await expect(page.locator('#deck-comp-table tbody tr')).toHaveCount(3);
   await viewCtx.close();
   await adminCtx.close();
 });
@@ -161,7 +171,7 @@ test('晋级继承去重:选手流动未换卡组,同一副只计一副', async 
   await page.goto('/stats.html');
   await page.waitForSelector('#deck-comp-table');
   const rows = page.locator('#deck-comp-table tbody tr');
-  await expect(rows).toHaveCount(2, 'SNAP_A 两种卡');
+  await expect(rows).toHaveCount(3, 'SNAP_A 三种卡(去重后仍只计一副)');
   await expect(rows.nth(0)).toContainText('须臾剑士');
   await expect(rows.nth(0)).toContainText('100%·0%·0%·0%');
   await expect(rows.nth(1)).toContainText('统音的安纳提玛');
