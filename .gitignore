@@ -17,5 +17,8 @@ kb/.obsidian/
 kb/
 docs/
 
+# SSH 直推连接配置(含生产地址,不入公开仓库)
+deploy/ecs.env
+
 # git worktree 隔离工作区
 .worktrees/
