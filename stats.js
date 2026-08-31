@@ -195,27 +195,38 @@
   /* ---------- 卡组构成分析(职业 × 卡牌携带率) ---------- */
 
   /* 聚合 scope 内所有已解析快照:按 deck.classId 分职业(写入时已纠错,cls 兜底以快照为准)。
-   * 继承链路(resolveEffectiveClassLinks)与职业登场同口径:同副卡组被继承到多场计多次。 */
+   * 继承链路用 resolveEffectiveClassLinks(晋级未换卡组 → 同一副卡组随选手流入下游场次),
+   * 但计副按「同届+同选手+同构成指纹」去重:一副物理卡组只计一副,重复提交/流动继承不翻倍;
+   * 未解析链接同样按「同届+同选手+同 url」去重。 */
   function computeDeckComposition(records) {
     const byClass = new Map(); // cls -> { decks, cards: Map(id -> row) }
     const unresolved = new Map(); // cls -> count(有 url 无快照的条目)
+    const seenDecks = new Set();
+    const seenUrls = new Set();
     for (const record of records || []) {
       if (!record || !record.canvas) continue;
       const eff = CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {});
+      const resolved = CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {});
+      const playersById = new Map(resolved.cards.map((c) => [c.id, c]));
       for (const card of record.canvas.cards || []) {
         const sides = eff.get(card.id) || {};
+        const rc = playersById.get(card.id) || {};
         for (const side of ['a', 'b']) {
+          const pid = side === 'a' ? rc.a : rc.b;
           const list = Array.isArray(sides[side]) ? sides[side] : [];
           for (let idx = 0; idx < list.length; idx++) {
             const entry = list[idx];
             if (!entry || !entry.cls) continue;
             const deck = entry.deck;
             if (deck && deck.classId >= 1 && deck.classId <= 7 && Array.isArray(deck.cards) && deck.cards.length) {
+              const fp = record.id + '|' + (pid || '-') + '|' + deck.classId + '|' +
+                deck.cards.map((r) => r[0] + ':' + r[5]).join(',');
+              if (seenDecks.has(fp)) continue;
+              seenDecks.add(fp);
               const cls = CanvasModel.CLASS_LIST[deck.classId - 1];
               let agg = byClass.get(cls);
               if (!agg) { agg = { decks: 0, cards: new Map() }; byClass.set(cls, agg); }
               agg.decks += 1;
-              /* 副数去重键含条目下标:同侧多副卡组各自计一副 */
               const key = record.id + ':' + card.id + ':' + side + ':' + idx;
               for (const row of deck.cards) {
                 const [id, name, cost, rarity, , n] = row;
@@ -229,6 +240,9 @@
                 if (copies >= 1 && copies <= 3) c.dist[copies - 1] += 1;
               }
             } else if (entry.url) {
+              const up = record.id + '|' + (pid || '-') + '|' + entry.url;
+              if (seenUrls.has(up)) continue;
+              seenUrls.add(up);
               unresolved.set(entry.cls, (unresolved.get(entry.cls) || 0) + 1);
             }
           }

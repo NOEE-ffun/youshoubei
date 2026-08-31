@@ -133,6 +133,43 @@ test('公示锁:窗口开他人卡组不入统计,关窗后出现', async ({ bro
   await adminCtx.close();
 });
 
+test('晋级继承去重:选手流动未换卡组,同一副只计一副', async ({ browser }) => {
+  const adminCtx = await browser.newContext();
+  await resetStore(adminCtx);
+  await smsLogin(adminCtx, ADMIN_PHONE);
+  /* c1 甲胜乙(a:2 b:0)→ 甲流入 c2;c2 自己未交(空数组=继承)→ 同一副卡组
+   * 在 c1(自有)与 c2(继承)各出现一次,聚合必须只计一副 */
+  await seedWorkspace(adminCtx, {
+    activeId: 't1',
+    players: [{ id: 'pz1', name: '选手甲' }, { id: 'pz2', name: '选手乙' }],
+    tournaments: [{
+      id: 't1', name: '流动届', roster: ['pz1', 'pz2'],
+      canvas: {
+        cards: [
+          { id: 'c1', label: '首场', format: 'BO3', slots: [{ type: 'player', playerId: 'pz1' }, { type: 'player', playerId: 'pz2' }],
+            classLinks: { a: [{ cls: '皇家', url: 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.aaaa.bbbb', text: '', deck: SNAP_A }], b: [] } },
+          { id: 'c2', label: '次场', format: 'BO3', slots: [{ type: 'flow', cardId: 'c1', outcome: 'winner' }, { type: 'empty' }],
+            classLinks: { a: [], b: [] } }
+        ], edges: []
+      },
+      scores: { c1: { a: 2, b: 0 } },
+      deckWindow: { manual: 'closed' }, updatedAt: 1
+    }]
+  });
+
+  const page = await adminCtx.newPage();
+  await page.goto('/stats.html');
+  await page.waitForSelector('#deck-comp-table');
+  const rows = page.locator('#deck-comp-table tbody tr');
+  await expect(rows).toHaveCount(2, 'SNAP_A 两种卡');
+  await expect(rows.nth(0)).toContainText('须臾剑士');
+  await expect(rows.nth(0)).toContainText('1/1 100%');
+  await expect(rows.nth(0)).toContainText('1·0·0');
+  await expect(rows.nth(1)).toContainText('统音的安纳提玛');
+  await expect(page.locator('#deck-comp-foot')).toContainText('共 1 副');
+  await adminCtx.close();
+});
+
 test('选手提交 WB 链接:无感无 toast + cls 自动纠错', async ({ browser }) => {
   const adminCtx = await browser.newContext();
   await resetStore(adminCtx);

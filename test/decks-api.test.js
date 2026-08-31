@@ -328,6 +328,37 @@ async function main() {
     console.log('✓ submit:窗口关 423 不受解析影响');
   }
 
+  /* ---- 快照复用:同届已存同 hash → 不再二次出网,表单丢快照也能续上 ---- */
+  {
+    const seed = seedWorld({ manual: 'open' });
+    /* c2 b 侧预置一条已解析条目(同 WB_URL),模拟选手晋级后上游场次的存量快照 */
+    seed['data.json'].tournaments[0].canvas.cards[0].classLinks.b = [
+      { cls: '皇家', url: WB_URL, text: '', deck: SNAPSHOT }
+    ];
+    const storage = memoryStorage(seed);
+    let called = 0;
+    const audits2 = [];
+    const h = createHandler(storage, {
+      appendAudit: (a, d) => audits2.push(d),
+      currentUser: makeFindUser(storage),
+      resolveDeck: async () => { called++; return { ok: true, deck: SNAPSHOT }; }
+    });
+    const r = await call(h.submit, mockReq('PUT', {
+      headers: auth,
+      body: json({ tournamentId: 't1', cardId: 'c1', side: 'a', links: [
+        { cls: '精灵', url: WB_URL, text: '同链接重交' },
+        { cls: '皇家', url: 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.3.newCard.x', text: '' }
+      ] })
+    }));
+    assert.strictEqual(r.status, 200, '复用场景提交 200');
+    assert.strictEqual(called, 1, '同 hash 走缓存,仅新 hash 出网一次');
+    const saved = storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks.a;
+    assert.deepStrictEqual(saved[0].deck, SNAPSHOT, '缓存快照续到新条目');
+    assert.strictEqual(saved[0].cls, '皇家', '缓存命中同样纠错 cls');
+    assert.ok(audits2.some((d) => d.includes('resolved=2/2 cached=1')), '审计含 cached 计数');
+    console.log('✓ submit:同届同 hash 快照复用(不二次解析+cls 纠错+审计 cached)');
+  }
+
   /* ---- stripHiddenDecks(GET 剥离) ---- */
   {
     const ws = seedWorld({ manual: 'open' })['data.json'];

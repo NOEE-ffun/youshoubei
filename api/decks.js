@@ -66,13 +66,39 @@ function createHandler(storage, options) {
     }
 
     /* WB 链接解析:锁外完成(网络 IO 绝不进锁)。成功附快照并以卡组真实职业纠错 cls,
-     * 失败静默降级(仅存链接,无 deck 字段),绝不阻塞提交。 */
+     * 失败静默降级(仅存链接,无 deck 字段),绝不阻塞提交。
+     * 快照复用:选手晋级后在下游场次重交同一副卡组(继承流动场景)时,
+     * 该届已存的同 hash 快照直接复用,不再二次出网解析。 */
     const parsedLinks = links.map((entry) => ({ entry, parsed: entry.url ? parseDeckHash(entry.url) : null }));
     const wbCount = parsedLinks.reduce((s, p) => s + (p.parsed ? 1 : 0), 0);
     let resolvedCount = 0;
+    let cachedCount = 0;
     if (wbCount) {
+      const snapshotCache = new Map();
+      try {
+        const wsNow = await read(DATA_PATH);
+        const recNow = wsNow && (wsNow.tournaments || []).find((t) => t && t.id === tournamentId);
+        for (const c of (recNow && recNow.canvas && recNow.canvas.cards) || []) {
+          for (const side of ['a', 'b']) {
+            for (const e of (c.classLinks && c.classLinks[side]) || []) {
+              if (e && e.deck && e.deck.classId && e.url) {
+                const p = parseDeckHash(e.url);
+                if (p && !snapshotCache.has(p.hash)) snapshotCache.set(p.hash, e.deck);
+              }
+            }
+          }
+        }
+      } catch (err) { /* 缓存读失败=全部走在线解析 */ }
       await Promise.all(parsedLinks.map(async ({ entry, parsed }) => {
         if (!parsed) return;
+        const cached = snapshotCache.get(parsed.hash);
+        if (cached && CLASS_LIST[cached.classId - 1]) {
+          entry.deck = cached;
+          entry.cls = CLASS_LIST[cached.classId - 1];
+          resolvedCount++;
+          cachedCount++;
+          return;
+        }
         try {
           const r = await resolveDeck(parsed.hash);
           const cls = r && r.ok && r.deck ? CLASS_LIST[r.deck.classId - 1] : null;
@@ -124,7 +150,7 @@ function createHandler(storage, options) {
       record.updatedAt = now();
       await backup();
       await write(DATA_PATH, workspace);
-      audit('deck.submit', 'user=' + user.username + ' card=' + cardId + ' side=' + side + ' n=' + links.length + (wbCount ? ' resolved=' + resolvedCount + '/' + wbCount : ''));
+      audit('deck.submit', 'user=' + user.username + ' card=' + cardId + ' side=' + side + ' n=' + links.length + (wbCount ? ' resolved=' + resolvedCount + '/' + wbCount + ' cached=' + cachedCount : ''));
       sendJson(res, 200, { ok: true, links });
     });
   }
