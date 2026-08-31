@@ -13,8 +13,10 @@ const crypto = require('node:crypto');
  * 注入 options.verifier 时启用):本地不再存码哈希,store 退化为发送记录(过期/尝试计数),
  * 限速/日限/尝试次数逻辑与本地模式完全同构;每次 check 失败计一次,超 5 次删记录
  * (平台码随之作废,须重新获取)。未注入 verifier 时保持本地生成+本地校验(注入测试用)。
- * dev 后门 AUTH_DEV_SMS_CODE(单码或 phone:code 列表)仅在真通道 env
- * (SMS_SIGN_NAME+SMS_TEMPLATE_CODE)不齐全时启用——生产配置齐即自动关死。 */
+ * dev 后门 AUTH_DEV_SMS_CODE(单码或 phone:code 列表):显式配置即最高优先——本地 .env
+ * 配齐真通道签名/模板也不顶掉它(e2e/开发链路依赖);生产硬闸:NODE_ENV=production 时
+ * 一律无后门(systemd 已设该值,即使误配 AUTH_DEV_SMS_CODE 也不开门)。
+ * 真发联调方法:临时注释掉 AUTH_DEV_SMS_CODE 再调发送(2026-08-31 交接修正)。 */
 
 const DEFAULTS = {
   resendMs: 120 * 1000,
@@ -25,9 +27,12 @@ const DEFAULTS = {
   dayMs: 24 * 60 * 60 * 1000
 };
 
+/* 后门 env 语义:未配置=无后门;NODE_ENV=production=硬关(先于一切);
+ * 显式 AUTH_DEV_SMS_CODE 优先于真通道 env 判断(签名/模板齐全也拦不住它)。 */
 function envDevCode(phone) {
-  if (process.env.SMS_SIGN_NAME && process.env.SMS_TEMPLATE_CODE) return null;
-  const raw = String(process.env.AUTH_DEV_SMS_CODE || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (!process.env.AUTH_DEV_SMS_CODE) return null;
+  if (process.env.NODE_ENV === 'production') return null;
+  const raw = String(process.env.AUTH_DEV_SMS_CODE).split(',').map((s) => s.trim()).filter(Boolean);
   let any = null;
   for (const item of raw) {
     const [p, c] = item.includes(':') ? item.split(':') : [null, item];

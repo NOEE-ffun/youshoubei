@@ -14,9 +14,11 @@ export default defineConfig({
     port: 3999,
     reuseExistingServer: !process.env.CI,
     stdout: 'ignore',
-    /* 登录接口 E2E:短信开发后门码 + 超管名单手机号(无 OSS 时走内存降级存储) */
+    /* 登录接口 E2E:短信开发后门码 + 超管名单手机号(无 OSS 时走内存降级存储)。
+     * NODE_ENV 显式钉 development:防止宿主 shell 误 export production 触发后门硬闸 */
     env: {
       ...process.env,
+      NODE_ENV: 'development',
       AUTH_DEV_SMS_CODE: '000000',
       SUPER_ADMIN_PHONES: '13900000000',
       SESSION_SECRET: 'e2e-session-secret'

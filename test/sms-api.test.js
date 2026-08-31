@@ -159,6 +159,39 @@ function mkSvc(patch) {
   const rpv6 = await pv6.issue('13500000000', IP);
   assert.strictEqual(rpv6.dev, true);
 
+  /* ---- dev 后门 env 语义(2026-08-31 交接修正):显式 AUTH_DEV_SMS_CODE 最高优先,
+   * 真通道 env 齐全也不顶掉;NODE_ENV=production 硬闸;未配置=无后门。
+   * 用默认 devResolver(读 env)而非注入,否则测不到 envDevCode 本体 ---- */
+  {
+    const keys = ['AUTH_DEV_SMS_CODE', 'SMS_SIGN_NAME', 'SMS_TEMPLATE_CODE', 'NODE_ENV'];
+    const saved = {};
+    for (const k of keys) saved[k] = process.env[k];
+    const restore = () => {
+      for (const k of keys) {
+        if (saved[k] === undefined) delete process.env[k];
+        else process.env[k] = saved[k];
+      }
+    };
+    const mkEnvSvc = () => createSmsService({ sender: async () => ({ ok: true }) });
+    try {
+      /* 显式后门优先:真通道 env 配齐仍命中(旧逻辑此处会关后门) */
+      process.env.AUTH_DEV_SMS_CODE = '246810';
+      process.env.SMS_SIGN_NAME = 'fixture';
+      process.env.SMS_TEMPLATE_CODE = 'fixture';
+      delete process.env.NODE_ENV;
+      assert.strictEqual((await mkEnvSvc().verify('13900001234', '246810')).ok, true);
+      /* 生产硬闸:NODE_ENV=production 时后门必死(即使后门 env 在) */
+      process.env.NODE_ENV = 'production';
+      assert.strictEqual((await mkEnvSvc().verify('13900001234', '246810')).ok, false);
+      delete process.env.NODE_ENV;
+      /* 未配置后门 env=无后门 */
+      delete process.env.AUTH_DEV_SMS_CODE;
+      assert.strictEqual((await mkEnvSvc().verify('13900001234', '246810')).ok, false);
+    } finally {
+      restore();
+    }
+  }
+
   /* ---- 回归钉子:dypnsClient 真通道构造(require 链 + Config 形态) ---- */
   /* 修复前该组红:dypnsClient 误 require 已随 dysmsapi 卸载的 @alicloud/openapi-client
    * (MODULE_NOT_FOUND);修复后绿:@alicloud/openapi-core 的 $OpenApiUtil.Config 构造

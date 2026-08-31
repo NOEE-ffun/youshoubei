@@ -63,9 +63,9 @@ npm start
 
 短信登录走阿里云号码认证服务的「短信认证服务」(`@alicloud/dypnsapi20170525`,首个外部运行时依赖,lazy require 缺库不阻断启动;官方签名/模板,个人无需自有短信签名):
 
-- `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE`:号码认证服务控制台申请的短信认证签名与模板,两者配齐才算真通道开通(当前阿里云侧待开通,配置前发送接口返回明确报错)
-- `SMS_ACCESS_KEY_ID` / `SMS_ACCESS_KEY_SECRET`:独立的短信 AK(建议与 OSS 分权);缺省回落复用 `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`
-- `AUTH_DEV_SMS_CODE`:开发后门验证码——单码(如 `123456`)或 `phone:code` 逗号列表;仅真通道 env 不齐时生效,配齐即自动关死(本地与 E2E 全靠它走通链路)
+- `SMS_SIGN_NAME` / `SMS_TEMPLATE_CODE`:控制台「系统赠送签名/模板」的签名名称与模板 CODE,两者配齐才算真通道开通(未配置时发送接口返回明确报错,站点其余功能不受影响)
+- `SMS_ACCESS_KEY_ID` / `SMS_ACCESS_KEY_SECRET`:独立的短信 AK(建议与 OSS 分权,如仅授 AliyunDypnsFullAccess 的专用 RAM 用户);缺省回落复用 `OSS_ACCESS_KEY_ID` / `OSS_ACCESS_KEY_SECRET`
+- `AUTH_DEV_SMS_CODE`:开发后门验证码——单码(如 `123456`)或 `phone:code` 逗号列表;显式配置即最高优先(本地 .env 配齐签名/模板也不影响开发/E2E 走后门),`NODE_ENV=production` 时一律失效(生产仍勿配置);真发联调时临时注释本行
 - `SESSION_SECRET`:登录会话签名密钥,生产必须固定(不设则每次重启全员掉线)
 - `SUPER_ADMIN_USERNAMES` / `SUPER_ADMIN_PHONES`:超管名单(见上文账号与权限)
 
