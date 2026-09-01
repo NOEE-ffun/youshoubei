@@ -119,7 +119,7 @@ async function main() {
 
     const r1 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000001', code: '000000' }) }));
     assert.strictEqual(r1.status, 200);
-    assert.strictEqual(r1.body.user.role, 'user');
+    assert.strictEqual(r1.body.user.role, 'player');
     assert.strictEqual(r1.body.user.nickname, '用户0001');
     assert.ok(r1.body.user.id);
     assert.ok((r1.headers['Set-Cookie'] || '').includes('sess='), '验码登录应种会话 cookie');

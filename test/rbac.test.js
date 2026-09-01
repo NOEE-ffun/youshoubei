@@ -9,11 +9,11 @@ function withEnv(patch, fn) {
   try { fn(); } finally { for (const k of Object.keys(patch)) process.env[k] = kept[k]; }
 }
 
-assert.strictEqual(ROLES.join(','), 'user,player,admin,super');
+assert.strictEqual(ROLES.join(','), 'player,admin,super');
 assert.strictEqual(effectiveRole(null), null);
 assert.strictEqual(effectiveRole({ role: 'player' }), 'player');
 assert.strictEqual(effectiveRole({ role: 'admin' }), 'admin');
-assert.strictEqual(effectiveRole({ role: 'bogus' }), 'user');      // 未知角色兜底
+assert.strictEqual(effectiveRole({ role: 'bogus' }), 'player');    // 未知角色兜底 player
 assert.strictEqual(effectiveRole({ role: 'player', usernameLower: 'noee' }), 'player');
 
 withEnv({ SUPER_ADMIN_USERNAMES: 'NOEE, ops ' }, () => {
@@ -23,7 +23,7 @@ withEnv({ SUPER_ADMIN_USERNAMES: 'NOEE, ops ' }, () => {
 });
 withEnv({ SUPER_ADMIN_PHONES: '13900000000' }, () => {
   assert.strictEqual(effectiveRole({ role: 'user', phone: '13900000000' }), 'super');
-  assert.strictEqual(effectiveRole({ role: 'user', phone: '13800000000' }), 'user');
+  assert.strictEqual(effectiveRole({ role: 'user', phone: '13800000000' }), 'player'); // 旧 'user' 落盘值回落 player
   // 空名单不误伤
 });
 withEnv({ SUPER_ADMIN_USERNAMES: '' }, () => {

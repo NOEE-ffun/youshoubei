@@ -92,6 +92,9 @@ async function call(handler, req) {
     const by = Object.fromEntries(r.body.users.map((u) => [u.id, u]));
     /* role 用 effectiveRole:env 升格回 'super'(非存档 'admin') */
     assert.strictEqual(by.u1.role, 'super');
+    /* u4/u6 存档为旧 'user' 落盘值,effectiveRole 一律回落 'player' */
+    assert.strictEqual(by.u4.role, 'player');
+    assert.strictEqual(by.u6.role, 'player');
     /* phoneMasked:11 位 → 138****1234;非 11 位/无手机 → null */
     assert.match(by.u1.phoneMasked, /^\d{3}\*{4}\d{4}$/);
     assert.strictEqual(by.u1.phoneMasked, '138****1234');

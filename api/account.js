@@ -214,7 +214,7 @@ function createHandlers(storage, options) {
     sendJson(res, 200, { ok: true, dev: Boolean(r.dev) });
   }
 
-  /* POST /api/auth/sms/login:验码登录;未注册手机号自动注册为注册用户(user 级) */
+  /* POST /api/auth/sms/login:验码登录;未注册手机号自动注册为 player 级(注册即选手,档案见 createPlayerFor) */
   async function smsLogin(req, res) {
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
     const ip = clientIp(req);
@@ -234,10 +234,10 @@ function createHandlers(storage, options) {
       let user = users.find((u) => u.phone === phone);
       let created = false;
       if (!user) {
-        /* 验码通过即自动注册为注册用户(user 级) */
+        /* 验码通过即自动注册为 player 级(注册即选手,档案见 createPlayerFor) */
         user = {
           id: newId('u'), username: phone, usernameLower: phone,
-          phone, passHash: null, role: 'user', playerId: null,
+          phone, passHash: null, role: 'player', playerId: null,
           nickname: '用户' + phone.slice(-4), status: 'active', createdAt: t0iso(now)
         };
         users.push(user);
