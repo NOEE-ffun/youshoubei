@@ -15,12 +15,13 @@ const path = require('node:path');
 const WB_API_BASE = 'https://shadowverse-wb.com/web/DeckBuilder/deckHashDetail?hash=';
 const FETCH_TIMEOUT_MS = 8000;
 const FETCH_ATTEMPTS = 2;
-const HASH_CHARS = /^[0-9A-Za-z.\-]+$/;
+/* 官方卡牌码字符集 = 字母数字 + . - _(下划线有线上实证:ej_8;fetchOnce 出网前再 encodeURIComponent) */
+const HASH_CHARS = /^[0-9A-Za-z._\-]+$/;
 /* 官方卡组链接:https://shadowverse-wb.com/(chs|cht|en|ja|ko)?/deck/detail/?hash=… */
 const DECK_URL_HOST_RE = /shadowverse-wb\.com\/(?:[a-z]{2,3}\/)?deck\/detail\//i;
 const HASH_PARAM_RE = /[?&]hash=([^&#\s]+)/i;
 /* 裸卡组码:版本.职业(1-7).卡牌码…(至少一张) */
-const BARE_HASH_RE = /^1\.[1-7]\.[0-9A-Za-z.\-]+(?:\.[0-9A-Za-z.\-]+)+$/;
+const BARE_HASH_RE = /^1\.[1-7]\.[0-9A-Za-z._\-]+(?:\.[0-9A-Za-z._\-]+)+$/;
 
 function parseDeckHash(input) {
   if (typeof input !== 'string') return null;

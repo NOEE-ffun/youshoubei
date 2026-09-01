@@ -47,6 +47,12 @@ async function main() {
     HASH, 'hash 参数不在末尾'
   );
   assert.deepEqual(parseDeckHash(HASH), { hash: HASH, classByte: 2 }, '裸卡组码识别');
+  /* 官方卡牌码字符集含下划线(线上 ej_8 实证,2026-09-01 白名单曾漏导致复仇者永不解析) */
+  {
+    const withUnderscore = '1.7.dyRQ.eLN-.ej_8.ej_8.f5jk.f6PU.ftEe.ftEe.f69s.f6Pe.fUp-.fUq8.ej--.eLae.ejlM.ejG6.f5gc.f5wE';
+    assert.equal(parseDeckHash('https://shadowverse-wb.com/chs/deck/detail/?hash=' + withUnderscore).classByte, 7, 'hash 含下划线(链接)识别');
+    assert.equal(parseDeckHash(withUnderscore).classByte, 7, 'hash 含下划线(裸码)识别');
+  }
   assert.equal(parseDeckHash('https://shadowverse-wb.com/ja/deck/detail/?hash=' + HASH + '#frag').hash, HASH, 'url 锚点不进 hash');
   assert.equal(parseDeckHash('https://shadowverse-portal.com/deck/1.2.abc'), null, '非 WB 域名拒判');
   assert.equal(parseDeckHash('https://shadowverse-wb.com/chs/deck/build/'), null, 'WB 非详情页拒判');
