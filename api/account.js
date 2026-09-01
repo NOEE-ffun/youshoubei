@@ -282,7 +282,7 @@ function createHandlers(storage, options) {
         return sendJson(res, 403, { error: '账号已被停用' });
       }
       rate.reset(ip);
-      audit(created ? 'sms.register' : 'sms.login', 'user=' + user.username);
+      audit(created ? 'sms.register' : 'sms.login', 'user=' + user.username + (created ? ' player=' + user.playerId : ''));
       setSessionCookie(res, issueFor(user.id, pvOf(user), now), req);
       sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
     });

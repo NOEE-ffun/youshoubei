@@ -406,11 +406,13 @@ function createHandlers(options) {
       const target = users[idx];
       /* 注册即选手合并后:被删账号的选手从未上场 → 一并删;
        * 有历史(signup/画布在册)→ 保留为无主选手,历史不可消失;
-       * 仍被其他账号绑定的选手不动(多号绑同档本不存在,防御性兜底) */
+       * 仍被其他账号绑定的选手不动(多号绑同档本不存在,防御性兜底);
+       * 悬空 playerId(选手已不存在)不触发清理,防无谓整库重写与审计误报 */
       let removedPlayer = false;
       if (target.playerId) {
         const workspace = await read(DATA_KEY);
-        if (workspace && isPristinePlayer(target.playerId, workspace)
+        if (workspace && (workspace.players || []).some((p) => p && p.id === target.playerId)
+            && isPristinePlayer(target.playerId, workspace)
             && !users.some((u) => u && u.id !== id && u.playerId === target.playerId)) {
           workspace.players = (workspace.players || []).filter((p) => !(p && p.id === target.playerId));
           await oss.backupData();

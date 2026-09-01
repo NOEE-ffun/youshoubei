@@ -116,7 +116,9 @@ function workspacePutGuard(user, current, incoming, boundPlayerIds) {
     Array.isArray(cur.tournaments) ? cur.tournaments : [], workspace.tournaments)
     || guardList(role, userId, 'series',
       Array.isArray(cur.series) ? cur.series : [], workspace.series);
-  /* 被账号绑定的选手禁删:选手与账号 1:1 后,删绑定选手会留悬空 playerId
+  if (err) return { ok: false, status: err.status, error: err.error };
+  /* 被账号绑定的选手禁删(归属 403 已先行通过,再查绑定冲突 409):
+   * 选手与账号 1:1 后,删绑定选手会留悬空 playerId
    * (自愈会另建新档,原档案不辞而别)。换绑/删号端点自带清理,不经此路径。
    * boundPlayerIds 省略时不检查(纯函数兼容既有调用)。 */
   if (boundPlayerIds && boundPlayerIds.size) {
@@ -130,7 +132,6 @@ function workspacePutGuard(user, current, incoming, boundPlayerIds) {
       }
     }
   }
-  if (err) return { ok: false, status: err.status, error: err.error };
   return { ok: true, workspace };
 }
 

@@ -53,7 +53,7 @@
     $('me-empty').hidden = true;
     $('me-shell').hidden = false;
     /* tab 门:playerOnly 在注册即选手后恒过(登录即有档案),保留作防御;
-     * adminOnly(发码中心)需 admin/super。user.role 即后端 effectiveRole(super/admin/player/user) */
+     * adminOnly(发码中心)需 admin/super。user.role 即后端 effectiveRole(super/admin/player) */
     const role = user.role;
     const allowed = TABS.filter((t) =>
       (t.playerOnly ? Boolean(player) : true) && (t.adminOnly ? (role === 'admin' || role === 'super') : true));
