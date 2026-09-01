@@ -1,12 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { createRequire } from 'node:module';
-import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
+import { ADMIN_PHONE, smsLogin, seedWorkspace, resetStore } from './helpers.mjs';
 
 /* 报名取前 N + 自动填入全链路(开发内存云端,PUT /api/data 自举):
  * 开放期名单编号/候补弱化/自动弹开 → 关报名撤"已报名"留编号 →
  * 设置 N>空位拦截 → 自动填入前 N 覆盖入场卡。
  * 2026-08-30 权限重构后:自举 PUT 与数据核验走超管会话(旧 Bearer 口令退役);
- * 登录墙下查看视角也是登录用户(user 级,不涉卡组剥离)。 */
+ * 2026-09-01 注册即选手合并后种子走 seedWorkspace(自动保留被绑档案,防 409);
+ * 登录墙下查看视角也是登录用户(player 级,不涉卡组剥离)。 */
 
 const require = createRequire(import.meta.url);
 const CM = require('../../canvas-model.js');
@@ -29,8 +30,7 @@ test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入',
   await request.post('/api/dev/reset');
   const adminCtx = await browser.newContext();
   await smsLogin(adminCtx, ADMIN_PHONE);
-  const put = (data) => adminCtx.request.put('/api/data', { data });
-  await put(workspace({ open: true, players: P, slots: 4 }));
+  await seedWorkspace(adminCtx, workspace({ open: true, players: P, slots: 4 }));
 
   /* ---- 1. 登录用户视角:开放期名单自动弹开,按报名先后编号,第 5 人候补弱化 ---- */
   const viewerCtx = await browser.newContext();
@@ -55,7 +55,7 @@ test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入',
   await viewerCtx.close();
 
   /* ---- 2. 关报名:不自动弹开,点开后编号保留、"已报名"标记撤销 ---- */
-  await put(workspace({ open: false, players: P, slots: 4 }));
+  await seedWorkspace(adminCtx, workspace({ open: false, players: P, slots: 4 }));
   const viewer2Ctx = await browser.newContext();
   await smsLogin(viewer2Ctx, '13800007772');
   const viewer2 = await viewer2Ctx.newPage();

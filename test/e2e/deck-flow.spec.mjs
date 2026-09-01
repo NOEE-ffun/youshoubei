@@ -4,7 +4,8 @@ import { ADMIN_PHONE, smsLogin, seedWorkspace, makePlayer, resetStore } from './
 /* 卡组自助提交全链路(开发内存云端,E2E 无 OSS):
  * 管理员建赛→指派选手→开窗 ‖ 选手提交 ‖ 另一登录用户看锁→关窗公示。
  * 这是 2026-08-25 "自助提交一团糟" 事故的回归测试集。
- * 2026-08-30 权限重构后:自举 = 超管会话 PUT /api/data + 绑定码造选手会话;
+ * 2026-08-30 权限重构后:自举 = 超管会话 PUT /api/data + 换绑通道造选手会话;
+ * 2026-09-01 注册即选手合并后换绑走后台端点(绑定码通道退役)。
  * 「游客🔒」视角改为另一登录用户(非该侧选手,stripHiddenDecks 语义不变)。 */
 
 test.setTimeout(90_000);
@@ -18,7 +19,7 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
   const player = await playerCtx.newPage();
   const guest = await guestCtx.newPage();
 
-  /* ---- 0. 自举云端状态:超管直写工作区(种子选手 e2e提交者,绑定码通道要用) ---- */
+  /* ---- 0. 自举云端状态:超管直写工作区(种子选手 e2e提交者,换绑通道要用) ---- */
   await smsLogin(adminCtx, ADMIN_PHONE);
   await seedWorkspace(adminCtx, {
     tournaments: [], activeId: null,
@@ -28,7 +29,7 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
     ]
   });
 
-  /* ---- 1. 选手会话:超管发绑定码 → 手机登录 → 兑换继承 pz1 ---- */
+  /* ---- 1. 选手会话:手机登录自动建档 → super 后台换绑继承 pz1 ---- */
   await makePlayer(playerCtx, '13800003333', 'pz1');
 
   /* ---- 2. 管理员建赛(会话即身份,旧解锁口令已退役) ---- */

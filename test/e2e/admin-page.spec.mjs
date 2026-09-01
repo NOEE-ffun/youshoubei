@@ -122,13 +122,13 @@ test('封禁降级链路:封禁后登录 403,解封恢复,admin 降 player 失�
   const usersList = await context.request.get('/api/admin/users');
   const usersJson = await usersList.json();
   expect(usersJson.users.some((u) => u.phoneMasked === '138****3333'), '手机号随删除释放').toBe(false);
-  /* 同手机号重新短信登录 = 全新账号(自动注册),角色回到 user */
+  /* 同手机号重新短信登录 = 全新账号(自动注册即选手,角色回到 player) */
   const reLogin = await contextU.request.post('/api/auth/sms/login', {
     data: { phone: PHONE_USER, code: '000000' }
   });
   expect(reLogin.status(), '手机号释放后应能重新注册登录').toBe(200);
   const reUser = (await reLogin.json()).user;
-  expect(reUser.role).toBe('user');
+  expect(reUser.role).toBe('player');
 
   await contextA.close();
   await contextU.close();

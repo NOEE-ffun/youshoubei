@@ -1,44 +1,42 @@
 import { test, expect } from '@playwright/test';
-import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
+import { ADMIN_PHONE, smsLogin, seedWorkspace, resetStore } from './helpers.mjs';
 
-/* 短信登录全链路:注册 → 填码升选手 → 升管理员 → 发码中心权限边界。
+/* 短信登录全链路(2026-09-01 注册即选手合并后):
+ * 注册即选手(自动建档,无需兑码)→ 选手码发放口停用(400)→ 管理员码升管理员。
  * 填码成功后前端 700ms 自动 reload 刷新 tab 门,等待要落在
  * #redeem-status 出结果之后再给足自动刷新时间(直接 reload 会与
  * 异步 POST 竞态,可能在跃迁落盘前就刷成旧身份)。 */
 
-test('短信注册→空白码升选手→管理员码升管理员', async ({ page }) => {
+test('短信注册即选手→选手码停用→管理员码升管理员', async ({ page }) => {
   const context = page.context();
   test.setTimeout(60_000);
   await resetStore(context);
 
-  /* 超管建工作区+发码 */
+  /* 超管建工作区+发码;选手码发放口已停用(400) */
   await smsLogin(context, ADMIN_PHONE);
-  await context.request.put('/api/data', {
-    data: { tournaments: [], players: [{ id: 'p1', name: '选手一', createdAt: 1, updatedAt: 1 }], activeId: null }
+  await seedWorkspace(context, {
+    tournaments: [],
+    players: [{ id: 'p1', name: '选手一', createdAt: 1, updatedAt: 1 }],
+    activeId: null
   });
-  const blank = await context.request.post('/api/codes', { data: { kind: 'player' } });
+  const gone = await context.request.post('/api/codes', { data: { kind: 'player' } });
+  expect(gone.status()).toBe(400);
   const adminCode = await context.request.post('/api/codes', { data: { kind: 'admin' } });
-  const { code: c1 } = await blank.json();
   const { code: c2 } = await adminCode.json();
+  await context.request.post('/api/auth/logout');
 
-  /* 新手机登录(自动注册 user)→ me 页只见资料 tab */
+  /* 新手机登录(自动注册即 player,已带选手档案)→ 选手 tab 直接可见 */
   await smsLogin(context, '13800001111');
   await page.goto('/me.html');
-  await expect(page.locator('#me-tab-decks')).toBeHidden();
+  await expect(page.locator('#me-tab-decks')).toBeVisible();
   await expect(page.locator('#me-tab-codes')).toBeHidden();
 
-  /* 填空白码 → 选手 */
-  await page.locator('#redeem-code').fill(c1);
-  await page.locator('#redeem-form button[type=submit]').click();
-  await expect(page.locator('#redeem-status')).toContainText(/已绑定|已升级/);
-  await page.waitForTimeout(1200); /* 前端 700ms 后自动 reload 重算 tab 门 */
-  await expect(page.locator('#me-tab-decks')).toBeVisible();
-
-  /* 填管理员码 → admin(保留选手绑定) */
+  /* 资料页填管理员码 → admin(保留选手绑定) */
+  await page.locator('#me-tab-profile').click();
   await page.locator('#redeem-code').fill(c2);
   await page.locator('#redeem-form button[type=submit]').click();
   await expect(page.locator('#redeem-status')).toContainText('已升级为管理员');
-  await page.waitForTimeout(1200);
+  await page.waitForTimeout(1200); /* 前端 700ms 后自动 reload 重算 tab 门 */
   await expect(page.locator('#me-tab-codes')).toBeVisible();
   await expect(page.locator('#me-tab-decks')).toBeVisible();
 

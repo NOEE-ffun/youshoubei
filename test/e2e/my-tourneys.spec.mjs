@@ -1,16 +1,17 @@
 import { test, expect } from '@playwright/test';
 import { ADMIN_PHONE, smsLogin, seedWorkspace, makePlayer, resetStore } from './helpers.mjs';
 
-/* 报名全链路(开发内存云端):管理员开报名 → 选手报名/退报 → 关闭后只读。
- * 2026-08-30 权限重构后:自举 = 超管会话 PUT /api/data + 绑定码造选手会话,
- * 旧「API 注册 + UI 账密登录」通道已退役。 */
+/* 报名全链路(开发内存云端):管理员开报名 → 选手报名/退报 → 关闭后只读;
+ * 注册即选手回归:新手机登录无需兑码直接报名。
+ * 2026-08-30 权限重构后:自举 = 超管会话 PUT /api/data + 换绑通道造选手会话,
+ * 2026-09-01 注册即选手合并后换绑走后台端点(绑定码通道退役)。 */
 
 test.setTimeout(90_000);
 
 test('报名:开窗→报名→退报→关闭只读', async ({ browser, request }) => {
   await request.post('/api/dev/reset');
 
-  /* 0. 自举云端状态:超管直写工作区(种子选手 e2e报名者)+ 绑定码造选手会话 */
+  /* 0. 自举云端状态:超管直写工作区(种子选手 e2e报名者)+ 换绑通道造选手会话 */
   const adminCtx = await browser.newContext();
   const playerCtx = await browser.newContext();
   const admin = await adminCtx.newPage();
@@ -39,7 +40,7 @@ test('报名:开窗→报名→退报→关闭只读', async ({ browser, request
   await admin.locator('#settings-form button[type="submit"]').click();
   await admin.waitForTimeout(800);
 
-  /* 2. 选手进入我的比赛(会话已由绑定码通道就绪) */
+  /* 2. 选手进入我的比赛(会话已由换绑通道就绪) */
   await player.goto('/me.html#tourneys');
   await player.waitForSelector('#my-tourneys-body', { state: 'visible' });
 
@@ -81,6 +82,49 @@ test('报名:开窗→报名→退报→关闭只读', async ({ browser, request
 
   await adminCtx.close();
   await playerCtx.close();
+});
+
+test('注册即选手:新手机登录无需兑码直接报名', async ({ browser, request }) => {
+  await request.post('/api/dev/reset');
+  const adminCtx = await browser.newContext();
+  const playerCtx = await browser.newContext();
+  const admin = await adminCtx.newPage();
+  const player = await playerCtx.newPage();
+
+  await smsLogin(adminCtx, ADMIN_PHONE);
+  await seedWorkspace(adminCtx, { tournaments: [], activeId: null, players: [] });
+  await smsLogin(playerCtx, '13800007777');
+  const me = await playerCtx.request.get('/api/me');
+  const meBody = await me.json();
+  expect(meBody.user.role).toBe('player');
+  expect(meBody.user.playerId).toBeTruthy();
+  expect(meBody.player.name).toBe('用户7777');
+
+  await admin.goto('/schedule.html');
+  await admin.waitForTimeout(800);
+  await admin.locator('#manage-btn').click();
+  await admin.fill('#new-tournament-name', 'E2E注册即报名届');
+  await admin.locator('#create-tournament-form button[type="submit"]').click();
+  await admin.waitForTimeout(1200);
+  await admin.locator('#manage-dialog [data-dialog-close]').click();
+  await admin.waitForTimeout(300);
+  await admin.locator('#settings-btn').click();
+  await admin.waitForSelector('#settings-form');
+  await admin.locator('#signup-open').selectOption('open');
+  await admin.locator('#settings-form button[type="submit"]').click();
+  await admin.waitForTimeout(800);
+
+  await player.goto('/me.html#tourneys');
+  await player.waitForSelector('#my-tourneys-body', { state: 'visible' });
+  const card = player.locator('.mt-card', { hasText: 'E2E注册即报名届' });
+  await expect(card).toBeVisible();
+  await card.locator('[data-signup="join"]').click();
+  await player.waitForTimeout(1200);
+  await expect(card.locator('[data-signup="leave"]')).toBeVisible();
+
+  await adminCtx.close();
+  await playerCtx.close();
+  await request.post('/api/dev/reset');
 });
 
 test.afterAll(async ({ request }) => {

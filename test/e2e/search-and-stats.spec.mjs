@@ -1,13 +1,15 @@
 import { test, expect } from '@playwright/test';
-import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
+import { ADMIN_PHONE, smsLogin, seedWorkspace, resetStore, DEFAULT_PLAYERS } from './helpers.mjs';
 
 /* 查找定位 + 统计页(先在赛程页布置一局已赛数据,统计页断言其联动) */
 
 test.beforeEach(async ({ page }) => {
-  /* 登录墙:先 API 登录;reset 清内存存储 → 本机模式默认画布 */
+  /* 登录墙:先 API 登录;2026-09-01 合并后登录即写云工作区(本地默认画布不可达),
+   * API 预置同名「选手 N」种子让默认画布卡位下拉可选 */
   const context = page.context();
   await resetStore(context);
   await smsLogin(context, ADMIN_PHONE);
+  await seedWorkspace(context, { tournaments: [], activeId: null, players: DEFAULT_PLAYERS });
 });
 
 test('查找:高亮计数、Enter 跳转、Esc 清除', async ({ page }) => {

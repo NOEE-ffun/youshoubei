@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
+import { ADMIN_PHONE, smsLogin, seedWorkspace, resetStore, DEFAULT_PLAYERS } from './helpers.mjs';
 
 /* 办赛主链路:编辑→选手→职业卡组→比分→下游继承与连锁重算。
- * 每个用例全新 context:IndexedDB 从零,自动建"我的赛事"+8 选手,本机模式可编辑;
- * 登录墙先 API 登录(会话与页面同 cookie jar),reset 保证不吃先行用例的云数据。 */
+ * 每个用例全新 context;2026-09-01 注册即选手合并后登录即写云工作区,页面恒走
+ * 云端 normalizeWorkspace 默认画布(本地模式默认 8 选手不可再达),故 API 预置
+ * 同名「选手 N」种子保持卡位下拉/下游断言;reset 保证不吃先行用例的云数据。 */
 
 test.setTimeout(60_000);
 
@@ -11,6 +12,7 @@ test('首卡比分后下游继承选手与职业卡组,改比分连锁重算', a
   const context = page.context();
   await resetStore(context);
   await smsLogin(context, ADMIN_PHONE);
+  await seedWorkspace(context, { tournaments: [], activeId: null, players: DEFAULT_PLAYERS });
 
   await page.goto('/schedule.html');
   await page.waitForSelector('.canvas-card');

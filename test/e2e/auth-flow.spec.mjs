@@ -8,14 +8,16 @@ import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
 test('短信登录 API:自动注册/会话/登出/错码 401', async ({ request }) => {
   await request.post('/api/dev/reset');
 
-  // 1. 未注册手机验码登录 → 自动建号(user 级),不回传敏感字段
+  // 1. 未注册手机验码登录 → 自动建号即 player 级并自动建选手档案,不回传敏感字段
   const login = await request.post('/api/auth/sms/login', {
     data: { phone: '13811112222', code: '000000' }
   });
   expect(login.status()).toBe(200);
   const body = await login.json();
-  expect(body.user.role).toBe('user');
+  expect(body.user.role).toBe('player');
   expect(body.user.username).toBe('13811112222');
+  expect(body.user.playerId).toBeTruthy();
+  expect(body.player).not.toBeNull();
   expect(body.user).not.toHaveProperty('passHash');
 
   // 2. 会话有效(同 request 上下文自动携带 cookie)
@@ -54,15 +56,16 @@ test('越权回归:非管理员会话 PUT /api/data 被拒(2026-08-30 权限重�
   });
   expect(anon.status()).toBe(401);
 
-  // 2. 超管会话 → 200(自举通道)
+  // 2. 超管会话 → 200(自举通道;注册即选手后登录即建被绑档案,整库 PUT 不得删它,种子保留)
   const admin = await request.post('/api/auth/sms/login', {
     data: { phone: ADMIN_PHONE, code: '000000' }
   });
   expect(admin.status()).toBe(200);
   expect((await admin.json()).user.role).toBe('super');
-  const seed = await request.put('/api/data', {
-    data: { tournaments: [], players: [], activeId: null }
-  });
+  const ws = await (await request.get('/api/data')).json();
+  ws.tournaments = [];
+  ws.activeId = null;
+  const seed = await request.put('/api/data', { data: ws });
   expect(seed.status()).toBe(200);
 
   // 3. 普通用户会话 → 403,身份按角色算
