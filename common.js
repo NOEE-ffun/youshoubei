@@ -1785,6 +1785,7 @@
       { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' },
       { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' },
       { page: 'stats', href: 'stats.html', icon: 'bar_chart', label: '数据统计' },
+      { page: 'docs', href: 'docs.html', icon: 'rule', label: '官方文档' },
       { page: 'me', href: 'me.html', icon: 'person', label: '选手中心' }
     ];
     const isActive = (page) => {
@@ -1849,7 +1850,7 @@
     const isPlayers = app.activePage === 'players';
     const showTournamentSwitch = app.activePage === 'schedule';
     /* 这些页 main 不再放 h1(避免与页头重复),顶栏标题承担 h1 */
-    const headerAsH1 = ['schedule', 'players', 'stats', 'me'].includes(app.activePage);
+    const headerAsH1 = ['schedule', 'players', 'stats', 'docs', 'me'].includes(app.activePage);
     const titleTag = headerAsH1 ? 'h1' : 'span';
     const titleGroup = app.activePage === 'home'
       ? ''
@@ -1963,7 +1964,7 @@
     const header = document.getElementById('app-header');
     if (header && app.current) {
       const active = app.current;
-      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', me: '选手中心' };
+      const pageTitles = { home: '右手杯', players: '选手库', poster: '海报生成器', stats: '数据统计', docs: '官方文档', me: '选手中心' };
       const headerTitle = pageTitles[app.activePage] || active.name;
 
       const titleEl = header.querySelector('.header-title');
