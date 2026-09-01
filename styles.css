@@ -2391,6 +2391,7 @@ body.canvas-editing #bg-layer {
 body[data-page="home"] #bg-layer,
 body[data-page="players"] #bg-layer,
 body[data-page="stats"] #bg-layer,
+body[data-page="docs"] #bg-layer,
 body[data-page="me"] #bg-layer {
   display: none;
 }
