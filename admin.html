@@ -38,6 +38,7 @@
           <button type="button" class="me-tab" id="admin-tab-users" role="tab" aria-controls="admin-panel-users">账号与邀请码</button>
           <button type="button" class="me-tab" id="admin-tab-tourneys" role="tab" aria-controls="admin-panel-tourneys">比赛状态</button>
           <button type="button" class="me-tab" id="admin-tab-health" role="tab" aria-controls="admin-panel-health">健康与备份</button>
+          <button type="button" class="me-tab" id="admin-tab-notices" role="tab" aria-controls="admin-panel-notices">通知</button>
         </nav>
 
         <section class="me-panel" id="admin-panel-audit" role="tabpanel" aria-labelledby="admin-tab-audit" hidden>
@@ -118,6 +119,79 @@
               </table>
             </div>
           </section>
+        </section>
+
+        <section class="me-panel" id="admin-panel-notices" role="tabpanel" aria-labelledby="admin-tab-notices" hidden>
+          <div class="admin-toolbar">
+            <button type="button" id="nf-new" class="btn btn-primary btn-sm">新建通知</button>
+            <span class="hint">主页顶部横幅,多条生效时轮播;带收款码的通知点击横幅弹大图。</span>
+          </div>
+          <form id="nf-form" class="admin-notice-form" hidden>
+            <label class="form-field">
+              <span class="form-label">内容(必填,≤120 字)</span>
+              <textarea id="nf-text" rows="2" maxlength="120" placeholder="例:第二届右手杯报名已开启" required></textarea>
+            </label>
+            <div class="nf-row">
+              <label class="form-field">
+                <span class="form-label">级别</span>
+                <select id="nf-level" class="header-select">
+                  <option value="info">普通</option>
+                  <option value="important">重要</option>
+                </select>
+              </label>
+              <label class="form-field">
+                <span class="form-label">排序(小在前)</span>
+                <input type="number" id="nf-sort" value="0" step="1">
+              </label>
+              <label class="form-field nf-check">
+                <input type="checkbox" id="nf-dismissible" checked>
+                <span>允许用户关闭</span>
+              </label>
+              <label class="form-field nf-check">
+                <input type="checkbox" id="nf-enabled" checked>
+                <span>启用(取消=撤下)</span>
+              </label>
+            </div>
+            <div class="nf-row">
+              <label class="form-field">
+                <span class="form-label">生效时间(可选)</span>
+                <input type="datetime-local" id="nf-start">
+              </label>
+              <label class="form-field">
+                <span class="form-label">过期时间(可选)</span>
+                <input type="datetime-local" id="nf-end">
+              </label>
+            </div>
+            <div class="nf-row">
+              <label class="form-field nf-grow">
+                <span class="form-label">链接(可选,http(s))</span>
+                <input type="url" id="nf-link-url" placeholder="https://…">
+              </label>
+              <label class="form-field">
+                <span class="form-label">按钮文字</span>
+                <input type="text" id="nf-link-text" maxlength="12" placeholder="查看">
+              </label>
+            </div>
+            <div class="nf-row">
+              <label class="form-field nf-grow">
+                <span class="form-label">收款码(可选,点击横幅弹大图)</span>
+                <input type="file" id="nf-qr-file" accept="image/png,image/jpeg,image/webp,image/gif">
+              </label>
+              <span class="nf-qr-box"><img id="nf-qr-preview" alt="收款码预览" hidden><button type="button" id="nf-qr-clear" class="btn btn-ghost btn-sm" hidden>清除</button></span>
+            </div>
+            <div class="nf-row">
+              <button type="submit" class="btn btn-primary btn-sm">保存</button>
+              <button type="button" id="nf-cancel" class="btn btn-ghost btn-sm">取消</button>
+              <span class="hint" id="nf-hint" role="status" aria-live="polite"></span>
+            </div>
+          </form>
+          <p class="hint admin-status" id="admin-notices-status" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>内容</th><th>级别</th><th>状态</th><th>时间窗</th><th>排序</th><th>操作</th></tr></thead>
+              <tbody id="admin-notices-tbody"></tbody>
+            </table>
+          </div>
         </section>
       </div>
     </main>

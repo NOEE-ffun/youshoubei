@@ -4454,6 +4454,73 @@ body[data-view='canvas'] .list-view {
   background: var(--accent-soft);
 }
 
+/* —— 超管后台·通知表单(nf-*) —— */
+.admin-notice-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-block: 1rem;
+  margin-block-end: 0.9rem;
+  border-block: 1px solid var(--border);
+}
+
+.admin-notice-form .form-field textarea {
+  min-block-size: auto;
+}
+
+.admin-notice-form .form-field input[type='url'],
+.admin-notice-form .form-field input[type='number'],
+.admin-notice-form .form-field input[type='datetime-local'],
+.admin-notice-form .form-field input[type='file'] {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.65rem;
+}
+
+.nf-row {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.nf-row .form-field {
+  margin: 0;
+}
+
+.nf-grow {
+  flex: 1 1 14rem;
+  min-inline-size: 0;
+}
+
+.nf-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  padding-block: 0.55rem;
+  font-weight: 500;
+}
+
+.nf-qr-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-block: 0.35rem;
+}
+
+.nf-qr-box img {
+  inline-size: 4.5rem;
+  block-size: 4.5rem;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
 /* 健康指标行:扁平均布,无卡片盒 */
 .admin-kv {
   display: flex;

@@ -98,7 +98,8 @@
     { id: 'audit', btn: 'admin-tab-audit', load: loadAudit },
     { id: 'users', btn: 'admin-tab-users', load: loadUsersPanel },
     { id: 'tourneys', btn: 'admin-tab-tourneys', load: loadTourneys },
-    { id: 'health', btn: 'admin-tab-health', load: loadHealth }
+    { id: 'health', btn: 'admin-tab-health', load: loadHealth },
+    { id: 'notices', btn: 'admin-tab-notices', load: loadNotices }
   ];
   let activeTab = null;
 
@@ -461,6 +462,238 @@
     }
     setStatus(status, '已恢复 ' + key + ',各端数据将在下次加载时生效。', false);
     loadHealth();
+  });
+
+  /* ---------- 通知横幅(主页) ---------- */
+
+  const NOTICE_STATUS = {
+    active: { text: '生效中', cls: 'admin-chip-ok' },
+    pending: { text: '未开始', cls: 'admin-chip-muted' },
+    expired: { text: '已过期', cls: 'admin-chip-muted' },
+    disabled: { text: '已撤下', cls: 'admin-chip-danger' }
+  };
+  const NOTICE_LEVELS = { info: '普通', important: '重要' };
+
+  let noticesCache = [];
+  let nfEditingId = null; /* null=新建模式;否则为编辑中的通知 id */
+
+  /* ISO → datetime-local 输入值(本地时区,分钟精度,双向换算的显示侧) */
+  function isoToLocalInput(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+      + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+
+  function noticeFormFill(notice) {
+    nfEditingId = notice ? notice.id : null;
+    $('nf-text').value = notice ? (notice.text || '') : '';
+    $('nf-level').value = notice ? (notice.level || 'info') : 'info';
+    $('nf-sort').value = notice ? (notice.sortOrder || 0) : 0;
+    $('nf-dismissible').checked = notice ? notice.dismissible !== false : true;
+    $('nf-enabled').checked = notice ? notice.enabled !== false : true;
+    $('nf-start').value = isoToLocalInput(notice && notice.startAt);
+    $('nf-end').value = isoToLocalInput(notice && notice.endAt);
+    $('nf-link-url').value = notice ? (notice.linkUrl || '') : '';
+    $('nf-link-text').value = notice ? (notice.linkText || '') : '';
+    const url = notice ? (notice.qrImage || '') : '';
+    $('nf-qr-preview').src = url;
+    $('nf-qr-preview').hidden = !url;
+    $('nf-qr-clear').hidden = !url;
+    $('nf-qr-file').value = '';
+    setStatus($('nf-hint'), '', false);
+    $('nf-form').hidden = false;
+    $('nf-text').focus();
+  }
+
+  function noticeFormBody() {
+    return {
+      text: $('nf-text').value,
+      level: $('nf-level').value,
+      sortOrder: $('nf-sort').value === '' ? 0 : Number($('nf-sort').value),
+      dismissible: $('nf-dismissible').checked,
+      enabled: $('nf-enabled').checked,
+      startAt: $('nf-start').value || null,
+      endAt: $('nf-end').value || null,
+      linkUrl: $('nf-link-url').value.trim() || null,
+      linkText: $('nf-link-text').value.trim() || null,
+      qrImage: $('nf-qr-preview').hidden ? null : $('nf-qr-preview').src
+    };
+  }
+
+  function renderNotices() {
+    $('admin-notices-tbody').innerHTML = noticesCache.map((n, i) => {
+      const st = NOTICE_STATUS[n.status] || NOTICE_STATUS.active;
+      const timeWindow = [
+        n.startAt ? fmtDateTime(n.startAt) : '',
+        n.endAt ? fmtDateTime(n.endAt) : ''
+      ].filter(Boolean).join(' → ');
+      const toggle = n.enabled !== false;
+      return '<tr>' +
+        '<td class="admin-detail-cell" title="' + escapeHtml(n.text) + '">' + escapeHtml(n.text) +
+          (n.qrImage ? ' <span class="admin-chip admin-chip-accent">收款码</span>' : '') +
+          (n.linkUrl ? ' <span class="admin-chip admin-chip-muted">链接</span>' : '') + '</td>' +
+        '<td>' + chip(NOTICE_LEVELS[n.level] || n.level, n.level === 'important' ? 'admin-chip-danger' : 'admin-chip-muted') + '</td>' +
+        '<td>' + chip(st.text, st.cls) + '</td>' +
+        '<td class="admin-detail-cell">' + escapeHtml(timeWindow || '长期') + '</td>' +
+        '<td class="code-cell">' + (typeof n.sortOrder === 'number' ? n.sortOrder : 0) + '</td>' +
+        '<td><span class="admin-row-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="edit" data-id="' + escapeHtml(n.id) + '">编辑</button> ' +
+          '<button type="button" class="btn ' + (toggle ? 'btn-secondary' : 'btn-primary') + ' btn-sm" data-act="toggle" data-id="' + escapeHtml(n.id) + '">' + (toggle ? '撤下' : '启用') + '</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="up" data-id="' + escapeHtml(n.id) + '"' + (i === 0 ? ' disabled' : '') + '>上移</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="down" data-id="' + escapeHtml(n.id) + '"' + (i === noticesCache.length - 1 ? ' disabled' : '') + '>下移</button> ' +
+          '<button type="button" class="btn btn-danger btn-sm" data-act="delete" data-id="' + escapeHtml(n.id) + '">删除</button>' +
+        '</span></td></tr>';
+    }).join('');
+  }
+
+  async function loadNotices() {
+    const status = $('admin-notices-status');
+    setStatus(status, '加载中…', false);
+    const result = await api('/api/admin/notices');
+    if (!result.ok) {
+      setStatus(status, '通知加载失败:' + (result.data.error || result.status), true);
+      return;
+    }
+    noticesCache = Array.isArray(result.data.notices) ? result.data.notices : [];
+    renderNotices();
+    setStatus(status, noticesCache.length
+      ? '共 ' + noticesCache.length + ' 条(排序小在前,同级按创建先后)。'
+      : '暂无通知,点「新建通知」发布第一条。', false);
+  }
+
+  async function saveNotice(event) {
+    event.preventDefault();
+    const hint = $('nf-hint');
+    const body = noticeFormBody();
+    if (!body.text.trim()) {
+      setStatus(hint, '请填写通知内容。', true);
+      return;
+    }
+    setStatus(hint, '保存中…', false);
+    const result = await api(nfEditingId
+      ? '/api/admin/notices/' + encodeURIComponent(nfEditingId) + '/update'
+      : '/api/admin/notices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!result.ok) {
+      setStatus(hint, '保存失败:' + (result.data.error || result.status), true);
+      return;
+    }
+    $('nf-form').hidden = true;
+    nfEditingId = null;
+    setStatus($('admin-notices-status'), '已保存。', false);
+    loadNotices();
+  }
+
+  /* 收款码上传:裸字节体(Content-Type=图片类型),响应 {url};预览 img 即真源 */
+  async function uploadQr(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const hint = $('nf-hint');
+    setStatus(hint, '收款码上传中…', false);
+    try {
+      const resp = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setStatus(hint, '收款码上传失败:' + (data.error || resp.status), true);
+        return;
+      }
+      $('nf-qr-preview').src = data.url;
+      $('nf-qr-preview').hidden = false;
+      $('nf-qr-clear').hidden = false;
+      $('nf-qr-file').value = '';
+      setStatus(hint, '收款码已上传。', false);
+    } catch (error) {
+      setStatus(hint, '收款码上传失败:网络错误', true);
+    }
+  }
+
+  $('nf-new').addEventListener('click', () => noticeFormFill(null));
+  $('nf-cancel').addEventListener('click', () => { $('nf-form').hidden = true; nfEditingId = null; });
+  $('nf-form').addEventListener('submit', saveNotice);
+  $('nf-qr-file').addEventListener('change', uploadQr);
+  $('nf-qr-clear').addEventListener('click', () => {
+    $('nf-qr-preview').src = '';
+    $('nf-qr-preview').hidden = true;
+    $('nf-qr-clear').hidden = true;
+  });
+
+  /* 行内操作:编辑/撤下启用(整记录翻 enabled)/上下移(排序=邻居∓1)/删除(confirm) */
+  $('admin-notices-tbody').addEventListener('click', async (event) => {
+    const btn = event.target.closest('button[data-act]');
+    if (!btn || btn.disabled) return;
+    const id = btn.dataset.id;
+    const notice = noticesCache.find((n) => n.id === id);
+    if (!notice) return;
+    const act = btn.dataset.act;
+    const status = $('admin-notices-status');
+    const url = '/api/admin/notices/' + encodeURIComponent(id);
+
+    if (act === 'edit') {
+      noticeFormFill(notice);
+      return;
+    }
+    if (act === 'toggle') {
+      const result = await api(url + '/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: notice.text, level: notice.level, sortOrder: notice.sortOrder || 0,
+          dismissible: notice.dismissible !== false, enabled: notice.enabled === false,
+          startAt: notice.startAt || null, endAt: notice.endAt || null,
+          linkUrl: notice.linkUrl || null, linkText: notice.linkText || null,
+          qrImage: notice.qrImage || null
+        })
+      });
+      if (!result.ok) {
+        setStatus(status, (notice.enabled === false ? '启用' : '撤下') + '失败:' + (result.data.error || result.status), true);
+        return;
+      }
+      loadNotices();
+      return;
+    }
+    if (act === 'up' || act === 'down') {
+      const i = noticesCache.indexOf(notice);
+      const neighbor = noticesCache[act === 'up' ? i - 1 : i + 1];
+      if (!neighbor) return;
+      const target = (neighbor.sortOrder || 0) + (act === 'up' ? -1 : 1);
+      const result = await api(url + '/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: notice.text, level: notice.level, sortOrder: target,
+          dismissible: notice.dismissible !== false, enabled: notice.enabled !== false,
+          startAt: notice.startAt || null, endAt: notice.endAt || null,
+          linkUrl: notice.linkUrl || null, linkText: notice.linkText || null,
+          qrImage: notice.qrImage || null
+        })
+      });
+      if (!result.ok) {
+        setStatus(status, '移动失败:' + (result.data.error || result.status), true);
+        return;
+      }
+      loadNotices();
+      return;
+    }
+    if (act === 'delete') {
+      if (!window.confirm('确认删除通知「' + notice.text.slice(0, 20) + '」?删除后主页立即不再显示。')) return;
+      const result = await api(url + '/delete', { method: 'POST' });
+      if (!result.ok) {
+        setStatus(status, '删除失败:' + (result.data.error || result.status), true);
+        return;
+      }
+      setStatus(status, '已删除。', false);
+      loadNotices();
+    }
   });
 
   /* ---------- 启动 ---------- */
