@@ -31,8 +31,8 @@ const { CLASS_LIST, deriveRoster } = require('../canvas-model');
  *                                    三件全败 → 500「备份全部失败」,部分成功仍 200)
  *   POST /api/admin/restore           把 backups/ 里的 data 类备份恢复为 data.json
   *                                    (恢复前 backupData 留底;key 白名单校验)
- *   POST /api/admin/decks/backfill    存量 WB 卡组链接补解析快照(body {tournamentId?},
- *                                    admin/super;三段式:无锁收集→锁外解析→进锁回填,
+ *   POST /api/admin/decks/backfill    存量 WB 卡组链接补解析快照(body {tournamentId? |
+ *                                    tournamentIds?},admin/super;三段式:无锁收集→锁外解析→进锁回填,
  *                                    单次 ≤30 副、间隔 300ms,幂等可重入)
  *   GET/POST /api/admin/notices(+:id/update、:id/delete)
  *                                    通知横幅管理(仅 super),整体委托 api/notices
@@ -490,19 +490,30 @@ function createHandlers(options) {
    * ①无锁读收集"有 WB 链接且无 deck"候选;②锁外逐副 resolveDeck(同 hash 去重,
    *   间隔 backfillGapMs 防压,超 BACKFILL_MAX 本批不做、skipped 返回分批);
    * ③进锁重读,按 hash 匹配回填快照+cls 纠错,期间被选手改掉的条目记 'changed'。
+   * 范围 body { tournamentId? | tournamentIds? }:统计页按勾选届传数组,未列出的届
+   * 绝不出网解析;tournamentIds 传了就必须是非空字符串数组,防空集退化成全量。
    * resolved=0 不写盘不备份;审计记录本次尝试。 */
   async function deckBackfill(req, res) {
     const operator = await requireRole(req, res, ['admin', 'super']);
     if (!operator) return;
     const body = await readJsonBody(req, res, MAX_BODY);
     if (body === undefined) return;
-    const tournamentId = typeof body.tournamentId === 'string' ? body.tournamentId : null;
+    let scope = null; /* null = 不限届(全量) */
+    if (body.tournamentIds !== undefined) {
+      if (!Array.isArray(body.tournamentIds) || !body.tournamentIds.length ||
+          !body.tournamentIds.every((id) => typeof id === 'string')) {
+        return sendJson(res, 400, { error: 'tournamentIds 须为非空字符串数组' });
+      }
+      scope = new Set(body.tournamentIds);
+    } else if (typeof body.tournamentId === 'string') {
+      scope = new Set([body.tournamentId]);
+    }
 
     const workspace = await read(DATA_KEY);
     const candidates = [];
     for (const record of (workspace && workspace.tournaments) || []) {
       if (!record || !record.canvas) continue;
-      if (tournamentId && record.id !== tournamentId) continue;
+      if (scope && !scope.has(record.id)) continue;
       for (const card of record.canvas.cards || []) {
         if (!card || !card.classLinks || typeof card.classLinks !== 'object') continue;
         for (const side of ['a', 'b']) {

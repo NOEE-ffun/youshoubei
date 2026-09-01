@@ -318,18 +318,21 @@
 
     const app = window.TournamentApp;
     backfillBtn.hidden = !(app && typeof app.isAdmin === 'function' && app.isAdmin());
+    /* 解析范围 = 当前勾选的届;一个都不勾时禁用,绝不能退化成全量解析 */
+    backfillBtn.disabled = !selectedIds.size;
+    backfillBtn.title = selectedIds.size ? '解析当前勾选届的存量卡组链接' : '先勾选届,再解析其存量卡组';
   }
 
   async function backfillDecks() {
     const btn = document.getElementById('deck-backfill-btn');
-    if (btn.disabled) return;
+    if (btn.disabled || !selectedIds.size) return;
     btn.disabled = true;
     btn.textContent = '解析中…';
     try {
       const res = await fetch('/api/admin/decks/backfill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: '{}'
+        body: JSON.stringify({ tournamentIds: [...selectedIds] })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));

@@ -661,6 +661,43 @@ async function call(handler, req) {
     console.log('✓ admin 写:decks/backfill 批次上限');
   }
 
+  /* ---- decks/backfill tournamentIds 数组限定(统计页勾选范围传参,2026-09-01) ---- */
+  {
+    const SNAP = { v: 1, resolvedAt: 'T', classId: 2, format: 1, cards: [[10021110, '须臾剑士', 1, 1, 1, 3]] };
+    const mkWorld = () => ({
+      'data.json': {
+        tournaments: [
+          { id: 't1', canvas: { cards: [{ id: 'c1', classLinks: { a: [{ cls: '皇家', url: 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.aaaa.x', text: '' }], b: [] } }] } },
+          { id: 't2', canvas: { cards: [{ id: 'c2', classLinks: { a: [{ cls: '法师', url: 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.3.bbbb.x', text: '' }], b: [] } }] } }
+        ]
+      }
+    });
+    const storage = memoryStorage(mkWorld());
+    const admin = apiAdmin.createHandlers({
+      storage,
+      appendAudit: () => {},
+      backupData: async () => {},
+      backfillGapMs: 0,
+      resolveDeck: async () => ({ ok: true, deck: { ...SNAP, cards: SNAP.cards.slice() } })
+    });
+    const post = (body) =>
+      call(admin, mockReq('POST', { url: '/api/admin/decks/backfill', headers: { cookie: ck('u5') }, body: jsonBody(body) }));
+
+    /* 只安排 t1:t1 回填,t2(未安排)必须原封不动 */
+    let rb = await post({ tournamentIds: ['t1'] });
+    assert.strictEqual(rb.status, 200);
+    assert.strictEqual(rb.body.resolved, 1);
+    const ts = storage._map.get('data.json').tournaments;
+    assert.ok(ts[0].canvas.cards[0].classLinks.a[0].deck, '范围内 t1 回填快照');
+    assert.ok(!ts[1].canvas.cards[0].classLinks.a[0].deck, '范围外 t2 不得被解析');
+
+    /* 非法形状:空数组/非数组/非字符串混入 → 400(防空集退化成全量) */
+    assert.strictEqual((await post({ tournamentIds: [] })).status, 400, '空数组 400');
+    assert.strictEqual((await post({ tournamentIds: 't1' })).status, 400, '非数组 400');
+    assert.strictEqual((await post({ tournamentIds: ['t1', 5] })).status, 400, '非字符串混入 400');
+    console.log('✓ admin 写:decks/backfill tournamentIds 数组限定(未安排的届不解析)');
+  }
+
   /* ---- 换绑 + 删号连带清理(注册即选手合并,2026-09-01) ---- */
   {
     /* 重新落种:本块自足,不依赖前块状态(种子落全局 dev-store,

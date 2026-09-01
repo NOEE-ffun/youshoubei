@@ -94,27 +94,61 @@ test('统计页:快照聚合携带率表格 + 稀有度着色 + 未解析计数'
   await adminCtx.close();
 });
 
-test('管理端回填:未解析链接 → 解析存量卡组 → 表格出现', async ({ browser }) => {
+test('管理端回填:解析范围=勾选届,未勾选的届绝不出网', async ({ browser }) => {
   const adminCtx = await browser.newContext();
   await resetStore(adminCtx);
   await smsLogin(adminCtx, ADMIN_PHONE);
-  await seedWorkspace(adminCtx, world({ manual: 'closed' }, [
+  const w = world({ manual: 'closed' }, [
     { cls: '皇家', url: WB_URL, text: '' }
-  ]));
+  ]);
+  /* 范围外届同埋一条未解析链接:其 hash 无 fixture,一旦被误安排解析即计入失败暴露 */
+  w.tournaments.push({
+    id: 't2', name: '范围外届', roster: ['pz1', 'pz2'],
+    canvas: {
+      cards: [{
+        id: 'c1', label: '首场', format: 'BO3',
+        slots: [{ type: 'player', playerId: 'pz1' }, { type: 'player', playerId: 'pz2' }],
+        classLinks: { a: [{ cls: '法师', url: 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.zzzz.yyyy', text: '' }], b: [] }
+      }]
+    },
+    scores: {}, deckWindow: { manual: 'closed' }, updatedAt: 1
+  });
+  await seedWorkspace(adminCtx, w);
 
   const page = await adminCtx.newPage();
+  const bodies = [];
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && req.url().endsWith('/api/admin/decks/backfill')) bodies.push(req.postDataJSON());
+  });
   await page.goto('/stats.html');
   await page.waitForSelector('#deck-comp-table');
   await expect(page.locator('#deck-comp-table tbody')).toContainText('暂无已解析');
   await expect(page.locator('#deck-backfill-btn')).toBeVisible();
 
-  await page.locator('#deck-backfill-btn').click();
+  /* 默认全选;取消勾选范围外届 → 解析范围只剩 t1 */
+  await page.locator('#stats-check-list input[data-scope-id="t2"]').uncheck();
+  const btn = page.locator('#deck-backfill-btn');
+  await expect(btn).toBeEnabled();
+  await btn.click();
   await expect(page.locator('.toast')).toContainText('解析完成:成功 1 · 失败 0');
+
+  /* 请求体只携带勾选届;t1 回填,t2 原封不动 */
+  expect(bodies.at(-1)).toEqual({ tournamentIds: ['t1'] });
+  const data = await (await adminCtx.request.get('/api/data')).json();
+  const t1e = data.tournaments.find((t) => t.id === 't1').canvas.cards[0].classLinks.a[0];
+  const t2e = data.tournaments.find((t) => t.id === 't2').canvas.cards[0].classLinks.a[0];
+  expect(t1e.deck && t1e.deck.classId).toBe(2);
+  expect(t2e.deck).toBeUndefined();
+
   /* revalidateWorkspace → ts:changed → 重渲出表 */
   await expect(page.locator('#deck-comp-table tbody tr')).toHaveCount(17, '真实卡组 17 种卡');
   await expect(page.locator('#deck-comp-table tbody')).toContainText('须臾剑士');
   await expect(page.locator('#deck-comp-table tbody')).toContainText('真红与群青·塞达&贝阿朵丽丝');
   await expect(page.locator('#deck-comp-foot')).toContainText('共 1 副');
+
+  /* 全不勾 → 按钮禁用:一个届都不安排就不得解析 */
+  await page.locator('#stats-check-list input[data-scope-id="t1"]').uncheck();
+  await expect(btn).toBeDisabled();
   await adminCtx.close();
 });
 
