@@ -83,10 +83,10 @@
             <form id="redeem-form" class="redeem-form">
               <label class="form-field">
                 <span class="form-label">验证码</span>
-                <input type="text" id="redeem-code" maxlength="16" placeholder="选手码 / 管理员码" autocomplete="off">
+                <input type="text" id="redeem-code" maxlength="16" placeholder="管理员码" autocomplete="off">
               </label>
               <button type="submit" class="btn btn-primary btn-sm">兑换</button>
-              <span class="hint">选手码绑定/创建选手档案;管理员码升级为管理员。</span>
+              <span class="hint">管理员码升级为管理员;选手档案注册时已自动创建。</span>
             </form>
             <form id="phone-bind-form" class="phone-bind" hidden>
               <label class="form-field">
@@ -105,7 +105,7 @@
             <form id="nickname-form" class="redeem-form">
               <label class="form-field">
                 <span class="form-label">账号昵称</span>
-                <input type="text" id="account-nickname" maxlength="24" placeholder="账号展示名;首次建选手档案时作为默认名">
+                <input type="text" id="account-nickname" maxlength="24" placeholder="账号展示名;注册时已自动创建选手档案">
               </label>
               <button type="submit" class="btn btn-secondary btn-sm">保存昵称</button>
             </form>
@@ -194,14 +194,8 @@
             <label class="form-field">
               <span class="form-label">码类型</span>
               <select id="codes-kind" class="header-select">
-                <option value="player">选手码(空白)</option>
-                <option value="player-bound">选手码(绑定指定选手)</option>
                 <option value="admin">管理员码</option>
               </select>
-            </label>
-            <label class="form-field" id="codes-player-field" hidden>
-              <span class="form-label">绑定选手</span>
-              <select id="codes-player" class="header-select"></select>
             </label>
             <button type="submit" class="btn btn-primary btn-sm">生成</button>
             <output id="codes-gen-out" class="codes-gen-out" aria-live="polite"></output>

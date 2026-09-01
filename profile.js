@@ -7,7 +7,7 @@
  * - 「升级与绑定」:账号昵称保存(PUT /api/me/player 纯昵称请求,未绑选手也可改)、
  *   填码跃迁 POST /api/me/redeem、绑手机 PUT /api/me/phone(120s 发码倒计时);
  * - 「发码中心」tab 数据:GET/POST /api/codes(admin/super)。
- * 云端模式专用;游客提示登录,未绑选手账号显示升级与绑定+改密。
+ * 云端模式专用;游客提示登录,登录账号均显示升级与绑定+改密(注册即选手,2026-09-01)。
  */
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -95,8 +95,9 @@
     setRedeemStatus('');
     if (user.role === 'admin' || user.role === 'super') setupCodes(user.role);
     if (!player) {
+      /* 注册即选手后登录必有档案,此为防御分支(/api/me 自愈失败等) */
       $('profile-card').hidden = true;
-      notify('当前账号未绑定选手资料,可在上方「升级与绑定」填码绑定');
+      notify('选手档案加载失败,请刷新重试', 'danger');
       return;
     }
     $('profile-card').hidden = false;
@@ -378,21 +379,14 @@
   }
 
   function setupCodes(role) {
-    /* admin 码仅 super 可发:非 super 直接移除该 option(后端同样 403 兜底) */
+    /* admin 码仅 super 可发:非 super 直接移除该 option(后端同样 403 兜底)。
+     * 选手码已停用,码类型仅剩 admin 一项(2026-09-01 合并) */
     if (role !== 'super') {
       const adminOpt = $('codes-kind').querySelector('option[value="admin"]');
       if (adminOpt) adminOpt.remove();
     }
-    const players = (window.TournamentApp && window.TournamentApp.players) || [];
-    $('codes-player').innerHTML = players.map((p) =>
-      '<option value="' + escapeHtml(p.id) + '">' + escapeHtml(p.name || p.id) + '</option>'
-    ).join('');
     loadCodes();
   }
-
-  $('codes-kind').addEventListener('change', () => {
-    $('codes-player-field').hidden = $('codes-kind').value !== 'player-bound';
-  });
 
   /* 切到发码中心 tab 时刷新列表(他人发的新码可见) */
   $('me-tab-codes').addEventListener('click', () => loadCodes());
@@ -400,16 +394,8 @@
   $('codes-gen-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     const out = $('codes-gen-out');
-    const kindSel = $('codes-kind').value;
-    const body = { kind: kindSel === 'admin' ? 'admin' : 'player' };
-    if (kindSel === 'player-bound') {
-      const playerId = $('codes-player').value;
-      if (!playerId) {
-        out.textContent = '请先选择要绑定的选手';
-        return;
-      }
-      body.playerId = playerId;
-    }
+    /* 仅 admin 码:选手码停用,服务端对非 admin kind 一律 400 兜底 */
+    const body = { kind: 'admin' };
     try {
       const resp = await fetch('/api/codes', {
         method: 'POST',
@@ -421,7 +407,7 @@
         out.textContent = (data && data.error) || '生成失败';
         return;
       }
-      out.textContent = '新码:' + data.code + (body.kind === 'admin' ? '(管理员)' : '(选手)');
+      out.textContent = '新码:' + data.code + '(管理员)';
       loadCodes();
     } catch (error) {
       out.textContent = '网络错误,请稍后再试';

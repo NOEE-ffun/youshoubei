@@ -1671,7 +1671,8 @@
   }
 
   /* 选手自助页启动守卫(my-decks/my-tourneys 共用):
-   * 云模式+登录+绑定选手才放行,返回选手对象;不可用时应答空态并返回 null */
+   * 云模式+登录即放行,返回选手对象;不可用时应答空态并返回 null。
+   * 注册即选手(2026-09-01 合并)后登录账号必有档案,空 player 属加载异常,保留防御分支 */
   async function requirePlayerSession(pageNoun, showEmpty) {
     const app = window.TournamentApp;
     if (app.mode !== 'cloud') {
@@ -1685,7 +1686,7 @@
       return null;
     }
     if (!player) {
-      showEmpty('当前是管理员账号(未绑定选手),' + pageNoun + '仅选手账号可用。', false);
+      showEmpty('选手档案加载失败,请刷新重试。', false);
       return null;
     }
     return player;
@@ -2029,9 +2030,10 @@
       const posterObs = header.querySelector('#poster-obs');
       if (posterObs) posterObs.hidden = !canEdit();
 
-      /* 选手库新增表单仅管理员可见;搜索全员可用 */
+      /* 选手库新增表单仅本机模式可见:云模式选手只由注册产生(2026-09-01 合并),
+       * 管理员亦不再手工建;搜索全员可用 */
       const playersAdd = header.querySelector('#add-player-form');
-      if (playersAdd) playersAdd.hidden = !canEdit();
+      if (playersAdd) playersAdd.hidden = mode === 'cloud';
 
       syncHeaderHeight();
     }
@@ -2040,8 +2042,8 @@
     const manageBtn = document.getElementById('manage-btn');
     if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
 
-    /* 选手中心导航项:云端+登录+账号绑定了选手即可见(管理员绑选手同样放行) */
-    const playerPagesVisible = Boolean(mode === 'cloud' && sessionUser && sessionUser.playerId);
+    /* 选手中心导航项:云端+登录即显(注册即选手,账号必有档案) */
+    const playerPagesVisible = Boolean(mode === 'cloud' && sessionUser);
     document.querySelectorAll('#app-sidebar .side-link[data-page="me"]').forEach((link) => {
       link.hidden = !playerPagesVisible;
     });

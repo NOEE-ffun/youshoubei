@@ -3,7 +3,8 @@
 /**
  * 选手中心:统一登录守卫 + 四 tab(我的对局/我的比赛/资料与账号/发码中心)。
  * 旧页 my-decks/my-tourneys/profile 已合并到此,hash 路由 #decks/#tourneys/#profile/#codes;
- * 未登录显示统一空态;playerOnly 需绑选手,adminOnly(发码中心)需 admin/super 角色。
+ * 未登录显示统一空态;playerOnly 在注册即选手后恒过(登录即有档案),
+ * adminOnly(发码中心)需 admin/super 角色。
  */
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -51,8 +52,8 @@
     }
     $('me-empty').hidden = true;
     $('me-shell').hidden = false;
-    /* tab 门:playerOnly 需已绑选手;adminOnly(发码中心)需 admin/super。
-     * user.role 即后端 effectiveRole(super/admin/player/user) */
+    /* tab 门:playerOnly 在注册即选手后恒过(登录即有档案),保留作防御;
+     * adminOnly(发码中心)需 admin/super。user.role 即后端 effectiveRole(super/admin/player/user) */
     const role = user.role;
     const allowed = TABS.filter((t) =>
       (t.playerOnly ? Boolean(player) : true) && (t.adminOnly ? (role === 'admin' || role === 'super') : true));

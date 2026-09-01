@@ -163,6 +163,7 @@
     if (submit) submit.disabled = !editable;
   }
 
+  /* 选手库新增表单绑定:本机模式专用(云模式表单由 common.js 隐藏,选手只由注册产生) */
   function bindAddForm() {
     const form = document.getElementById('add-player-form');
     if (!form) return;
