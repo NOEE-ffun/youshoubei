@@ -4758,3 +4758,11 @@ body[data-view='canvas'] .list-view {
 .md-body blockquote { margin: 8px 0; padding-left: 12px; border-left: 3px solid var(--accent-stripe); color: var(--text-muted); }
 .md-body hr { border: 0; border-top: 1px solid var(--border); }
 .md-body a { color: var(--accent); }
+
+/* 官方文档后台编辑器:源码/预览双栏,窄屏折行 */
+.df-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.df-editor textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; resize: vertical; }
+.df-preview-wrap { display: flex; flex-direction: column; gap: 6px; overflow: auto; max-height: 460px;
+  border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.df-preview { font-size: 14px; }
+@media (max-width: 760px) { .df-editor { grid-template-columns: 1fr; } }

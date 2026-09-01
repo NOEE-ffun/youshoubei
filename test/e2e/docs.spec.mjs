@@ -76,3 +76,38 @@ test('渲染净化:script/事件属性不执行,图片与外链属性正常', as
   await userCtx.close();
   await adminCtx.close();
 });
+
+test('后台第六标签:新建/默认可见性/编辑/删除全链', async ({ browser }) => {
+  const adminCtx = await browser.newContext();
+  await resetStore(adminCtx);
+  await smsLogin(adminCtx, ADMIN_PHONE);
+  const page = await adminCtx.newPage();
+  await page.goto('/admin.html');
+  await page.locator('#admin-tab-docs').click();
+
+  /* 新建:选内部规程默认勾上仅管理员可见 */
+  await page.locator('#df-new').click();
+  await page.locator('#df-title').fill('裁判值班规程');
+  await page.locator('#df-category').selectOption('internal');
+  await expect(page.locator('#df-adminonly')).toBeChecked();
+  await page.locator('#df-body').fill('## 值班表\n- 周一:NOEE');
+  await expect(page.locator('#df-preview h3')).toContainText('值班表', '编辑实时预览');
+  await page.locator('#df-form [type="submit"]').click();
+  const row = page.locator('#admin-docs-tbody tr').first();
+  await expect(row).toContainText('裁判值班规程');
+  await expect(row).toContainText('仅管理员');
+  await expect(row).toContainText('内部规程');
+
+  /* 编辑:改为全员可见 */
+  await row.locator('[data-act="edit"]').click();
+  await page.locator('#df-adminonly').uncheck();
+  await page.locator('#df-form [type="submit"]').click();
+  await expect(page.locator('#admin-docs-tbody tr').first()).toContainText('全员');
+
+  /* 删除:confirm 确认后列表清空(空态文案在状态行) */
+  page.once('dialog', (d) => d.accept());
+  await page.locator('#admin-docs-tbody tr').first().locator('[data-act="delete"]').click();
+  await expect(page.locator('#admin-docs-tbody tr')).toHaveCount(0);
+  await expect(page.locator('#admin-docs-status')).toContainText('暂无文档');
+  await adminCtx.close();
+});

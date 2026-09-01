@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="右手杯超管后台:审计流水、账号与邀请码、比赛状态、健康与备份。">
+  <meta name="description" content="右手杯超管后台:审计流水、账号与邀请码、比赛状态、健康与备份、通知与官方文档。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>超管后台 - 右手杯</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
-  <script src="theme-init.js?v=2026090030"></script>
-  <link rel="stylesheet" href="styles.css?v=2026090030">
+  <script src="theme-init.js?v=2026090031"></script>
+  <link rel="stylesheet" href="styles.css?v=2026090031">
 </head>
 <body class="admin-body" data-page="admin">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -39,6 +39,7 @@
           <button type="button" class="me-tab" id="admin-tab-tourneys" role="tab" aria-controls="admin-panel-tourneys">比赛状态</button>
           <button type="button" class="me-tab" id="admin-tab-health" role="tab" aria-controls="admin-panel-health">健康与备份</button>
           <button type="button" class="me-tab" id="admin-tab-notices" role="tab" aria-controls="admin-panel-notices">通知</button>
+          <button type="button" class="me-tab" id="admin-tab-docs" role="tab" aria-controls="admin-panel-docs">官方文档</button>
         </nav>
 
         <section class="me-panel" id="admin-panel-audit" role="tabpanel" aria-labelledby="admin-tab-audit" hidden>
@@ -193,11 +194,70 @@
             </table>
           </div>
         </section>
+
+        <section class="me-panel" id="admin-panel-docs" role="tabpanel" aria-labelledby="admin-tab-docs" hidden>
+          <div class="admin-toolbar">
+            <button type="button" id="df-new" class="btn btn-primary btn-sm">新建文档</button>
+            <span class="hint">Markdown 文档,按分类分组展示在官方文档页;勾选「仅管理员可见」的篇目普通账号读不到。</span>
+          </div>
+          <form id="df-form" class="admin-notice-form" hidden>
+            <input type="hidden" id="df-id">
+            <label class="form-field">
+              <span class="form-label">标题(必填,≤60 字)</span>
+              <input type="text" id="df-title" maxlength="60" required>
+            </label>
+            <div class="nf-row">
+              <label class="form-field">
+                <span class="form-label">分类</span>
+                <select id="df-category" class="header-select"></select>
+              </label>
+              <label class="form-field">
+                <span class="form-label">排序(组内小在前)</span>
+                <input type="number" id="df-sort" value="0" step="1">
+              </label>
+              <label class="form-field nf-check">
+                <input type="checkbox" id="df-adminonly">
+                <span>仅管理员可见</span>
+              </label>
+            </div>
+            <div class="df-editor">
+              <label class="form-field">
+                <span class="form-label">正文(Markdown,≤64KB)</span>
+                <textarea id="df-body" rows="14" placeholder="# 标题&#10;&#10;正文支持 **粗体**、列表、表格、图片"></textarea>
+              </label>
+              <div class="df-preview-wrap" aria-label="预览">
+                <span class="form-label">预览</span>
+                <div class="md-body df-preview" id="df-preview"></div>
+              </div>
+            </div>
+            <div class="nf-row">
+              <button type="button" id="df-insert-image" class="btn btn-secondary btn-sm">插入图片</button>
+              <input type="file" id="df-image-file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+              <span class="hint">PNG/JPEG/GIF/WebP ≤5MB,上传后插入到光标处</span>
+            </div>
+            <div class="nf-row">
+              <button type="submit" class="btn btn-primary btn-sm">保存</button>
+              <button type="button" id="df-cancel" class="btn btn-ghost btn-sm">取消</button>
+              <span class="hint" id="df-hint" role="status" aria-live="polite"></span>
+            </div>
+          </form>
+          <p class="hint admin-status" id="admin-docs-status" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>标题</th><th>分类</th><th>可见性</th><th>排序</th><th>更新</th><th>操作</th></tr></thead>
+              <tbody id="admin-docs-tbody"></tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </main>
   </div>
 
   <script src="canvas-model.js?v=2026090030" defer></script>
-  <script src="admin.js?v=2026090030" defer></script>
+  <script src="vendor/marked.umd.js?v=2026090031" defer></script>
+  <script src="vendor/purify.min.js?v=2026090031" defer></script>
+  <script src="docs-meta.js?v=2026090031" defer></script>
+  <script src="md-render.js?v=2026090031" defer></script>
+  <script src="admin.js?v=2026090031" defer></script>
 </body>
 </html>

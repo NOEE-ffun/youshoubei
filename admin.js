@@ -99,7 +99,8 @@
     { id: 'users', btn: 'admin-tab-users', load: loadUsersPanel },
     { id: 'tourneys', btn: 'admin-tab-tourneys', load: loadTourneys },
     { id: 'health', btn: 'admin-tab-health', load: loadHealth },
-    { id: 'notices', btn: 'admin-tab-notices', load: loadNotices }
+    { id: 'notices', btn: 'admin-tab-notices', load: loadNotices },
+    { id: 'docs', btn: 'admin-tab-docs', load: loadDocs }
   ];
   let activeTab = null;
 
@@ -728,6 +729,171 @@
       }
       setStatus(status, '已删除。', false);
       loadNotices();
+    }
+  });
+
+  /* ---------- 官方文档(docs.html 内容源) ---------- */
+
+  let docsCache = [];
+  let dfEditingId = null; /* null=新建模式;否则为编辑中的文档 id */
+  let dfCategoryOptionsBuilt = false;
+
+  function docCategoryLabel(key) {
+    return (window.DocsMeta && window.DocsMeta.docCategoryLabel(key)) || key;
+  }
+
+  function docPreviewSync() {
+    $('df-preview').innerHTML = window.MDRender
+      ? window.MDRender.render($('df-body').value)
+      : escapeHtml($('df-body').value);
+  }
+
+  function docFormFill(doc) {
+    dfEditingId = doc ? doc.id : null;
+    $('df-id').value = doc ? doc.id : '';
+    $('df-title').value = doc ? (doc.title || '') : '';
+    $('df-category').value = doc ? doc.category : 'rules';
+    $('df-sort').value = doc ? (doc.sort || 0) : 0;
+    /* 新建选「内部规程」默认仅管理员可见;编辑回放存档值 */
+    $('df-adminonly').checked = doc ? doc.adminOnly === true : false;
+    $('df-body').value = doc ? (doc.body || '') : '';
+    setStatus($('df-hint'), '', false);
+    docPreviewSync();
+    $('df-form').hidden = false;
+    $('df-title').focus();
+  }
+
+  function renderDocs() {
+    $('admin-docs-tbody').innerHTML = docsCache.map((d) =>
+      '<tr>' +
+      '<td class="admin-detail-cell">' + escapeHtml(d.title) + '</td>' +
+      '<td>' + chip(docCategoryLabel(d.category), 'admin-chip-muted') + '</td>' +
+      '<td>' + (d.adminOnly ? chip('仅管理员', 'admin-chip-danger') : chip('全员', 'admin-chip-ok')) + '</td>' +
+      '<td class="code-cell">' + (typeof d.sort === 'number' ? d.sort : 0) + '</td>' +
+      '<td class="admin-detail-cell">' + fmtDateTime(d.updatedAt) + '</td>' +
+      '<td><span class="admin-row-actions">' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-act="edit" data-id="' + escapeHtml(d.id) + '">编辑</button> ' +
+        '<button type="button" class="btn btn-danger btn-sm" data-act="delete" data-id="' + escapeHtml(d.id) + '">删除</button>' +
+      '</span></td></tr>'
+    ).join('');
+  }
+
+  async function loadDocs() {
+    if (!dfCategoryOptionsBuilt && window.DocsMeta) {
+      $('df-category').innerHTML = window.DocsMeta.DOC_CATEGORIES
+        .map((c) => '<option value="' + escapeHtml(c.key) + '">' + escapeHtml(c.label) + '</option>')
+        .join('');
+      dfCategoryOptionsBuilt = true;
+    }
+    const status = $('admin-docs-status');
+    setStatus(status, '加载中…', false);
+    const result = await api('/api/admin/docs');
+    if (!result.ok) {
+      setStatus(status, '文档加载失败:' + (result.data.error || result.status), true);
+      return;
+    }
+    docsCache = Array.isArray(result.data.docs) ? result.data.docs : [];
+    renderDocs();
+    setStatus(status, docsCache.length
+      ? '共 ' + docsCache.length + ' 篇(分类分组,组内按排序号,同级新写排前)。'
+      : '暂无文档,点「新建文档」写第一篇。', false);
+  }
+
+  async function saveDoc(event) {
+    event.preventDefault();
+    const hint = $('df-hint');
+    const body = {
+      title: $('df-title').value,
+      category: $('df-category').value,
+      sort: $('df-sort').value === '' ? 0 : Number($('df-sort').value),
+      adminOnly: $('df-adminonly').checked,
+      body: $('df-body').value
+    };
+    if (!body.title.trim()) {
+      setStatus(hint, '请填写标题。', true);
+      return;
+    }
+    setStatus(hint, '保存中…', false);
+    const result = await api(dfEditingId
+      ? '/api/admin/docs/' + encodeURIComponent(dfEditingId) + '/update'
+      : '/api/admin/docs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    if (!result.ok) {
+      setStatus(hint, '保存失败:' + (result.data.error || result.status), true);
+      return;
+    }
+    $('df-form').hidden = true;
+    dfEditingId = null;
+    setStatus($('admin-docs-status'), '已保存。', false);
+    loadDocs();
+  }
+
+  /* 插图:裸字节体直传 /api/upload(魔数嗅探拒 SVG,5MB 上限),成功插入光标处 */
+  async function uploadDocImage(event) {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    const hint = $('df-hint');
+    setStatus(hint, '图片上传中…', false);
+    try {
+      const resp = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': file.type || 'application/octet-stream' },
+        body: file
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setStatus(hint, '图片上传失败:' + (data.error || resp.status), true);
+        return;
+      }
+      const ta = $('df-body');
+      const md = '![图片](' + data.url + ')';
+      const at = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+      ta.value = ta.value.slice(0, at) + md + ta.value.slice(at);
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = at + md.length;
+      docPreviewSync();
+      setStatus(hint, '图片已插入。', false);
+    } catch (error) {
+      setStatus(hint, '图片上传失败:' + error.message, true);
+    }
+  }
+
+  $('df-new').addEventListener('click', () => docFormFill(null));
+  $('df-cancel').addEventListener('click', () => { $('df-form').hidden = true; dfEditingId = null; });
+  $('df-form').addEventListener('submit', saveDoc);
+  $('df-body').addEventListener('input', docPreviewSync);
+  $('df-insert-image').addEventListener('click', () => $('df-image-file').click());
+  $('df-image-file').addEventListener('change', uploadDocImage);
+  /* 新建模式切到「内部规程」默认勾上仅管理员可见(编辑模式不自动改) */
+  $('df-category').addEventListener('change', () => {
+    if (!dfEditingId && $('df-category').value === 'internal') $('df-adminonly').checked = true;
+  });
+
+  /* 行内操作:编辑/删除(confirm) */
+  $('admin-docs-tbody').addEventListener('click', async (event) => {
+    const btn = event.target.closest('button[data-act]');
+    if (!btn || btn.disabled) return;
+    const id = btn.dataset.id;
+    const doc = docsCache.find((x) => x.id === id);
+    if (!doc) return;
+    const status = $('admin-docs-status');
+    if (btn.dataset.act === 'edit') {
+      docFormFill(doc);
+      return;
+    }
+    if (btn.dataset.act === 'delete') {
+      if (!window.confirm('确认删除文档「' + doc.title.slice(0, 20) + '」?不可恢复。')) return;
+      const result = await api('/api/admin/docs/' + encodeURIComponent(id) + '/delete', { method: 'POST' });
+      if (!result.ok) {
+        setStatus(status, '删除失败:' + (result.data.error || result.status), true);
+        return;
+      }
+      setStatus(status, '已删除。', false);
+      loadDocs();
     }
   });
 
