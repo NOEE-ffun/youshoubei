@@ -7,6 +7,7 @@ const { withWorkspaceLock } = require('./workspace-lock');
 const oss = require('./oss');
 const { parseDeckHash, resolveDeck: defaultResolveDeck } = require('./deck-resolve');
 const { createAdminHandler: createNoticesAdmin } = require('./notices');
+const { createAdminHandler: createDocsAdmin } = require('./docs');
 const { CLASS_LIST, deriveRoster } = require('../canvas-model');
 
 /* 后台接口(仅超管 super;写操作全部审计):
@@ -189,6 +190,8 @@ function createHandlers(options) {
   const backfillGapMs = Number.isFinite(Number(o.backfillGapMs)) ? Number(o.backfillGapMs) : 300;
   /* 通知管理:整体委托 api/notices(独立 notices.json,storage 同源注入;测试可替换) */
   const noticesAdmin = typeof o.noticesAdmin === 'function' ? o.noticesAdmin : createNoticesAdmin(o.storage);
+  /* 官方文档管理:整体委托 api/docs(独立 docs.json,同上) */
+  const docsAdmin = typeof o.docsAdmin === 'function' ? o.docsAdmin : createDocsAdmin(o.storage);
   const { read, write } = createStorage(o.storage);
 
   /* GET /api/admin/users:账号总览(role 用 effectiveRole,env 升格即时生效) */
@@ -626,6 +629,10 @@ function createHandlers(options) {
      * 方法校验与未知子路径 404/405 在被委托方自理) */
     if (tail === 'notices' || tail.startsWith('notices/')) {
       return noticesAdmin(req, res);
+    }
+    /* docs* 尾段整体委托 api/docs(管理列表与 CRUD,自理方法校验) */
+    if (tail === 'docs' || tail.startsWith('docs/')) {
+      return docsAdmin(req, res);
     }
     if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method Not Allowed' });
     if (tail === 'users') return listUsers(req, res);
