@@ -1,6 +1,6 @@
 'use strict';
 
-/* 后台接口:读(users/audit/health)+ 写(users/:id/status|role、backup、restore)。
+/* 后台接口:读(users/audit/health)+ 写(users/:id/status|role|player|delete、backup、restore)。
  * 模块默认 handler 读 dev-store(种子模式同 login-wall.test.js):
  * requireRole 走全局 account 单例 → users 种子必须落全局 dev-store;
  * createHandlers({storage,...}) 工厂注入内存存储/假备份列表/假审计。
@@ -520,10 +520,11 @@ async function call(handler, req) {
     console.log('✓ admin 写:manualBackupKey 命名');
   }
 
-  /* ---- 删除账号:手机号释放/选手档案保留解绑/超管本人保护/404 ---- */
+  /* ---- 删除账号:手机号释放/从未上场选手连带删/超管本人保护/404 ---- */
   {
     /* 走模块默认 handler(与 requireRole→account 单例同读全局 dev-store 种子):
-     * u5=root(super) 操作,u2=admin1(admin,绑 p1) 被删 */
+     * u5=root(super) 操作,u2=admin1(admin,绑 p1) 被删;
+     * 种子届无 signup/画布 → p1 从未上场,按注册即选手新语义随账号连带删除 */
     const del = (id, cookie) =>
       call(apiAdmin, mockReq('POST', { url: '/api/admin/users/' + id + '/delete', headers: cookie ? { cookie } : undefined }));
 
@@ -538,17 +539,17 @@ async function call(handler, req) {
     /* 手机号随记录消失即释放(同号可重新短信注册建新号) */
     const usersAfter = await devStore.readJson('users.json');
     assert.ok(!usersAfter.some((u) => u.phone === '13900000002'), '手机号应随账号删除释放');
-    /* 选手档案保留在 players,且无人再持有该 playerId(可经绑定码重新认领) */
+    /* 绑定选手从未上场(不在任何 signup/画布 roster)→ 空壳随账号连带删除 */
     const dataAfter = await devStore.readJson('data.json');
-    assert.ok(dataAfter.players.some((p) => p.id === 'p1'), '选手档案必须保留');
-    assert.ok(!usersAfter.some((u) => u.playerId === 'p1'), '账号对档案的绑定应解除');
+    assert.ok(!dataAfter.players.some((p) => p.id === 'p1'), '从未上场选手应随账号连带删除');
+    assert.ok(!usersAfter.some((u) => u.playerId === 'p1'), '不得残留对已删档案的绑定');
 
     /* 保护与 404:操作者本人(超管)400;不存在 404;重复删 404 */
     assert.strictEqual((await del('u5', ck('u5'))).status, 400, '超管自身不可删');
     assert.strictEqual((await del('u_none', ck('u5'))).status, 404);
     assert.strictEqual((await del('u2', ck('u5'))).status, 404, '已删账号再删 404');
 
-    console.log('✓ admin 写:删除账号(手机释放/档案保留/保护/404)');
+    console.log('✓ admin 写:删除账号(手机释放/空壳连带删/保护/404)');
   }
 
   /* ---- POST /api/admin/decks/backfill:存量 WB 链接补解析(三段式) ---- */
@@ -660,6 +661,64 @@ async function call(handler, req) {
     console.log('✓ admin 写:decks/backfill 批次上限');
   }
 
+  /* ---- 换绑 + 删号连带清理(注册即选手合并,2026-09-01) ---- */
+  {
+    /* 重新落种:本块自足,不依赖前块状态(种子落全局 dev-store,
+     * 模块默认 handler 的存储在无 OSS 环境同样解析到 dev-store;
+     * 超管会话 issueFor(uid, ''):passHash null → pv 空串,不带第三参防 1970 过期) */
+    await devStore.writeJson('users.json', [
+      { id: 'u1', username: 'boss', usernameLower: 'boss', phone: '13812341234', passHash: null, role: 'super', playerId: 'p_boss', status: 'active', createdAt: 't1' },
+      { id: 'u2', username: 'plain', usernameLower: 'plain', phone: '13900000002', passHash: null, role: 'player', playerId: 'p_auto', status: 'active', createdAt: 't2' },
+      { id: 'u9', username: 'root2', usernameLower: 'root2', phone: '13800000009', passHash: null, role: 'super', playerId: null, status: 'active', createdAt: 't3' }
+    ]);
+    await devStore.writeJson('data.json', {
+      tournaments: [{ id: 't1', name: '届一', canvas: { cards: [] }, signup: { open: false, players: ['p_hist'] } }],
+      series: [], activeId: 't1',
+      players: [
+        { id: 'p_boss', name: '超管的选手' },
+        { id: 'p_auto', name: '用户0002' },
+        { id: 'p_hist', name: '有历史选手' },
+        { id: 'p_free', name: '无主老选手' }
+      ]
+    });
+    const H = { cookie: 'sess=' + session.issueFor('u1', '') };
+    const req = (url, body) => mockReq('POST', { url, headers: H, body: body === undefined ? undefined : JSON.stringify(body) });
+    const playersNow = async () => ((await devStore.readJson('data.json')) || {}).players.map((p) => p.id).sort();
+    const usersNow = async () => (await devStore.readJson('users.json')) || [];
+
+    /* listUsers 附带 unboundPlayers:无主的 p_free/p_hist 在列(名字典序),被绑的 p_boss/p_auto 不在 */
+    const lu = await call(apiAdmin.listUsers, mockReq('GET', { url: '/api/admin/users', headers: H }));
+    assert.strictEqual(lu.status, 200);
+    assert.deepStrictEqual(lu.body.unboundPlayers.map((p) => p.id), ['p_free', 'p_hist'], 'unboundPlayers 只列无主且按名字序');
+
+    /* 换绑 u2 → p_free 成功:旧空壳 p_auto(不在任何 signup/roster)连带删除 */
+    const rb = await call(apiAdmin, req('/api/admin/users/u2/player', { playerId: 'p_free' }));
+    assert.strictEqual(rb.status, 200);
+    assert.strictEqual(rb.body.removedOldPlayer, true, '空壳旧选手被清理');
+    assert.deepStrictEqual(await playersNow(), ['p_boss', 'p_free', 'p_hist'], 'p_auto 已删');
+    assert.strictEqual((await usersNow()).find((u) => u.id === 'u2').playerId, 'p_free');
+
+    /* 409(已被他人绑定)/404(选手不存在)/400(缺 playerId)/400(超管保护目标 u9) */
+    assert.strictEqual((await call(apiAdmin, req('/api/admin/users/u2/player', { playerId: 'p_boss' }))).status, 409);
+    assert.strictEqual((await call(apiAdmin, req('/api/admin/users/u2/player', { playerId: 'p_no' }))).status, 404);
+    assert.strictEqual((await call(apiAdmin, req('/api/admin/users/u2/player', {}))).status, 400);
+    assert.strictEqual((await call(apiAdmin, req('/api/admin/users/u9/player', { playerId: 'p_free' }))).status, 400);
+
+    /* 换绑 u2 → p_hist(signup 在册,有历史):旧 p_free 空壳删,p_hist 本体绝不可删 */
+    const rb2 = await call(apiAdmin, req('/api/admin/users/u2/player', { playerId: 'p_hist' }));
+    assert.strictEqual(rb2.status, 200);
+    assert.strictEqual(rb2.body.removedOldPlayer, true, 'p_free 空壳删');
+    assert.deepStrictEqual(await playersNow(), ['p_boss', 'p_hist'], 'p_hist 有历史保留');
+
+    /* 删号连带:u2 现绑 p_hist(有历史)→ 删号后 p_hist 保留无主 */
+    const del = await call(apiAdmin, req('/api/admin/users/u2/delete'));
+    assert.strictEqual(del.status, 200);
+    assert.deepStrictEqual(await playersNow(), ['p_boss', 'p_hist'], '删号不删有历史选手');
+    assert.strictEqual((await usersNow()).some((u) => u.id === 'u2'), false, '账号已删');
+
+    console.log('✓ 换绑/删号:空壳清理/409/404/400保护/unboundPlayers/有历史保留');
+  }
+
   delete process.env.SESSION_SECRET;
-  console.log('✓ admin-api: 后台读+写接口(users 脱敏/audit/health/封禁/角色/备份/恢复/删除/回填)通过');
+  console.log('✓ admin-api: 后台读+写接口(users 脱敏/unboundPlayers/audit/health/封禁/角色/换绑/备份/恢复/删除/回填)通过');
 })().catch((e) => { console.error(e); process.exit(1); });

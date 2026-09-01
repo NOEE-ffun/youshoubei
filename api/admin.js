@@ -7,19 +7,24 @@ const { withWorkspaceLock } = require('./workspace-lock');
 const oss = require('./oss');
 const { parseDeckHash, resolveDeck: defaultResolveDeck } = require('./deck-resolve');
 const { createAdminHandler: createNoticesAdmin } = require('./notices');
-const { CLASS_LIST } = require('../canvas-model');
+const { CLASS_LIST, deriveRoster } = require('../canvas-model');
 
 /* 后台接口(仅超管 super;写操作全部审计):
  * 读:
- *   GET  /api/admin/users   账号总览(手机脱敏 138****1234;playerName 从 data.json 映射)
+ *   GET  /api/admin/users   账号总览(手机脱敏 138****1234;playerName 从 data.json 映射;
+ *                          附 unboundPlayers 无主选手清单,按名字序)
  *   GET  /api/admin/audit   审计流水(audit/log-<yyyy-mm>.json,最新在前,limit 钳 1-1000)
  *   GET  /api/admin/health  健康与备份列表(数据量计数 + backups/ 列表,lastBackupAt 从名解析)
  * 写:
  *   POST /api/admin/users/:id/status  封禁/解封(audit admin.ban/admin.unban)
  *   POST /api/admin/users/:id/role    角色降级/升级 player↔admin(audit admin.role);
  *                                    置 super 不支持(角色升级唯一入口是 redeem 填码)
+ *   POST /api/admin/users/:id/player  换绑选手(audit admin.rebind,绑定码的替代,body
+ *                                    {playerId}):旧选手从未上场(空壳)连带删除,
+ *                                    有历史保留无主;409 选手被他人绑定/404 选手不存在
  *   POST /api/admin/users/:id/delete  删除账号(audit admin.delete):手机号随记录
- *                                    消失即释放可重新注册;绑定选手档案保留仅解绑;
+ *                                    消失即释放可重新注册;绑定选手从未上场一并删、
+ *                                    有历史(signup/画布在册)保留为无主选手;
  *                                    超管/本人不可删;既有会话自然失效
  *   POST /api/admin/backup            手工快照三件套(data/users/invite-codes 各一份,
  *                                    backups/manual-<kind>-<ts>.json,永不自动清理;
@@ -144,6 +149,22 @@ function isSuperProtected(target, operator) {
   return effectiveRole(target) === 'super' || Boolean(operator && target.id === operator.id);
 }
 
+/** 从未被任何届引用的选手 = 空壳(可随换绑/删号一并清理):
+ * signup 名单与画布派生 roster 双源并集;画布解析异常按有历史处理(保守不删)。 */
+function isPristinePlayer(playerId, workspace) {
+  for (const record of (workspace && workspace.tournaments) || []) {
+    if (!record) continue;
+    const s = record.signup;
+    if (s && Array.isArray(s.players) && s.players.includes(playerId)) return false;
+    try {
+      if (deriveRoster(record.canvas || {}).includes(playerId)) return false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 /** 写接口回包的用户摘要(脱敏口径同 users 总览) */
 function adminUserView(u) {
   return {
@@ -181,7 +202,14 @@ function createHandlers(options) {
         .filter((p) => p && p.id)
         .map((p) => [p.id, p.name || null])
     );
+    /* 无主选手清单(未被任何账号绑定,名字序):后台换绑的候选池(Task 6 前端消费) */
+    const boundIds = new Set(raw.filter(Boolean).filter((u) => u.playerId).map((u) => u.playerId));
+    const unboundPlayers = [...players.entries()]
+      .filter(([id]) => !boundIds.has(id))
+      .map(([id, name]) => ({ id, name: name || id }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'zh-Hans-CN'));
     sendJson(res, 200, {
+      unboundPlayers,
       users: raw.filter(Boolean).map((u) => ({
         id: u.id || null,
         username: maskUsername(u.username),
@@ -320,10 +348,50 @@ function createHandlers(options) {
     });
   }
 
+  /* POST /api/admin/users/:id/player body {playerId}:换绑选手(绑定码的替代,super)。
+   * 换绑后旧选手若从未上场(空壳)一并删除,防选手库堆积;有历史保留无主 */
+  async function userPlayer(req, res, id) {
+    const operator = await requireRole(req, res, ['super']);
+    if (!operator) return;
+    const body = await readJsonBody(req, res, MAX_BODY);
+    if (body === undefined) return;
+    const playerId = typeof body.playerId === 'string' ? body.playerId : '';
+    if (!playerId) return sendJson(res, 400, { error: 'playerId 需为选手 id' });
+    await withWorkspaceLock(async () => {
+      const users = (await read(USERS_KEY)) || [];
+      const idx = users.findIndex((u) => u && u.id === id);
+      if (idx < 0) return sendJson(res, 404, { error: '账号不存在' });
+      if (isSuperProtected(users[idx], operator)) {
+        return sendJson(res, 400, { error: '超管账号不可在此操作' });
+      }
+      const workspace = (await read(DATA_KEY)) || { tournaments: [], series: [], players: [], activeId: null };
+      const target = (workspace.players || []).find((p) => p && p.id === playerId);
+      if (!target) return sendJson(res, 404, { error: '选手不存在' });
+      if (users.some((u) => u && u.playerId === playerId && u.id !== id)) {
+        return sendJson(res, 409, { error: '该选手已被其他账号绑定' });
+      }
+      const oldId = users[idx].playerId || null;
+      let removedOldPlayer = false;
+      if (oldId && oldId !== playerId && isPristinePlayer(oldId, workspace)) {
+        workspace.players = (workspace.players || []).filter((p) => !(p && p.id === oldId));
+        await oss.backupData();
+        await write(DATA_KEY, workspace);
+        removedOldPlayer = true;
+      }
+      users[idx].playerId = playerId;
+      await oss.backupJson(USERS_KEY, 'users');
+      await write(USERS_KEY, users);
+      appendAudit('admin.rebind', 'user=' + (users[idx].username || '-') + ' player=' + (target.name || playerId)
+        + (oldId ? ' old=' + oldId + (removedOldPlayer ? '(空壳已删)' : '(保留)') : ''));
+      sendJson(res, 200, { ok: true, user: adminUserView(users[idx]), removedOldPlayer });
+    });
+  }
+
   /* POST /api/admin/users/:id/delete:删除账号(2026-08-31)。
    * 语义:users.json 记录移除——手机号随记录消失即释放(同号可重新短信注册建新号);
-   * 绑定的选手档案保留在 data.json players(可经绑定码重新认领),仅解除账号归属;
-   * 既有会话随 uid 查无此人自然失效(currentUser null);超管/操作者本人不可删。
+   * 注册即选手合并后(2026-09-01):绑定的选手从未上场(空壳)随账号连带删除,
+   * 有历史(signup/画布在册)保留为无主选手;既有会话随 uid 查无此人自然失效
+   * (currentUser null);超管/操作者本人不可删。
    * 与封禁/降级不同走独立实现(mutateUser 是改写,删除要 splice 掉条目) */
   async function userDelete(req, res, id) {
     const operator = await requireRole(req, res, ['super']);
@@ -336,13 +404,27 @@ function createHandlers(options) {
         return sendJson(res, 400, { error: '超管账号不可在此操作' });
       }
       const target = users[idx];
+      /* 注册即选手合并后:被删账号的选手从未上场 → 一并删;
+       * 有历史(signup/画布在册)→ 保留为无主选手,历史不可消失;
+       * 仍被其他账号绑定的选手不动(多号绑同档本不存在,防御性兜底) */
+      let removedPlayer = false;
+      if (target.playerId) {
+        const workspace = await read(DATA_KEY);
+        if (workspace && isPristinePlayer(target.playerId, workspace)
+            && !users.some((u) => u && u.id !== id && u.playerId === target.playerId)) {
+          workspace.players = (workspace.players || []).filter((p) => !(p && p.id === target.playerId));
+          await oss.backupData();
+          await write(DATA_KEY, workspace);
+          removedPlayer = true;
+        }
+      }
       users.splice(idx, 1);
       await oss.backupJson(USERS_KEY, 'users');
       await write(USERS_KEY, users);
       appendAudit('admin.delete',
         'user=' + (target.username || '-') +
         (target.phone ? ' phone=***' + String(target.phone).slice(-4) : '') +
-        (target.playerId ? ' player=' + target.playerId + '(档案保留解绑)' : '') +
+        (target.playerId ? ' player=' + target.playerId + (removedPlayer ? '(从未上场,已连带删除)' : '(有历史,保留无主)') : '') +
         ' by=' + operator.username);
       sendJson(res, 200, { ok: true, deleted: adminUserView(target) });
     });
@@ -489,7 +571,8 @@ function createHandlers(options) {
   }
 
   /* 子路径分发:/api/admin/<tail>(tail 可多段)。
-   * 读:users/audit/health(仅 GET);写:users/<id>/status|role、backup、restore(仅 POST);
+   * 读:users/audit/health(仅 GET);写:users/<id>/status|role|player|delete、
+   * backup、restore、decks/backfill(仅 POST);
    * 裸路径/未知段 → 404;已知段方法不符 → 405 */
   async function handler(req, res) {
     let pathname;
@@ -509,6 +592,10 @@ function createHandlers(options) {
     if ((w = /^users\/([^/]+)\/role$/.exec(tail))) {
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
       return userRole(req, res, w[1]);
+    }
+    if ((w = /^users\/([^/]+)\/player$/.exec(tail))) {
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
+      return userPlayer(req, res, w[1]);
     }
     if ((w = /^users\/([^/]+)\/delete$/.exec(tail))) {
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
@@ -540,6 +627,7 @@ function createHandlers(options) {
   handler.health = health;
   handler.userStatus = userStatus;
   handler.userRole = userRole;
+  handler.userPlayer = userPlayer;
   handler.userDelete = userDelete;
   handler.backup = backup;
   handler.restore = restore;
