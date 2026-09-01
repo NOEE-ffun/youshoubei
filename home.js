@@ -5,7 +5,7 @@
  * 不引入新的数据源。布局与入场动效见 styles.css 的 ov-* 段。
  */
 (function () {
-  const { escapeHtml, avatarMarkup, formatStartTime, notify, errMsg, groupTournamentsBySeries, canManage } = window.TournamentUtils;
+  const { escapeHtml, avatarMarkup, formatStartTime, notify, errMsg, groupTournamentsBySeries, canManage, openLightbox } = window.TournamentUtils;
 
   const STATUS = {
     upcoming: { text: '未开始', cls: 'status-upcoming' },
@@ -230,6 +230,142 @@
     if (!row || row.classList.contains('is-current')) return;
     switchTo(row.dataset.id);
   });
+
+  /* ---------- 通知横幅(独立于 workspace,GET /api/notices;失败静默) ---------- */
+
+  const DISMISS_KEY = 'ts:dismissedNotices';
+  const NOTICE_ROTATE_MS = 5000;
+
+  let noticeItems = [];
+  let noticeIndex = 0;
+  let noticeTimer = null;
+
+  function dismissedIds() {
+    try {
+      const v = JSON.parse(localStorage.getItem(DISMISS_KEY) || '[]');
+      return Array.isArray(v) ? v : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function rememberDismissed(id) {
+    const ids = dismissedIds();
+    if (!ids.includes(id)) {
+      ids.push(id);
+      try { localStorage.setItem(DISMISS_KEY, JSON.stringify(ids)); } catch { /* 忽略 */ }
+    }
+  }
+
+  function noticeSlideHtml(n, i) {
+    /* 动作:有收款码=整条可点弹灯箱(不另设按钮);仅链接=文字链,外链新标签开 */
+    const action = n.qrImage
+      ? ''
+      : (n.linkUrl
+        ? '<a class="notice-action" href="' + escapeHtml(n.linkUrl) + '" target="_blank" rel="noopener">' +
+          escapeHtml(n.linkText || '查看') + '</a>'
+        : '');
+    const close = n.dismissible === false
+      ? ''
+      : '<button type="button" class="notice-close" data-notice-close="1" aria-label="关闭此通知">×</button>';
+    const clickable = n.qrImage ? ' notice-has-qr" role="button" tabindex="0" aria-label="点开收款码大图' : '';
+    return '<div class="notice-slide level-' + (n.level === 'important' ? 'important' : 'info') + clickable +
+      (i === noticeIndex ? ' is-active' : '') + '" data-slide="' + i + '">' +
+      '<span class="notice-text">' + escapeHtml(n.text) + '</span>' + action + close + '</div>';
+  }
+
+  function renderNotices() {
+    const box = $('notice-banner');
+    if (noticeTimer) { clearInterval(noticeTimer); noticeTimer = null; }
+    if (!noticeItems.length) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    if (noticeIndex >= noticeItems.length) noticeIndex = 0;
+    box.innerHTML =
+      '<div class="notice-track">' + noticeItems.map(noticeSlideHtml).join('') + '</div>' +
+      (noticeItems.length > 1
+        ? '<div class="notice-dots" role="tablist" aria-label="通知切换">' + noticeItems.map((n, i) =>
+            '<button type="button" class="notice-dot' + (i === noticeIndex ? ' is-active' : '') +
+            '" data-dot="' + i + '" aria-label="第 ' + (i + 1) + ' 条通知"></button>'
+          ).join('') + '</div>'
+        : '');
+    box.hidden = false;
+    if (noticeItems.length > 1) {
+      noticeTimer = setInterval(() => {
+        noticeIndex = (noticeIndex + 1) % noticeItems.length;
+        syncActiveSlide();
+      }, NOTICE_ROTATE_MS);
+    }
+  }
+
+  function syncActiveSlide() {
+    const box = $('notice-banner');
+    box.querySelectorAll('.notice-slide').forEach((el) => {
+      el.classList.toggle('is-active', Number(el.dataset.slide) === noticeIndex);
+    });
+    box.querySelectorAll('.notice-dot').forEach((el) => {
+      el.classList.toggle('is-active', Number(el.dataset.dot) === noticeIndex);
+    });
+  }
+
+  /* 关闭当前条:记忆 id → 立即轮到下一条;全关=隐藏横幅 */
+  function dismissCurrent() {
+    const n = noticeItems[noticeIndex];
+    if (!n || n.dismissible === false) return;
+    rememberDismissed(n.id);
+    noticeItems.splice(noticeIndex, 1);
+    if (noticeIndex >= noticeItems.length) noticeIndex = 0;
+    renderNotices();
+  }
+
+  $('notice-banner').addEventListener('click', (event) => {
+    if (event.target.closest('[data-notice-close]')) {
+      dismissCurrent();
+      return;
+    }
+    const dot = event.target.closest('[data-dot]');
+    if (dot) {
+      noticeIndex = Number(dot.dataset.dot);
+      syncActiveSlide();
+      return;
+    }
+    /* 收款码:点横幅本体弹灯箱大图 */
+    const slide = event.target.closest('.notice-has-qr');
+    if (slide) {
+      const n = noticeItems[Number(slide.dataset.slide)];
+      if (n && n.qrImage) openLightbox([{ src: n.qrImage, alt: '收款码' }], 0, slide);
+    }
+  });
+
+  /* 键盘可达:收款码条目聚焦后 Enter/空格开灯箱 */
+  $('notice-banner').addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const slide = event.target.closest && event.target.closest('.notice-has-qr');
+    if (slide) {
+      event.preventDefault();
+      const n = noticeItems[Number(slide.dataset.slide)];
+      if (n && n.qrImage) openLightbox([{ src: n.qrImage, alt: '收款码' }], 0, slide);
+    }
+  });
+
+  async function loadNotices() {
+    try {
+      const resp = await fetch('/api/notices', { headers: { Accept: 'application/json' } });
+      if (!resp.ok) return; /* 401=登录态异常(墙守卫兜底),其余静默:横幅不阻塞主页 */
+      const data = await resp.json();
+      const dismissed = new Set(dismissedIds());
+      noticeItems = (Array.isArray(data.notices) ? data.notices : [])
+        .filter((n) => n && n.id && !(n.dismissible !== false && dismissed.has(n.id)));
+      noticeIndex = 0;
+      renderNotices();
+    } catch {
+      /* 网络异常:横幅静默缺席 */
+    }
+  }
+
+  document.addEventListener('ts:ready', loadNotices);
 
   document.addEventListener('ts:ready', render);
   document.addEventListener('ts:changed', render);

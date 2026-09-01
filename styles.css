@@ -3236,6 +3236,116 @@ body[data-view='canvas'] .list-view {
   margin-inline: auto;
 }
 
+/* —— 通知横幅:多条叠放同位淡换,级别配色(普通=蓝 / 重要=琥珀) —— */
+.notice-banner {
+  margin-block-end: 1.1rem;
+}
+
+.notice-track {
+  display: grid;
+}
+
+.notice-slide {
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-inline-start: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-weight: 500;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  transition: opacity 0.45s ease, transform 0.45s ease;
+  pointer-events: none;
+}
+
+.notice-slide.is-active {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+}
+
+.notice-slide.level-important {
+  border-inline-start-color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.notice-slide.level-important .notice-action {
+  color: var(--warning);
+}
+
+.notice-slide.notice-has-qr {
+  cursor: pointer;
+}
+
+.notice-text {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.notice-action {
+  flex: none;
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.notice-action:hover,
+.notice-action:focus-visible {
+  opacity: 0.8;
+}
+
+.notice-close {
+  flex: none;
+  margin-inline-start: auto;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.notice-close:hover,
+.notice-close:focus-visible {
+  color: var(--text);
+  background: var(--border-soft);
+}
+
+.notice-dots {
+  display: flex;
+  gap: 0.4rem;
+  margin-block-start: 0.45rem;
+  padding-inline-start: 0.15rem;
+}
+
+.notice-dot {
+  inline-size: 8px;
+  block-size: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--border);
+  cursor: pointer;
+}
+
+.notice-dot.is-active {
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice-slide {
+    transition: none;
+  }
+}
+
 .ov-head {
   display: flex;
   flex-wrap: wrap;
