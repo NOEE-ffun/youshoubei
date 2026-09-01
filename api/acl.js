@@ -81,8 +81,10 @@ function guardList(role, userId, kind, curList, outList) {
 /* 整库写守卫:user 为 currentUser 原始对象(内部 effectiveRole 判 super/admin)。
  * 返回 {ok:true, workspace}(处理后的 incoming 深拷贝,已盖章/回填 createdBy)
  * 或 {ok:false, status, error}。只做归属判定:players/activeId 等顶层字段自由,
- * 结构校验仅防御非数组(完整结构校验由 data.js 承担)。 */
-function workspacePutGuard(user, current, incoming) {
+ * 结构校验仅防御非数组(完整结构校验由 data.js 承担)。
+ * 第 4 参 boundPlayerIds(可选 Set<string>):被账号绑定的选手 id 集,
+ * current 有而 incoming 无且仍在绑定集 → 409(省略 = 不检查,兼容既有调用)。 */
+function workspacePutGuard(user, current, incoming, boundPlayerIds) {
   const role = effectiveRole(user);
   if (role !== 'admin' && role !== 'super') {
     return { ok: false, status: 403, error: '无权写入工作区' };
@@ -114,6 +116,20 @@ function workspacePutGuard(user, current, incoming) {
     Array.isArray(cur.tournaments) ? cur.tournaments : [], workspace.tournaments)
     || guardList(role, userId, 'series',
       Array.isArray(cur.series) ? cur.series : [], workspace.series);
+  /* 被账号绑定的选手禁删:选手与账号 1:1 后,删绑定选手会留悬空 playerId
+   * (自愈会另建新档,原档案不辞而别)。换绑/删号端点自带清理,不经此路径。
+   * boundPlayerIds 省略时不检查(纯函数兼容既有调用)。 */
+  if (boundPlayerIds && boundPlayerIds.size) {
+    const curPlayers = Array.isArray(cur.players) ? cur.players : [];
+    for (const p of curPlayers) {
+      if (!p || p.id == null || !boundPlayerIds.has(String(p.id))) continue;
+      const kept = Array.isArray(workspace.players)
+        && workspace.players.some((q) => q && q.id != null && String(q.id) === String(p.id));
+      if (!kept) {
+        return { ok: false, status: 409, error: '该选手仍被账号绑定,请先在后台换绑或删除账号:' + (p.name || p.id) };
+      }
+    }
+  }
   if (err) return { ok: false, status: err.status, error: err.error };
   return { ok: true, workspace };
 }

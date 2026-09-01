@@ -91,12 +91,17 @@ async function call(handler, req) {
   assert.strictEqual((await call(apiData, mockReq('GET', { headers: { cookie: ck('u3') } }))).status, 200);
   assert.strictEqual((await call(apiData, mockReq('GET', { headers: { cookie: ck('u4') } }))).status, 401);
 
-  /* PUT /api/data:user 403;player 403;admin 200;匿名 401;旧 Bearer 口令彻底无效 */
-  const putBody = JSON.stringify({ tournaments: [], players: [], activeId: null });
+  /* PUT /api/data:user 403;player 403;admin 200;匿名 401;旧 Bearer 口令彻底无效。
+   * players 需保留被绑定选手 p1(u2.playerId):整库 PUT 守卫禁删被绑定选手(409) */
+  const putBody = JSON.stringify({ tournaments: [], players: [{ id: 'p1', name: '选手一' }], activeId: null });
   assert.strictEqual((await call(apiData, mockReq('PUT', { body: putBody, headers: { cookie: ck('u1') } }))).status, 403);
   assert.strictEqual((await call(apiData, mockReq('PUT', { body: putBody, headers: { cookie: ck('u2') } }))).status, 403);
   assert.strictEqual((await call(apiData, mockReq('PUT', { body: putBody, headers: { cookie: ck('u3') } }))).status, 200);
-  assert.strictEqual((await call(apiData, mockReq('PUT', { body: putBody }))).status, 401);
+  /* 整库 PUT 删被绑定选手(p1 仍绑 u2)→ 409(注册即选手合并,2026-09-01);
+   * super 亦拒:守卫在角色门之后,对 admin/super 一视同仁 */
+  const dropBody = JSON.stringify({ tournaments: [], players: [], activeId: null });
+  assert.strictEqual((await call(apiData, mockReq('PUT', { body: dropBody, headers: { cookie: ck('u3') } }))).status, 409);
+  assert.strictEqual((await call(apiData, mockReq('PUT', { body: dropBody }))).status, 401);
   assert.strictEqual((await call(apiData, mockReq('PUT', { body: putBody, headers: { authorization: 'Bearer anything' } }))).status, 401);
 
   /* upload:匿名 401;user 403;player/admin 过门后由 415(非法图片)兜底——非 401 即已过门 */

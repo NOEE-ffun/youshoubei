@@ -114,7 +114,12 @@ module.exports = async function handler(req, res) {
          * (读完判完、写入前被并发写改库,判定基准已过期) */
         const current = await storage.read(DATA_PATH)
           || { tournaments: [], series: [], players: [], activeId: null };
-        const guarded = workspacePutGuard(user, current, workspace);
+        /* 锁内构建被绑定选手集(users.json 读失败按空 = 无绑定,守卫退化为不检查):
+         * 与 current 同锁快照,防锁外读 users 后并发换绑/删号使绑定集过期 */
+        const users = (await storage.read('users.json').catch(() => null)) || [];
+        const boundPlayerIds = new Set(
+          users.filter((u) => u && u.playerId).map((u) => String(u.playerId)));
+        const guarded = workspacePutGuard(user, current, workspace, boundPlayerIds);
         if (!guarded.ok) return { status: guarded.status, error: guarded.error };
         /* 覆盖前备份当前版本(best-effort,失败不阻塞);落盘守卫盖章后的 workspace */
         await backupData();

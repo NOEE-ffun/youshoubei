@@ -162,4 +162,22 @@ assert.strictEqual(m.changed, true);
 assert.strictEqual(m.workspace.series.length, 1);
 assert.strictEqual(m.workspace.tournaments[0].seriesId, 'sD');
 
+/* 被绑定选手禁删(注册即选手合并,2026-09-01):current 有、incoming 无、仍在绑定集 → 409 */
+const curBound = () => Object.assign(cur(), { players: [{ id: 'p1', name: '被绑选手' }, { id: 'p2', name: '无主选手' }] });
+const dropPlayers = (ids) => curBound().players.filter((p) => !ids.includes(p.id));
+
+r = workspacePutGuard(S, curBound(), { series: cur().series, tournaments: cur().tournaments, players: dropPlayers(['p1']), activeId: 't1' }, new Set(['p1']));
+assert.strictEqual(r.ok, false);
+assert.strictEqual(r.status, 409);
+assert.match(r.error, /被绑选手/);
+
+/* 无主选手可删;绑定集里不存在的可删 */
+r = workspacePutGuard(S, curBound(), { series: cur().series, tournaments: cur().tournaments, players: dropPlayers(['p2']), activeId: 't1' }, new Set(['p1']));
+assert.strictEqual(r.ok, true);
+
+/* 第 4 参省略 = 不检查(兼容) */
+r = workspacePutGuard(S, curBound(), { series: cur().series, tournaments: cur().tournaments, players: [], activeId: 't1' });
+assert.strictEqual(r.ok, true);
+console.log('✓ acl:被绑定选手禁删(409)/无主可删/省略参数兼容');
+
 console.log('✓ acl: 归属判定与整库写守卫通过');
