@@ -268,9 +268,11 @@
     const close = n.dismissible === false
       ? ''
       : '<button type="button" class="notice-close" data-notice-close="1" aria-label="关闭此通知">×</button>';
-    const clickable = n.qrImage ? ' notice-has-qr" role="button" tabindex="0" aria-label="点开收款码大图' : '';
-    return '<div class="notice-slide level-' + (n.level === 'important' ? 'important' : 'info') + clickable +
-      (i === noticeIndex ? ' is-active' : '') + '" data-slide="' + i + '">' +
+    /* class 与附加属性分开拼:收款码的 role/tabindex 不能混进 class 串(引号会截断属性) */
+    const cls = 'notice-slide level-' + (n.level === 'important' ? 'important' : 'info') +
+      (n.qrImage ? ' notice-has-qr' : '') + (i === noticeIndex ? ' is-active' : '');
+    const attrs = n.qrImage ? ' role="button" tabindex="0" aria-label="点开收款码大图"' : '';
+    return '<div class="' + cls + '"' + attrs + ' data-slide="' + i + '">' +
       '<span class="notice-text">' + escapeHtml(n.text) + '</span>' + action + close + '</div>';
   }
 

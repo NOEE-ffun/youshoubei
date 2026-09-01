@@ -80,3 +80,31 @@ test('强插通知:无关闭钮,预置 dismissed 仍显示', async ({ page }) =>
 
   await resetStore(context);
 });
+
+test('收款码通知:点击横幅弹灯箱大图(回归:openLightbox 曾漏出 utils 导出)', async ({ page }) => {
+  const context = page.context();
+  await resetStore(context);
+  await smsLogin(context, ADMIN_PHONE);
+  const r = await context.request.post('/api/admin/notices', {
+    data: { text: '喜欢的话请作者喝杯奶茶', qrImage: '/icons/ghs.png' }
+  });
+  expect(r.ok()).toBeTruthy();
+
+  await page.goto('/');
+  /* 回归点①:QR 条目 class 拼接曾把 is-active 吞进 aria-label → 条目不可见 */
+  const slide = page.locator('.notice-slide.notice-has-qr.is-active');
+  await expect(slide).toBeVisible();
+  await expect(slide).toHaveAttribute('role', 'button');
+
+  /* 回归点②:openLightbox 曾不在 TournamentUtils 导出 → 点击即 TypeError */
+  await slide.click();
+  const lightbox = page.locator('.lightbox');
+  await expect(lightbox).toBeVisible();
+  await expect(lightbox.locator('.lightbox-img')).toHaveAttribute('src', /ghs\.png$/);
+
+  /* Esc 关闭 */
+  await page.keyboard.press('Escape');
+  await expect(lightbox).toBeHidden();
+
+  await resetStore(context);
+});

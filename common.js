@@ -1707,6 +1707,7 @@
     normalizePlayer,
     notify,
     uiConfirm,
+    openLightbox,
     bindZoomDock,
     bindZoomFitOnResize,
     requirePlayerSession,
