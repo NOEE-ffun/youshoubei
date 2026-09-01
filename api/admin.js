@@ -6,6 +6,7 @@ const { sendJson, readJsonBody, createStorage } = require('./helpers');
 const { withWorkspaceLock } = require('./workspace-lock');
 const oss = require('./oss');
 const { parseDeckHash, resolveDeck: defaultResolveDeck } = require('./deck-resolve');
+const { createAdminHandler: createNoticesAdmin } = require('./notices');
 const { CLASS_LIST } = require('../canvas-model');
 
 /* 后台接口(仅超管 super;写操作全部审计):
@@ -28,6 +29,8 @@ const { CLASS_LIST } = require('../canvas-model');
  *   POST /api/admin/decks/backfill    存量 WB 卡组链接补解析快照(body {tournamentId?},
  *                                    admin/super;三段式:无锁收集→锁外解析→进锁回填,
  *                                    单次 ≤30 副、间隔 300ms,幂等可重入)
+ *   GET/POST /api/admin/notices(+:id/update、:id/delete)
+ *                                    通知横幅管理(仅 super),整体委托 api/notices
  * 超管保护:目标 effectiveRole==='super'(env 名单命中也算)或目标即操作者本人
  * → 400「超管账号不可在此操作」;目标不存在 → 404。
  * 子路径分发:按 req.url 尾段路由(/api/admin/<tail>,tail 可多段);裸 /api/admin 与
@@ -91,7 +94,7 @@ function monthKeyNow(now) {
 /** backups/<prefix>-<ts>.json 名内时间戳 → ISO(名里 : 与 . 被 backupKeyNow 换成 -,此处逆变换)。
  * 前缀覆盖手工快照 manual-<kind>-(与自动 <kind>- 同构),否则 manual-data 的
  * lastBackupAt 解析不到、排序也插不进时间轴 */
-const BACKUP_TS_RE = /^backups\/(?:manual-)?(?:data|users|codes)-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.json$/;
+const BACKUP_TS_RE = /^backups\/(?:manual-)?(?:data|users|codes|notices)-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z\.json$/;
 function backupTimeOf(key) {
   const m = BACKUP_TS_RE.exec(String(key || ''));
   if (!m) return null;
@@ -163,6 +166,8 @@ function createHandlers(options) {
   const restoreCopy = typeof o.restoreCopy === 'function' ? o.restoreCopy : defaultRestoreCopy;
   const resolveDeck = typeof o.resolveDeck === 'function' ? o.resolveDeck : defaultResolveDeck;
   const backfillGapMs = Number.isFinite(Number(o.backfillGapMs)) ? Number(o.backfillGapMs) : 300;
+  /* 通知管理:整体委托 api/notices(独立 notices.json,storage 同源注入;测试可替换) */
+  const noticesAdmin = typeof o.noticesAdmin === 'function' ? o.noticesAdmin : createNoticesAdmin(o.storage);
   const { read, write } = createStorage(o.storage);
 
   /* GET /api/admin/users:账号总览(role 用 effectiveRole,env 升格即时生效) */
@@ -516,6 +521,11 @@ function createHandlers(options) {
     if (tail === 'decks/backfill') {
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
       return deckBackfill(req, res);
+    }
+    /* notices* 尾段整体委托 api/notices(GET/POST 列表与新建、:id/update|delete;
+     * 方法校验与未知子路径 404/405 在被委托方自理) */
+    if (tail === 'notices' || tail.startsWith('notices/')) {
+      return noticesAdmin(req, res);
     }
     if (req.method !== 'GET') return sendJson(res, 405, { error: 'Method Not Allowed' });
     if (tail === 'users') return listUsers(req, res);

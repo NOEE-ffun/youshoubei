@@ -59,6 +59,7 @@ const API_ROUTES = {
   '/api/me/classlinks': apiDecks,
   '/api/me/signup': require('./api/signup'),
   '/api/codes': require('./api/codes'),
+  '/api/notices': require('./api/notices'),
   '/api/dev/reset': require('./api/dev-store').resetHandler
 };
 
@@ -264,7 +265,7 @@ if (require.main === module) {
   const server = createServer();
   server.listen(PORT, () => {
     console.log('赛事网站已启动：http://localhost:' + PORT);
-    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/dev/reset /api/admin/*');
+    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/notices /api/dev/reset /api/admin/*');
     console.log('按 Ctrl+C 停止服务器');
   });
 }
