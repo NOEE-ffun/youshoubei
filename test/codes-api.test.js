@@ -1,10 +1,11 @@
 'use strict';
 
-/* 发码中心:鉴权矩阵(admin 发 player 码/super 发 admin 码)、生成格式、幂等列表。
+/* 发码中心:仅 admin 码(选手码停用 400)、鉴权矩阵(admin 发 admin 码 403/super 发 200)、
+ * 生成格式、幂等列表。
  * codes 用 createHandler(store) 注入内存存储;requireRole 走全局 account 单例,
  * users 种子须落模块级 dev-store(同 login-wall.test.js)。
  * 会话真实签发:passHash null 的 pv 是空串;issueFor 不带第三参 now(防 1970 过期)。
- * 末段并发互斥:create×2 与 redeem 交错(写延迟放大窗口),验核销不复活、新码不丢。 */
+ * 末段并发互斥:create×2 与 redeem(admin 码)交错(写延迟放大窗口),验核销不复活、新码不丢。 */
 
 const assert = require('node:assert');
 const session = require('../api/session');
@@ -80,35 +81,39 @@ async function call(handler, req) {
   assert.strictEqual((await call(handler, mockReq('GET', { headers: { cookie: ck('u2') } }))).status, 403);
   assert.strictEqual((await call(handler, mockReq('GET', { headers: { cookie: ck('u3') } }))).status, 200);
 
-  /* admin 发空白 player 码 */
+  /* admin 发 player 码 → 400(选手码停用,不落码表) */
   let r = await call(handler, mockReq('POST', { body: JSON.stringify({ kind: 'player' }), headers: { cookie: ck('u3') } }));
-  assert.strictEqual(r.status, 200);
-  assert.match(r.body.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+  assert.strictEqual(r.status, 400);
+  assert.match(r.body.error, /选手码已停用/);
 
   /* admin 发 admin 码 → 403 */
   r = await call(handler, mockReq('POST', { body: JSON.stringify({ kind: 'admin' }), headers: { cookie: ck('u3') } }));
   assert.strictEqual(r.status, 403);
 
-  /* super 发 admin 码 OK;绑定码校验 playerId 存在 */
+  /* super 发 admin 码 OK(生成格式);player 码(含带 playerId)一律 400 停用,不校验选手存在 */
   r = await call(handler, mockReq('POST', { body: JSON.stringify({ kind: 'admin' }), headers: { cookie: ck('u5') } }));
   assert.strictEqual(r.status, 200);
+  assert.match(r.body.code, /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
   r = await call(handler, mockReq('POST', { body: JSON.stringify({ kind: 'player', playerId: 'p_no' }), headers: { cookie: ck('u3') } }));
-  assert.strictEqual(r.status, 404);
+  assert.strictEqual(r.status, 400);
+  assert.match(r.body.error, /选手码已停用/);
   r = await call(handler, mockReq('POST', { body: JSON.stringify({ kind: 'player', playerId: 'p1' }), headers: { cookie: ck('u3') } }));
-  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.status, 400);
+  assert.match(r.body.error, /选手码已停用/);
 
-  /* 列表带 playerName 与 issuedBy */
+  /* 列表:停用拒绝的码不落表,仅 admin 码入表(带 issuedBy) */
   const lst = await call(handler, mockReq('GET', { headers: { cookie: ck('u5') } }));
-  assert.strictEqual(lst.body.codes.length, 3);
-  assert.strictEqual(lst.body.codes[2].playerName, '选手一');
-  assert.strictEqual(lst.body.codes[2].issuedBy, 'u3');
+  assert.strictEqual(lst.body.codes.length, 1);
+  assert.strictEqual(lst.body.codes[0].kind, 'admin');
+  assert.strictEqual(lst.body.codes[0].playerName, null);
+  assert.strictEqual(lst.body.codes[0].issuedBy, 'u5');
 
   /* 非GET/POST → 405 */
   assert.strictEqual((await call(handler, mockReq('DELETE', { headers: { cookie: ck('u5') } }))).status, 405);
 
-  /* ---- 并发互斥:create×2 与 redeem 交错,核销状态不得复活、新码不得丢 ---- */
+  /* ---- 并发互斥:create×2 与 redeem(admin 码)交错,核销状态不得复活、新码不得丢 ---- */
   {
-    /* 独立种子:C0 待兑空白码;u9/u10 两个 user 级账号(redeem 走注入 store 的 account 实例,
+    /* 独立种子:C0 待兑 admin 码;u9/u10 两个存量 user 级账号(redeem 走注入 store 的 account 实例,
      * create 的 requireRole 仍走全局 dev-store——上面已种 u5 super) */
     const seed2 = {
       'users.json': [
@@ -117,7 +122,7 @@ async function call(handler, req) {
       ],
       'data.json': { tournaments: [], players: [], activeId: null },
       'invite-codes.json': [
-        { code: 'C0', kind: 'player', playerId: null, used: false, usedBy: null, usedAt: null, issuedBy: 'u5', createdAt: 't' }
+        { code: 'C0', kind: 'admin', playerId: null, used: false, usedBy: null, usedAt: null, issuedBy: 'u5', createdAt: 't' }
       ]
     };
     const base = memoryStorage(seed2);
@@ -137,8 +142,8 @@ async function call(handler, req) {
     const ckk = (uid) => 'sess=' + session.issueFor(uid, '');
 
     const [rc1, rc2, rr] = await Promise.all([
-      call(codesH, mockReq('POST', { body: JSON.stringify({ kind: 'player' }), headers: { cookie: ckk('u5') } })),
-      call(codesH, mockReq('POST', { body: JSON.stringify({ kind: 'player' }), headers: { cookie: ckk('u5') } })),
+      call(codesH, mockReq('POST', { body: JSON.stringify({ kind: 'admin' }), headers: { cookie: ckk('u5') } })),
+      call(codesH, mockReq('POST', { body: JSON.stringify({ kind: 'admin' }), headers: { cookie: ckk('u5') } })),
       call(acc.redeem, mockReq('POST', { body: JSON.stringify({ code: 'C0' }), headers: { cookie: ckk('u9') } }))
     ]);
     assert.strictEqual(rc1.status, 200, 'create A 200');
@@ -153,15 +158,15 @@ async function call(handler, req) {
     assert.strictEqual(codes.filter((c) => c.code !== 'C0' && c.used === false).length, 2, '两张新码均在且未用');
 
     const users = store._map.get('users.json');
-    assert.strictEqual(users.filter((u) => u.role === 'player').length, 1, '仅一个账号升格');
-    assert.ok(users.find((u) => u.id === 'u9').playerId, '升格者 u9 已绑新选手');
+    assert.strictEqual(users.filter((u) => u.role === 'admin').length, 1, '仅一个账号升格');
+    assert.strictEqual(users.find((u) => u.id === 'u9').playerId, null, 'admin 码不动选手绑定');
 
     /* 复活即双消费:若 used 被覆盖回 false,u10 可再兑 C0。锁下必须拒绝 */
     const again = await call(acc.redeem, mockReq('POST', { body: JSON.stringify({ code: 'C0' }), headers: { cookie: ckk('u10') } }));
     assert.strictEqual(again.status, 400, '已核销码二次兑换必须 400(不复活)');
-    console.log('✓ 并发互斥:create×2+redeem 交错不复活不丢码');
+    console.log('✓ 并发互斥:create×2+redeem(admin 码)交错不复活不丢码');
   }
 
   delete process.env.SESSION_SECRET;
-  console.log('✓ codes-api: 13 断言通过');
+  console.log('✓ codes-api: 27 断言通过');
 })().catch((e) => { console.error(e); process.exit(1); });

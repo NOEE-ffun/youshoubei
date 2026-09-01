@@ -2,40 +2,30 @@
 'use strict';
 
 /* 邀请码生成器(本地或 ECS 上运行,需 OSS 环境变量):
- *   node scripts/gen-invite.js --list                查看所有码的绑定/使用状态 + 未认领选手
- *   node scripts/gen-invite.js 8                     生成 8 个空白码(新选手)
- *   node scripts/gen-invite.js 3 --player 雨橘        生成 3 个绑定到「雨橘」的码
- *   node scripts/gen-invite.js 2 --kind admin         生成 2 个管理员码(应急用;日常请在网页发码中心)
- *   node scripts/gen-invite.js --all                 给每个未绑定的存量选手各生成 1 个绑定码(幂等,可反复跑)
- *   --push:生成后直接写入 OSS invite-codes.json;不加则只打印。
- * 码生成函数与发码中心 API 共用 api/codes 的 generateCode。
- * 绑定码为老选手过渡方案,三期将整体删除。 */
+ *   node scripts/gen-invite.js --list                 查看码状态 + 未认领选手(换绑参考)
+ *   node scripts/gen-invite.js 2 --kind admin [--push]  生成 2 个管理员码(仅应急;日常走网页发码中心)
+ * 选手码(空白/绑定)已随「注册即选手」退役(2026-09-01):不再生成,历史码自然作废。
+ * 码生成函数与发码中心 API 共用 api/codes 的 generateCode。 */
 
 const { generateCode: newCode } = require('../api/codes');
 
 const args = process.argv.slice(2);
-/* 数量取第一个纯数字参数(允许 --all/--player/--push 出现在任意位置) */
+/* 数量取第一个纯数字参数(允许 --kind/--push 出现在任意位置) */
 const count = Math.max(1, Math.min(50, parseInt(args.find((a) => /^\d+$/.test(a)), 10) || 1));
-const playerArg = (args.includes('--player') && args[args.indexOf('--player') + 1]) || null;
 const push = args.includes('--push');
 const kindAdmin = (args.includes('--kind') && args[args.indexOf('--kind') + 1]) === 'admin';
 
-async function resolvePlayerId(nameOrId) {
-  const oss = require('../api/oss');
-  const workspace = await oss.readJson('data.json');
-  const players = (workspace && workspace.players) || [];
-  const byId = players.find((p) => p.id === nameOrId);
-  if (byId) return { id: byId.id, name: byId.name };
-  const byName = players.filter((p) => p && p.name === nameOrId);
-  if (byName.length === 1) return { id: byName[0].id, name: byName[0].name };
-  if (byName.length > 1) throw new Error('重名选手:' + byName.map((p) => p.id).join(', ') + ',请用选手 id 指定');
-  throw new Error('选手不存在:' + nameOrId);
-}
-
 async function main() {
+  /* 选手码(空白/绑定)已停用:生成仅剩 admin 码一条路(此守卫先于 OSS 依赖,
+   * 无 OSS 环境变量的机器也能得到明确提示而非配置报错) */
+  if (!args.includes('--list') && !kindAdmin) {
+    console.error('选手码已停用,仅支持 --kind admin');
+    process.exit(1);
+  }
+
   const oss = require('../api/oss');
 
-  /* --list:只读查看——码状态、绑定归属、未认领选手 */
+  /* --list:只读查看——码状态、绑定归属、未认领选手(后台换绑老选手时参考) */
   if (args.includes('--list')) {
     const [codes, workspace, users] = await Promise.all([
       oss.readJson('invite-codes.json'),
@@ -58,31 +48,10 @@ async function main() {
     return;
   }
 
-  let entries = [];
-
-  if (args.includes('--all')) {
-    /* 给每个还没被账号绑定、且还没有未用绑定码的选手各生成一个绑定码(可重复执行) */
-    const workspace = await oss.readJson('data.json');
-    const players = ((workspace && workspace.players) || []).filter((p) => p && p.id);
-    const users = (await oss.readJson('users.json')) || [];
-    const boundIds = new Set(users.filter((u) => u && u.playerId).map((u) => u.playerId));
-    const codes = (await oss.readJson('invite-codes.json')) || [];
-    const hasOpenCode = new Set(codes.filter((c) => c && !c.used && c.playerId).map((c) => c.playerId));
-    const pending = players.filter((p) => !boundIds.has(p.id) && !hasOpenCode.has(p.id));
-    entries = pending.map((p) => ({ code: newCode(), playerId: p.id, note: '绑定:' + p.name, used: false, playerName: p.name }));
-    console.log('选手总数 ' + players.length + ',已绑定 ' + boundIds.size + ',待发码 ' + entries.length + ':');
-  } else {
-    let player = null;
-    if (kindAdmin) {
-      console.log('提示:admin 码请由超管在网页发码中心生成,此脚本仅供应急。');
-    } else if (playerArg) {
-      player = await resolvePlayerId(playerArg);
-    }
-    for (let i = 0; i < count; i++) {
-      entries.push(kindAdmin
-        ? { code: newCode(), kind: 'admin', playerId: null, note: '', used: false, playerName: '' }
-        : { code: newCode(), playerId: player ? player.id : null, note: player ? '绑定:' + player.name : '', used: false, playerName: player ? player.name : '' });
-    }
+  console.log('提示:admin 码请由超管在网页发码中心生成,此脚本仅供应急。');
+  const entries = [];
+  for (let i = 0; i < count; i++) {
+    entries.push({ code: newCode(), kind: 'admin', playerId: null, note: '', used: false, playerName: '' });
   }
 
   if (push) {
@@ -99,7 +68,6 @@ async function main() {
   console.table ? console.table(entries) : console.log(JSON.stringify(entries, null, 2));
   if (!push) {
     console.log('提示:加 --push 直接写入 OSS;或把上表粘进 OSS 的 invite-codes.json 数组。');
-    console.log('绑定码使用者登录后即继承选手的全部数据。');
   }
 }
 

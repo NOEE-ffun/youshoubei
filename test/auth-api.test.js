@@ -3,7 +3,7 @@
 /* 账号体系 API 行为测试(内存存储注入,不联网):
  * 会话签名、短信验证码登录/自动注册、存量用户归一化、登录限速、
  * /api/me 会话读取、资料白名单更新、修改密码、
- * 填码跃迁(redeem)、账号昵称(nickname)、绑定手机号(mePhone)。
+ * 填码升格(redeem:选手码停用不核销/admin 码生效)、账号昵称(nickname)、绑定手机号(mePhone)。
  * 并发轮:写延迟放大读-改-写窗口——smsLogin 两手机号并发注册不丢号。 */
 
 const assert = require('node:assert');
@@ -63,8 +63,8 @@ const noopRate = () => ({ blocked: () => 0, recordFail() {}, reset() {} });
 function seedWorld() {
   return {
     'users.json': [],
-    /* 填码跃迁的三种码:空白码(无 playerId,兑后建新选手)、
-     * 绑定码(playerId 指向既有选手)、admin 码(kind:'admin',仅 super 发放) */
+    /* redeem 用的三种码:空白码(无 playerId)/绑定码(playerId 指向既有选手)
+     * ——选手码已停用,兑即 400 且不核销;admin 码(kind:'admin',仅 super 发放)照常生效 */
     'invite-codes.json': [
       { code: 'BLANK1', playerId: null, used: false },
       { code: 'BOUND1', playerId: 'p_old', used: false },
@@ -311,22 +311,52 @@ async function main() {
     console.log('✓ me 自愈:悬空 playerId 补建/回填/幂等');
   }
 
-  /* ---- redeem 填码跃迁 + 账号昵称 + 绑手机 ---- */
+  /* ---- redeem:选手码停用 + admin 码照常 ---- */
   {
     const seed = seedWorld();
-    /* user2:用户名密码账号(user 级、未绑选手、未绑手机)——mePhone 绑手机用例要求账号尚无 phone,
-     * 故不能经 smsLogin 造(短信注册账号天生带 phone);pv 取 passHash 尾 8 位 */
-    const u2Seed = {
-      id: 'u_2', username: 'user2', usernameLower: 'user2',
-      passHash: hashPassword('pass12345'), role: 'user', playerId: null, createdAt: '2026-01-01T00:00:00Z'
-    };
-    seed['users.json'].push(u2Seed);
-    /* 合并前注册的存量短信账号(无 playerId):注册即建档上线后,空白码跃迁与
-     * 「无 playerId 改昵称」两条路径只服务这类存量数据,须经 seed 直造而非 smsLogin 新注册 */
+    const store = memoryStorage(seed);
+    const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
+    const acc = account.createHandlers(store, { sms: smsSvc, rateLimiter: noopRate() });
+    const r1 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000001', code: '000000' }) }));
+    const H = { cookie: (r1.headers['Set-Cookie'] || '').split(';')[0] };
+
+    /* 空白码/绑定码一律 400,且不核销(码表保持未用) */
+    for (const code of ['BLANK1', 'BOUND1']) {
+      const rb = await call(acc.redeem, mockReq('POST', { url: '/api/me/redeem', headers: H, body: jsonBody({ code }) }));
+      assert.strictEqual(rb.status, 400, code + ' 应 400');
+      assert.ok(/选手码已停用/.test(rb.body.error), code + ' 报停用文案');
+    }
+    const codesAfter = store._map.get('invite-codes.json');
+    assert.strictEqual(codesAfter.find((c) => c.code === 'BLANK1').used, false, '停用码不被核销');
+    assert.strictEqual(codesAfter.find((c) => c.code === 'BOUND1').used, false, '停用码不被核销');
+
+    /* admin 码照常:升 admin,保留选手绑定(注册即建,playerId 不动) */
+    const before = r1.body.user.playerId;
+    const rb3 = await call(acc.redeem, mockReq('POST', { headers: H, body: jsonBody({ code: 'ADMIN1' }) }));
+    assert.strictEqual(rb3.status, 200);
+    assert.strictEqual(rb3.body.user.role, 'admin');
+    assert.strictEqual(rb3.body.user.playerId, before, 'admin 码不动选手绑定');
+
+    /* 未登录 401;无效码 400 保留 */
+    assert.strictEqual((await call(acc.redeem, mockReq('POST', { body: jsonBody({ code: 'X' }) }))).status, 401);
+    const rb5 = await call(acc.redeem, mockReq('POST', { headers: H, body: jsonBody({ code: 'NOPE' }) }));
+    assert.strictEqual(rb5.status, 400);
+    console.log('✓ redeem:选手码停用不核销/admin 码照常/401/无效码');
+  }
+
+  /* ---- 账号昵称(nickname)+ 绑手机(mePhone):原与 redeem 同块,选手码停用后迁出 ---- */
+  {
+    const seed = seedWorld();
+    /* user2:用户名密码账号(player 级、绑 p_old、未绑手机)——mePhone 绑手机用例要求账号尚无 phone,
+     * 故不能经 smsLogin 造(短信注册账号天生带 phone);绑定原经 BOUND1 兑码获得,
+     * 选手码停用后改为直接 seed(playerId 指向既有选手的存量态);pv 取 passHash 尾 8 位 */
     seed['users.json'].push({
-      id: 'u_sms1', username: '13900000001', usernameLower: '13900000001', phone: '13900000001',
-      passHash: null, role: 'user', playerId: null, nickname: '用户0001', status: 'active', createdAt: '2025-12-01T00:00:00Z'
-    }, {
+      id: 'u_2', username: 'user2', usernameLower: 'user2',
+      passHash: hashPassword('pass12345'), role: 'player', playerId: 'p_old', createdAt: '2026-01-01T00:00:00Z'
+    });
+    /* 合并前注册的存量短信账号(无 playerId):「无 playerId 改昵称」路径只服务这类存量数据,
+     * 须经 seed 直造而非 smsLogin 新注册(注册即建档) */
+    seed['users.json'].push({
       id: 'u_sms3', username: '13900000003', usernameLower: '13900000003', phone: '13900000003',
       passHash: null, role: 'user', playerId: null, nickname: null, status: 'active', createdAt: '2025-12-01T00:00:00Z'
     });
@@ -338,65 +368,7 @@ async function main() {
       const seeded = seed['users.json'].find((u) => u.id === uid);
       return 'sess=' + session.issueFor(uid, seeded ? String(seeded.passHash || '').slice(-8) : '');
     };
-
-    /* r1:存量短信账号(无 playerId)经 smsLogin 登录——兑码空白路径的对象 */
-    const r1 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000001', code: '000000' }) }));
-    assert.strictEqual(r1.status, 200);
     const user2Id = 'u_2';
-    const anotherUserId = user2Id;
-
-    /* ---- redeem 跃迁 ---- */
-    /* blank: user → player,选手名取昵称 */
-    const rb = await call(acc.redeem, mockReq('POST', {
-      body: jsonBody({ code: 'BLANK1' }),
-      headers: { cookie: sessCookie(r1.body.user.id) }
-    }));
-    assert.strictEqual(rb.status, 200);
-    assert.strictEqual(rb.body.user.role, 'player');
-    assert.ok(rb.body.player.id);
-    assert.strictEqual(rb.body.player.name, '用户0001');
-    /* 兑码即核销:码文件标记 used/usedBy */
-    const usedEntry = store._map.get('invite-codes.json').find((c) => c.code === 'BLANK1');
-    assert.strictEqual(usedEntry.used, true);
-    assert.strictEqual(usedEntry.usedBy, '13900000001');
-
-    /* 码单次使用 */
-    const rb2 = await call(acc.redeem, mockReq('POST', {
-      body: jsonBody({ code: 'BLANK1' }),
-      headers: { cookie: sessCookie(anotherUserId) }
-    }));
-    assert.strictEqual(rb2.status, 400);
-
-    /* 已是选手再兑 → 409 */
-    const rb3 = await call(acc.redeem, mockReq('POST', {
-      body: jsonBody({ code: 'BOUND1' }),
-      headers: { cookie: sessCookie(r1.body.user.id) }
-    }));
-    assert.strictEqual(rb3.status, 409);
-
-    /* bound: user2 继承 p_old */
-    const rb4 = await call(acc.redeem, mockReq('POST', {
-      body: jsonBody({ code: 'BOUND1' }),
-      headers: { cookie: sessCookie(user2Id) }
-    }));
-    assert.strictEqual(rb4.status, 200);
-    assert.strictEqual(rb4.body.user.playerId, 'p_old');
-
-    /* admin 码:player → admin 保留 playerId */
-    const rb5 = await call(acc.redeem, mockReq('POST', {
-      body: jsonBody({ code: 'ADMIN1' }),
-      headers: { cookie: sessCookie(r1.body.user.id) }
-    }));
-    assert.strictEqual(rb5.status, 200);
-    assert.strictEqual(rb5.body.user.role, 'admin');
-    assert.strictEqual(rb5.body.user.playerId, rb.body.player.id);
-
-    /* 未登录 401;不存在码 400 */
-    assert.strictEqual((await call(acc.redeem, mockReq('POST', { body: jsonBody({ code: 'X' }) }))).status, 401);
-    assert.strictEqual((await call(acc.redeem, mockReq('POST', {
-      body: jsonBody({ code: 'X' }),
-      headers: { cookie: sessCookie(user2Id) }
-    }))).status, 400);
 
     /* ---- 昵称 ---- */
     const rn = await call(acc.me, mockReq('PUT', {
@@ -448,14 +420,14 @@ async function main() {
     }));
     assert.strictEqual(rp.status, 200);
     assert.strictEqual(store._map.get('users.json').find((u) => u.id === user2Id).phone, '13911112222');
-    /* 手机已被 r1 账号占用 → 409 */
+    /* 手机已被 u_sms3 账号占用 → 409 */
     const rp2 = await call(acc.mePhone, mockReq('PUT', {
-      body: jsonBody({ phone: '13900000001', code: '000000' }),
+      body: jsonBody({ phone: '13900000003', code: '000000' }),
       headers: { cookie: sessCookie(user2Id) }
     }));
     assert.strictEqual(rp2.status, 409);
 
-    console.log('✓ redeem/mePhone/nickname:跃迁/码核销/占用冲突/账号昵称');
+    console.log('✓ mePhone/nickname:账号昵称/选手字段守卫/绑手机占用冲突');
   }
 
   /* ---- 限速器窗口语义(注入时钟) ---- */

@@ -16,7 +16,7 @@ const { createSmsService, realVerifier } = require('./sms');
  *   GET  /api/me              当前会话的用户+绑定选手
  *   PUT  /api/me/player       选手自助改资料(字段白名单;nickname 属账号落 users.json,纯昵称不要求绑定选手)
  *   PUT  /api/me/password     修改密码
- *   POST /api/me/redeem       填码跃迁:空白码建新选手/绑定码继承既有选手/admin 码升格(角色升级唯一入口)
+ *   POST /api/me/redeem       填码升格:admin 码升 admin(角色升级唯一入口);选手码已停用(注册即选手,兑即 400 不核销)
  *   PUT  /api/me/phone        绑定手机号(验码 + 未被他人占用;已有 phone 拒绝)
  * 存储:OSS users.json / data.json(players) / invite-codes.json(填码跃迁);测试用 createHandlers(storage) 注入。 */
 const USERS_KEY = 'users.json';
@@ -202,7 +202,7 @@ function createHandlers(storage, options) {
     return out;
   }
 
-  /* 以用户名新建选手并入 workspace(选手兑换码绑定通道复用) */
+  /* 以用户名新建选手并入 workspace(短信注册建档/me 自愈通道复用) */
   async function createPlayerFor(username) {
     const t = now();
     const player = {
@@ -396,7 +396,7 @@ function createHandlers(storage, options) {
         return sendJson(res, 400, { error: '没有可更新的字段' });
       }
       /* 选手资料字段仍要求已绑定选手;纯昵称请求放行——
-       * 昵称是账号级字段(写 users.json),与选手档案无关,未兑码的 user 账号也可改 */
+       * 昵称是账号级字段(写 users.json),与选手档案无关,无 playerId 的存量账号也可改 */
       if (Object.keys(patch).length && !user.playerId) {
         return sendJson(res, 400, { error: '该账号未绑定选手,无法编辑资料' });
       }
@@ -468,12 +468,11 @@ function createHandlers(storage, options) {
     });
   }
 
-  /* POST /api/me/redeem:填码跃迁——角色升级唯一入口。
+  /* POST /api/me/redeem:填码升格——角色升级唯一入口。
    * 码来自 OSS invite-codes.json(super 发放):
-   *   空白码(无 playerId)→ 建新选手档案(名取 nickname||username 前 24 字),user 升 player
-   *   绑定码(playerId 指向既有选手)→ 账号继承该选手,目标已被他人绑定 409
    *   admin 码(kind:'admin')→ role 升 admin(保留既有 playerId)
-   * 码单次使用:核销即标 used/usedBy/usedAt 落盘。 */
+   *   选手码(空白/绑定)已停用:注册即选手后无跃迁语义,一律 400 且不核销,历史码自然作废
+   * admin 码单次使用:核销即标 used/usedBy/usedAt 落盘。 */
   async function redeem(req, res) {
     if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
     const user = await currentUser(req);
@@ -483,8 +482,8 @@ function createHandlers(storage, options) {
     const code = String(body.code || '').trim();
     if (!code) return sendJson(res, 400, { error: '请填写验证码' });
 
-    /* 码表查找→核销落盘整段上锁:codes/users/data(createPlayerFor 建档)三段读改写,
-     * 与 me PUT/signup/管理 PUT 等带锁写者互斥,堵并发兑同一码的双消费(含 admin 升格)与交错覆盖 */
+    /* 码表查找→核销落盘整段上锁:codes/users 两段读改写,
+     * 与 me PUT/signup/管理 PUT 等带锁写者互斥,堵并发兑同一码的双消费与交错覆盖 */
     return withWorkspaceLock(async () => {
       const codes = (await read(CODES_KEY)) || [];
       const entry = codes.find((c) => c && c.code === code);
@@ -493,22 +492,9 @@ function createHandlers(storage, options) {
       if (entry.kind === 'admin') {
         user.role = 'admin';
       } else {
-        if (user.playerId) return sendJson(res, 409, { error: '该账号已绑定选手,无需再次填码' });
-        if (entry.playerId) {
-          const workspace = await readWorkspace();
-          const players = (workspace && workspace.players) || [];
-          if (!players.some((p) => p && p.id === entry.playerId)) {
-            return sendJson(res, 400, { error: '验证码绑定的选手不存在' });
-          }
-          const users = await readUsers();
-          if (users.some((u) => u.playerId === entry.playerId && u.id !== user.id)) {
-            return sendJson(res, 409, { error: '该选手已被其他账号绑定' });
-          }
-          user.playerId = entry.playerId;
-        } else {
-          user.playerId = await createPlayerFor(String(user.nickname || user.username).slice(0, 24));
-        }
-        if (user.role === 'user') user.role = 'player';
+        /* 选手码(空白/绑定)已停用:注册即选手后无跃迁语义;
+         * 直接拒绝且不核销,历史码自然作废 */
+        return sendJson(res, 400, { error: '选手码已停用:所有账号注册时已自动创建选手' });
       }
       /* 核销码(单次使用)+ 同步用户表:users[idx] 与 user 对象是两个引用,须整体替换 */
       entry.used = true;
