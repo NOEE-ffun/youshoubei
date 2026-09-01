@@ -175,6 +175,33 @@ function createHandlers(storage, options) {
     return players.find((p) => p && p.id === user.playerId) || null;
   }
 
+  /* 不变量自愈:playerId 缺失/悬空(选手被删/恢复了旧备份)时就地补建并回写
+   * users.json。GET /api/me 是唯一自愈点:任何页面加载必经 refreshSession → me,
+   * 登录响应不重复此逻辑(下个页面会话刷新即兜住)。 */
+  async function ensurePlayerOf(user) {
+    const existing = await playerOf(user);
+    if (existing) return { user, player: existing };
+    let out = { user, player: null };
+    await withWorkspaceLock(async () => {
+      const users = await readUsers();
+      const idx = users.findIndex((u) => u.id === user.id);
+      if (idx < 0) return;
+      /* 锁内重查:并发 me 请求可能已补建 */
+      const pid = users[idx].playerId;
+      const ws = await readWorkspace();
+      const hit = pid && (ws && ws.players || []).find((p) => p && p.id === pid);
+      if (hit) { out = { user: users[idx], player: hit }; return; }
+      const name = String(users[idx].nickname || users[idx].username).slice(0, 24);
+      const newPid = await createPlayerFor(name);
+      users[idx].playerId = newPid;
+      await backupJson(USERS_KEY, 'users');
+      await write(USERS_KEY, users);
+      audit('me.autoPlayer', 'user=' + users[idx].username + ' player=' + newPid);
+      out = { user: users[idx], player: await playerOf(users[idx]) };
+    });
+    return out;
+  }
+
   /* 以用户名新建选手并入 workspace(选手兑换码绑定通道复用) */
   async function createPlayerFor(username) {
     const t = now();
@@ -240,6 +267,8 @@ function createHandlers(storage, options) {
           phone, passHash: null, role: 'player', playerId: null,
           nickname: '用户' + phone.slice(-4), status: 'active', createdAt: t0iso(now)
         };
+        /* 注册即选手:锁内建档并回填(与 redeem 建档共用 createPlayerFor 约定) */
+        user.playerId = await createPlayerFor(String(user.nickname || user.username).slice(0, 24));
         users.push(user);
         created = true;
         await backupJson(USERS_KEY, 'users');
@@ -309,7 +338,8 @@ function createHandlers(storage, options) {
     if (req.method === 'GET') {
       const user = await currentUser(req);
       if (!user) return sendJson(res, 401, { error: '未登录' });
-      sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
+      const ensured = await ensurePlayerOf(user);
+      sendJson(res, 200, { user: safeUser(ensured.user), player: ensured.player });
       return;
     }
     if (req.method === 'PUT') {

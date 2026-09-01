@@ -39,7 +39,7 @@ function createHandler(storage, options) {
     }
     const user = await currentUser(req);
     if (!user || !user.playerId) {
-      sendJson(res, 401, { error: '需要登录选手账号' });
+      sendJson(res, 401, { error: '需要登录' });
       return;
     }
     const body = await readJsonBody(req, res, MAX_BODY);

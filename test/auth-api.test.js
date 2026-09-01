@@ -123,6 +123,10 @@ async function main() {
     assert.strictEqual(r1.body.user.nickname, '用户0001');
     assert.ok(r1.body.user.id);
     assert.ok((r1.headers['Set-Cookie'] || '').includes('sess='), '验码登录应种会话 cookie');
+    assert.ok(r1.body.user.playerId, '注册即建选手档案');
+    assert.strictEqual(r1.body.player && r1.body.player.name, '用户0001', '默认名=用户+尾4');
+    const data1 = store._map.get('data.json');
+    assert.ok(data1.players.some((p) => p && p.id === r1.body.user.playerId), '选手档案落 data.json');
 
     /* 手机号格式拒绝 */
     const r2 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '12345', code: '000000' }) }));
@@ -281,6 +285,32 @@ async function main() {
     console.log('✓ me/player/password:白名单/越权/备份/改密');
   }
 
+  /* ---- /api/me 自愈:playerId 悬空/缺失就地补建(不变量兜底唯一自愈点) ---- */
+  {
+    const seed = seedWorld();
+    seed['users.json'] = [{
+      id: 'u_dangle', username: '13900000002', usernameLower: '13900000002', phone: '13900000002',
+      passHash: null, role: 'player', playerId: 'p_gone', nickname: '悬空用户', status: 'active', createdAt: 't'
+    }];
+    const store = memoryStorage(seed);
+    const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
+    const acc = account.createHandlers(store, { sms: smsSvc, rateLimiter: noopRate() });
+    const r1 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000002', code: '000000' }) }));
+    const cookie = (r1.headers['Set-Cookie'] || '').split(';')[0];
+    const me1 = await call(acc.me, mockReq('GET', { url: '/api/me', headers: { cookie } }));
+    assert.strictEqual(me1.status, 200);
+    assert.ok(me1.body.user.playerId && me1.body.player, '悬空 playerId 自愈补建');
+    assert.strictEqual(me1.body.player.name, '悬空用户', '补建名取昵称优先');
+    assert.notStrictEqual(me1.body.user.playerId, 'p_gone', '不复活已删选手');
+    assert.strictEqual(
+      store._map.get('users.json').find((u) => u.id === 'u_dangle').playerId,
+      me1.body.user.playerId, 'users.json 已回填新 playerId');
+    const before = store._map.get('data.json').players.length;
+    await call(acc.me, mockReq('GET', { url: '/api/me', headers: { cookie } }));
+    assert.strictEqual(store._map.get('data.json').players.length, before, '二次访问不重复补建(幂等)');
+    console.log('✓ me 自愈:悬空 playerId 补建/回填/幂等');
+  }
+
   /* ---- redeem 填码跃迁 + 账号昵称 + 绑手机 ---- */
   {
     const seed = seedWorld();
@@ -291,6 +321,15 @@ async function main() {
       passHash: hashPassword('pass12345'), role: 'user', playerId: null, createdAt: '2026-01-01T00:00:00Z'
     };
     seed['users.json'].push(u2Seed);
+    /* 合并前注册的存量短信账号(无 playerId):注册即建档上线后,空白码跃迁与
+     * 「无 playerId 改昵称」两条路径只服务这类存量数据,须经 seed 直造而非 smsLogin 新注册 */
+    seed['users.json'].push({
+      id: 'u_sms1', username: '13900000001', usernameLower: '13900000001', phone: '13900000001',
+      passHash: null, role: 'user', playerId: null, nickname: '用户0001', status: 'active', createdAt: '2025-12-01T00:00:00Z'
+    }, {
+      id: 'u_sms3', username: '13900000003', usernameLower: '13900000003', phone: '13900000003',
+      passHash: null, role: 'user', playerId: null, nickname: null, status: 'active', createdAt: '2025-12-01T00:00:00Z'
+    });
     const store = memoryStorage(seed);
     const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
     const acc = account.createHandlers(store, { sms: smsSvc, rateLimiter: noopRate() });
@@ -300,7 +339,7 @@ async function main() {
       return 'sess=' + session.issueFor(uid, seeded ? String(seeded.passHash || '').slice(-8) : '');
     };
 
-    /* r1:短信自动注册的 user 级账号(无 playerId) */
+    /* r1:存量短信账号(无 playerId)经 smsLogin 登录——兑码空白路径的对象 */
     const r1 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000001', code: '000000' }) }));
     assert.strictEqual(r1.status, 200);
     const user2Id = 'u_2';
@@ -385,7 +424,7 @@ async function main() {
     }));
     assert.strictEqual(rbad.status, 400);
 
-    /* 纯 user 账号(未兑码、无 playerId)也能改昵称:账号级字段写 users.json,与选手档案无关 */
+    /* 纯 user 存量账号(未兑码、无 playerId)也能改昵称:账号级字段写 users.json,与选手档案无关 */
     const r3 = await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13900000003', code: '000000' }) }));
     assert.strictEqual(r3.status, 200);
     const rnick = await call(acc.me, mockReq('PUT', {
