@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { sendJson, readJsonBody, createStorage } = require('./helpers');
+const { sendJson, readJsonBody, createStorage, maskUser } = require('./helpers');
 const { backupJson, appendAudit } = require('./oss');
 const { requireRole } = require('./auth');
 const { withWorkspaceLock } = require('./workspace-lock');
@@ -74,7 +74,7 @@ function createHandler(storage, options) {
       codes.push(entry);
       await backupJson(CODES_KEY, 'codes');
       await write(CODES_KEY, codes);
-      audit('codes.create', 'by=' + user.username + ' kind=' + kind);
+      audit('codes.create', 'by=' + maskUser(user.username) + ' kind=' + kind);
       sendJson(res, 200, { code: entry.code, kind, playerId: null });
     });
   }

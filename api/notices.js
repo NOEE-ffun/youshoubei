@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { sendJson, readJsonBody, createStorage } = require('./helpers');
+const { sendJson, readJsonBody, createStorage, maskUser } = require('./helpers');
 const { backupJson, appendAudit } = require('./oss');
 const { requireUser, requireRole } = require('./auth');
 const { withWorkspaceLock } = require('./workspace-lock');
@@ -131,7 +131,7 @@ function createHandlers(storage, options) {
       notices.push(entry);
       await backupJson(NOTICES_KEY, 'notices');
       await write(NOTICES_KEY, notices);
-      audit('admin.noticeCreate', 'text=' + String(entry.text).slice(0, 12) + ' by=' + user.username);
+      audit('admin.noticeCreate', 'text=' + String(entry.text).slice(0, 12) + ' by=' + maskUser(user.username));
       sendJson(res, 200, { notice: entry });
     });
   }
@@ -154,7 +154,7 @@ function createHandlers(storage, options) {
       });
       await backupJson(NOTICES_KEY, 'notices');
       await write(NOTICES_KEY, notices);
-      audit('admin.noticeUpdate', 'id=' + id + ' text=' + String(r.fields.text).slice(0, 12) + ' by=' + user.username);
+      audit('admin.noticeUpdate', 'id=' + id + ' text=' + String(r.fields.text).slice(0, 12) + ' by=' + maskUser(user.username));
       sendJson(res, 200, { notice: notices[idx] });
     });
   }
@@ -170,7 +170,7 @@ function createHandlers(storage, options) {
       const [removed] = notices.splice(idx, 1);
       await backupJson(NOTICES_KEY, 'notices');
       await write(NOTICES_KEY, notices);
-      audit('admin.noticeDelete', 'id=' + id + ' text=' + String(removed.text).slice(0, 12) + ' by=' + user.username);
+      audit('admin.noticeDelete', 'id=' + id + ' text=' + String(removed.text).slice(0, 12) + ' by=' + maskUser(user.username));
       sendJson(res, 200, { ok: true });
     });
   }

@@ -4767,3 +4767,16 @@ body[data-view='canvas'] .list-view {
   border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
 .df-preview { font-size: 14px; }
 @media (max-width: 760px) { .df-editor { grid-template-columns: 1fr; } }
+
+/* ---------- 隐私政策页(独立静态页,不引 common.js) ---------- */
+.legal-body { min-block-size: 100vh; min-block-size: 100dvh; padding: 2rem 1rem 3rem; }
+.legal-page { max-inline-size: 46rem; margin: 0 auto; }
+.legal-back { margin: 0 0 1rem; }
+.legal-title { margin: 0 0 0.25rem; font-size: 1.5rem; }
+.legal-meta { margin: 0 0 1.5rem; color: var(--text-muted); font-size: 0.85rem; }
+.legal-page .md-body h2 { margin: 1.75rem 0 0.5rem; font-size: 1.1rem; }
+.legal-page .md-body p { margin: 0.5rem 0; }
+.legal-page .md-body ul { margin: 0.5rem 0; padding-left: 1.25rem; }
+.legal-page .md-body li { margin: 0.35rem 0; }
+.login-legal { margin-top: 0.75rem; text-align: center; }
+.login-legal a { color: var(--accent); }

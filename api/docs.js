@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { sendJson, readJsonBody, createStorage } = require('./helpers');
+const { sendJson, readJsonBody, createStorage, maskUser } = require('./helpers');
 const { backupJson, appendAudit } = require('./oss');
 const { requireUser, requireRole } = require('./auth');
 const { withWorkspaceLock } = require('./workspace-lock');
@@ -109,7 +109,7 @@ function createHandlers(storage, options) {
       docs.push(entry);
       await backupJson(DOCS_KEY, 'docs');
       await write(DOCS_KEY, docs);
-      audit('admin.docCreate', 'title=' + String(entry.title).slice(0, 12) + ' by=' + user.username);
+      audit('admin.docCreate', 'title=' + String(entry.title).slice(0, 12) + ' by=' + maskUser(user.username));
       sendJson(res, 200, { doc: entry });
     });
   }
@@ -132,7 +132,7 @@ function createHandlers(storage, options) {
       });
       await backupJson(DOCS_KEY, 'docs');
       await write(DOCS_KEY, docs);
-      audit('admin.docUpdate', 'id=' + id + ' title=' + String(r.fields.title).slice(0, 12) + ' by=' + user.username);
+      audit('admin.docUpdate', 'id=' + id + ' title=' + String(r.fields.title).slice(0, 12) + ' by=' + maskUser(user.username));
       sendJson(res, 200, { doc: docs[idx] });
     });
   }
@@ -148,7 +148,7 @@ function createHandlers(storage, options) {
       const [removed] = docs.splice(idx, 1);
       await backupJson(DOCS_KEY, 'docs');
       await write(DOCS_KEY, docs);
-      audit('admin.docDelete', 'id=' + id + ' title=' + String(removed.title).slice(0, 12) + ' by=' + user.username);
+      audit('admin.docDelete', 'id=' + id + ' title=' + String(removed.title).slice(0, 12) + ' by=' + maskUser(user.username));
       sendJson(res, 200, { ok: true });
     });
   }

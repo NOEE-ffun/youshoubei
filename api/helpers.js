@@ -61,4 +61,11 @@ function createStorage(storage) {
   };
 }
 
-module.exports = { sendJson, readBody, readJsonBody, createStorage };
+/** 审计脱敏:11 位手机号形态的账号名只留末 4 位(短信注册用户 username 即手机号,
+ * 全文落盘等于手机号明文进日志;非手机号形态原样返回不过度打码) */
+function maskUser(name) {
+  const s = String(name == null ? '' : name);
+  return /^1\d{10}$/.test(s) ? '***' + s.slice(-4) : s;
+}
+
+module.exports = { sendJson, readBody, readJsonBody, createStorage, maskUser };

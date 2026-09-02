@@ -1,6 +1,6 @@
 'use strict';
 
-const { sendJson, readJsonBody, createStorage } = require('./helpers');
+const { sendJson, readJsonBody, createStorage, maskUser } = require('./helpers');
 const { DATA_PATH, backupJson } = require('./oss');
 const account = require('./account');
 const { withWorkspaceLock } = require('./workspace-lock');
@@ -92,7 +92,7 @@ function createHandler(storage, options) {
       record.updatedAt = now();
       await backup(DATA_PATH, 'data');
       await write(DATA_PATH, workspace);
-      audit('signup.' + action, 'user=' + user.username + ' tournament=' + (record.name || record.id) + ' n=' + players.length);
+      audit('signup.' + action, 'user=' + maskUser(user.username) + ' tournament=' + (record.name || record.id) + ' n=' + players.length);
       sendJson(res, 200, { ok: true, joined: action === 'join', players: players.length });
     });
   }

@@ -1,6 +1,6 @@
 'use strict';
 
-const { sendJson, readJsonBody, createStorage } = require('./helpers');
+const { sendJson, readJsonBody, createStorage, maskUser } = require('./helpers');
 const { DATA_PATH, backupData, appendAudit } = require('./oss');
 const account = require('./account');
 const { withWorkspaceLock } = require('./workspace-lock');
@@ -150,7 +150,7 @@ function createHandler(storage, options) {
       record.updatedAt = now();
       await backup();
       await write(DATA_PATH, workspace);
-      audit('deck.submit', 'user=' + user.username + ' card=' + cardId + ' side=' + side + ' n=' + links.length + (wbCount ? ' resolved=' + resolvedCount + '/' + wbCount + ' cached=' + cachedCount : ''));
+      audit('deck.submit', 'user=' + maskUser(user.username) + ' card=' + cardId + ' side=' + side + ' n=' + links.length + (wbCount ? ' resolved=' + resolvedCount + '/' + wbCount + ' cached=' + cachedCount : ''));
       sendJson(res, 200, { ok: true, links });
     });
   }

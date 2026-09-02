@@ -536,6 +536,48 @@ async function main() {
     console.log('✓ banned sms:不清限速计数/audit 带 ip');
   }
 
+  /* ---- 审计脱敏:手机号形态的账号名只留末 4 位(PIPL 最小化) ---- */
+  {
+    const audits = [];
+    const smsSvc = createSmsService({ devResolver: () => '000000', sender: async () => ({ ok: true }) });
+    const acc = account.createHandlers(memoryStorage(seedWorld()), {
+      sms: smsSvc,
+      rateLimiter: noopRate(),
+      appendAudit: (event, detail) => audits.push(event + ' ' + detail)
+    });
+
+    /* 注册+再登录:审计不得出现手机号全文,只保留末 4 位 */
+    await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13912340007', code: '000000' }) }));
+    await call(acc.smsLogin, mockReq('POST', { body: jsonBody({ phone: '13912340007', code: '000000' }) }));
+    const joined = audits.join('\n');
+    assert.ok(!joined.includes('13912340007'), '审计不得出现手机号全文(实际:' + joined + ')');
+    assert.ok(joined.includes('***0007'), '手机号脱敏应保留末 4 位');
+
+    /* 非手机号用户名原样保留,不过度打码(密码登录链) */
+    audits.length = 0;
+    const pwStore = memoryStorage({
+      'users.json': [{
+        id: 'u_x', username: '老用户', usernameLower: '老用户',
+        passHash: hashPassword('12345678'), role: 'player', playerId: null, status: 'active', createdAt: '2025-01-01T00:00:00Z'
+      }],
+      'data.json': { tournaments: [], activeId: null, players: [] }
+    });
+    const acc2 = account.createHandlers(pwStore, {
+      rateLimiter: noopRate(),
+      appendAudit: (event, detail) => audits.push(event + ' ' + detail)
+    });
+    const pw = await call(acc2.login, mockReq('POST', { body: jsonBody({ username: '老用户', password: '12345678' }) }));
+    assert.strictEqual(pw.status, 200);
+    assert.ok(audits.some((s) => s.includes('user=老用户')), '非手机号用户名不脱敏');
+
+    /* sms.send 打码口径保持不变 */
+    audits.length = 0;
+    await call(acc.smsSend, mockReq('POST', { body: jsonBody({ phone: '13912340007' }) }));
+    assert.ok(audits.includes('sms.send phone=***0007 dev'), 'sms.send 打码口径保持');
+
+    console.log('✓ 审计脱敏:手机号留末 4 位,非手机号原样');
+  }
+
   delete process.env.SESSION_SECRET;
   console.log('auth-api 全部通过');
 }

@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { sendJson, readJsonBody, createStorage } = require('./helpers');
+const { sendJson, readJsonBody, createStorage, maskUser } = require('./helpers');
 const { appendAudit, backupData, backupJson } = require('./oss');
 const { withWorkspaceLock } = require('./workspace-lock');
 const { sessionOf, setSessionCookie, issueFor } = require('./session');
@@ -196,7 +196,7 @@ function createHandlers(storage, options) {
       users[idx].playerId = newPid;
       await backupJson(USERS_KEY, 'users');
       await write(USERS_KEY, users);
-      audit('me.autoPlayer', 'user=' + users[idx].username + ' player=' + newPid);
+      audit('me.autoPlayer', 'user=' + maskUser(users[idx].username) + ' player=' + newPid);
       out = { user: users[idx], player: await playerOf(users[idx]) };
     });
     return out;
@@ -237,7 +237,7 @@ function createHandlers(storage, options) {
     if (!PHONE_RE.test(phone)) return sendJson(res, 400, { error: '手机号格式不正确' });
     const r = await sms.issue(phone, clientIp(req));
     if (!r.ok) return sendJson(res, 429, { error: r.error, wait: r.wait || null });
-    audit('sms.send', 'phone=***' + phone.slice(-4) + (r.dev ? ' dev' : ''));
+    audit('sms.send', 'phone=' + maskUser(phone) + (r.dev ? ' dev' : ''));
     sendJson(res, 200, { ok: true, dev: Boolean(r.dev) });
   }
 
@@ -278,11 +278,11 @@ function createHandlers(storage, options) {
        * 验码已通过但 banned:与密码链对称——不计失败亦不 reset,
        * 防借停用账号的既知验证码清失败计数助跑爆破 */
       if (user.status === 'banned') {
-        audit('auth.login.banned', 'user=' + user.username + ' ip=' + ip);
+        audit('auth.login.banned', 'user=' + maskUser(user.username) + ' ip=' + ip);
         return sendJson(res, 403, { error: '账号已被停用' });
       }
       rate.reset(ip);
-      audit(created ? 'sms.register' : 'sms.login', 'user=' + user.username + (created ? ' player=' + user.playerId : ''));
+      audit(created ? 'sms.register' : 'sms.login', 'user=' + maskUser(user.username) + (created ? ' player=' + user.playerId : ''));
       setSessionCookie(res, issueFor(user.id, pvOf(user), now), req);
       sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
     });
@@ -307,17 +307,17 @@ function createHandlers(storage, options) {
     const user = users.find((u) => u.usernameLower === username);
     if (!user || !verifyPassword(password, user.passHash)) {
       rate.recordFail(ip);
-      audit('auth.login.fail', 'user=' + username + ' ip=' + ip);
+      audit('auth.login.fail', 'user=' + maskUser(username) + ' ip=' + ip);
       return sendJson(res, 401, { error: '用户名或密码错误' });
     }
     /* banned:密码已验证(身份确认,非爆破)→ 403;不计限速失败亦不 reset,
      * 防借停用账号的既知密码清失败计数助跑爆破 */
     if (user.status === 'banned') {
-      audit('auth.login.banned', 'user=' + user.username + ' ip=' + ip);
+      audit('auth.login.banned', 'user=' + maskUser(user.username) + ' ip=' + ip);
       return sendJson(res, 403, { error: '账号已被停用' });
     }
     rate.reset(ip);
-    audit('auth.login', 'user=' + user.username + ' ip=' + ip);
+    audit('auth.login', 'user=' + maskUser(user.username) + ' ip=' + ip);
     setSessionCookie(res, issueFor(user.id, pvOf(user), now), req);
     sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
   }
@@ -328,7 +328,7 @@ function createHandlers(storage, options) {
       return;
     }
     const user = await currentUser(req);
-    audit('auth.logout', user ? 'user=' + user.username : 'anonymous');
+    audit('auth.logout', user ? 'user=' + maskUser(user.username) : 'anonymous');
     setSessionCookie(res, '', req, 0);
     sendJson(res, 200, { ok: true });
   }
@@ -413,7 +413,7 @@ function createHandlers(storage, options) {
           users[uidx] = Object.assign({}, users[uidx], { nickname });
           await backupJson(USERS_KEY, 'users');
           await write(USERS_KEY, users);
-          audit('me.account', 'user=' + user.username + ' fields=nickname');
+          audit('me.account', 'user=' + maskUser(user.username) + ' fields=nickname');
           out.user = safeUser(users[uidx]);
         }
         /* 第二段:选手资料 → data.json 读改写(仅剩资料字段时) */
@@ -425,7 +425,7 @@ function createHandlers(storage, options) {
           players[idx] = Object.assign({}, players[idx], patch, { updatedAt: now() });
           await backup();
           await write(DATA_KEY, workspace);
-          audit('me.player', 'user=' + user.username + ' player=' + players[idx].name + ' fields=' + Object.keys(patch).join(','));
+          audit('me.player', 'user=' + maskUser(user.username) + ' player=' + players[idx].name + ' fields=' + Object.keys(patch).join(','));
           out.player = players[idx];
         } else {
           out.player = await playerOf(user);
@@ -461,7 +461,7 @@ function createHandlers(storage, options) {
       users[idx].passHash = nextHash;
       await backupJson(USERS_KEY, 'users');
       await write(USERS_KEY, users);
-      audit('me.password', 'user=' + user.username);
+      audit('me.password', 'user=' + maskUser(user.username));
       /* 重签当前会话(新 pv),其他浏览器/旧 cookie 因 pv 不匹配全部下线 */
       setSessionCookie(res, issueFor(user.id, pvOf(users[idx]), now), req);
       sendJson(res, 200, { ok: true });
@@ -507,7 +507,7 @@ function createHandlers(storage, options) {
       users[idx] = user;
       await backupJson(USERS_KEY, 'users');
       await write(USERS_KEY, users);
-      audit('redeem', 'user=' + user.username + ' kind=' + (entry.kind || 'player') + ' player=' + (user.playerId || '-'));
+      audit('redeem', 'user=' + maskUser(user.username) + ' kind=' + (entry.kind || 'player') + ' player=' + (user.playerId || '-'));
       sendJson(res, 200, { user: safeUser(user), player: await playerOf(user) });
     });
   }
@@ -538,7 +538,7 @@ function createHandlers(storage, options) {
       users[idx].phone = phone;
       await backupJson(USERS_KEY, 'users');
       await write(USERS_KEY, users);
-      audit('me.phone', 'user=' + user.username);
+      audit('me.phone', 'user=' + maskUser(user.username));
       sendJson(res, 200, { user: safeUser(users[idx]) });
     });
   }
