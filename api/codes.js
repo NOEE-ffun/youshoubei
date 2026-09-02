@@ -42,8 +42,8 @@ function createHandler(storage, options) {
       codes: codes.map((c) => ({
         code: c.code, kind: c.kind, playerId: c.playerId || null,
         playerName: c.playerId ? (pmap.get(c.playerId) || null) : null,
-        used: Boolean(c.used), usedBy: c.usedBy || null, usedAt: c.usedAt || null,
-        issuedBy: c.issuedBy || null, createdAt: c.createdAt || null
+        used: Boolean(c.used), usedBy: maskUser(c.usedBy) || null, usedAt: c.usedAt || null,
+        issuedBy: maskUser(c.issuedBy) || null, createdAt: c.createdAt || null
       }))
     });
   }

@@ -552,6 +552,43 @@ async function call(handler, req) {
     console.log('✓ admin 写:删除账号(手机释放/空壳连带删/保护/404)');
   }
 
+  /* ---- 审计写入脱敏:手机号形态 username 在写侧即遮(读侧 maskDetail 只是兜底) ---- */
+  {
+    const audits = [];
+    const store = memoryStorage({
+      'users.json': writeSeed().concat([
+        /* 短信注册形态:username 即手机号 */
+        { id: 'u8', username: '13811112222', usernameLower: '13811112222', nickname: null, phone: '13811112222', passHash: null, role: 'player', playerId: null, status: 'active', createdAt: 't8' },
+        /* 短信注册形态的超管(env 名单或存档):操作者 by= 同样须遮 */
+        { id: 'u9', username: '13833334444', usernameLower: '13833334444', nickname: null, phone: '13833334444', passHash: null, role: 'super', playerId: null, status: 'active', createdAt: 't9' }
+      ]),
+      'data.json': { tournaments: [], series: [], players: [], activeId: null },
+      'invite-codes.json': []
+    });
+    const admin = apiAdmin.createHandlers({ storage: store, appendAudit: (a, d) => audits.push(a + ' ' + d) });
+    /* 操作者 u9 也种进全局 dev-store:requireRole→account 单例的会话校签读全局 */
+    await devStore.writeJson('users.json', (((await devStore.readJson('users.json')) || [])).concat([
+      { id: 'u9', username: '13833334444', usernameLower: '13833334444', nickname: null, phone: '13833334444', passHash: null, role: 'super', playerId: null, status: 'active', createdAt: 't9' }
+    ]));
+    const su = ck('u9');
+    const post = (url, body) => call(admin, mockReq('POST', { url, headers: { cookie: su }, body: jsonBody(body) }));
+
+    let r = await post('/api/admin/users/u8/status', { banned: true });
+    assert.strictEqual(r.status, 200, 'ban 200');
+    r = await post('/api/admin/users/u8/role', { role: 'admin' });
+    assert.strictEqual(r.status, 200, 'role 200');
+    r = await post('/api/admin/users/u8/delete', {});
+    assert.strictEqual(r.status, 200, 'delete 200');
+
+    const joined = audits.join('\n');
+    assert.ok(!joined.includes('13811112222'), 'admin 审计写入不得含目标手机号全文(实际:' + joined + ')');
+    assert.ok(!joined.includes('13833334444'), 'admin 审计写入不得含操作者手机号全文');
+    assert.ok(joined.includes('user=138****2222'), 'user= 脱敏形态');
+    assert.ok(joined.includes('by=138****4444'), 'by= 操作者脱敏形态');
+
+    console.log('✓ admin 审计写入脱敏:ban/role/delete 的 user=/by= 均末段遮断');
+  }
+
   /* ---- POST /api/admin/decks/backfill:存量 WB 链接补解析(三段式) ---- */
   {
     const WB_URL_1 = 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.aaaa.bbbb';

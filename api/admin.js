@@ -313,7 +313,7 @@ function createHandlers(options) {
       users[idx] = user;
       await oss.backupJson(USERS_KEY, 'users');
       await write(USERS_KEY, users);
-      appendAudit(action, detail + ' by=' + operator.username);
+      appendAudit(action, detail + ' by=' + maskUsername(operator.username));
       sendJson(res, 200, { ok: true, user: adminUserView(user) });
     });
   }
@@ -330,7 +330,7 @@ function createHandlers(options) {
       return {
         user,
         action: body.banned ? 'admin.ban' : 'admin.unban',
-        detail: 'user=' + (user.username || '-')
+        detail: 'user=' + (maskUsername(user.username) || '-')
       };
     });
   }
@@ -347,7 +347,7 @@ function createHandlers(options) {
     }
     await mutateUser(res, id, operator, (target) => {
       const user = Object.assign({}, target, { role: body.role });
-      return { user, action: 'admin.role', detail: 'user=' + (user.username || '-') + ' role=' + body.role };
+      return { user, action: 'admin.role', detail: 'user=' + (maskUsername(user.username) || '-') + ' role=' + body.role };
     });
   }
 
@@ -384,7 +384,7 @@ function createHandlers(options) {
       users[idx].playerId = playerId;
       await oss.backupJson(USERS_KEY, 'users');
       await write(USERS_KEY, users);
-      appendAudit('admin.rebind', 'user=' + (users[idx].username || '-') + ' player=' + (target.name || playerId)
+      appendAudit('admin.rebind', 'user=' + (maskUsername(users[idx].username) || '-') + ' player=' + (target.name || playerId)
         + (oldId ? ' old=' + oldId + (removedOldPlayer ? '(空壳已删)' : '(保留)') : ''));
       sendJson(res, 200, { ok: true, user: adminUserView(users[idx]), removedOldPlayer });
     });
@@ -427,10 +427,10 @@ function createHandlers(options) {
       await oss.backupJson(USERS_KEY, 'users');
       await write(USERS_KEY, users);
       appendAudit('admin.delete',
-        'user=' + (target.username || '-') +
+        'user=' + (maskUsername(target.username) || '-') +
         (target.phone ? ' phone=***' + String(target.phone).slice(-4) : '') +
         (target.playerId ? ' player=' + target.playerId + (removedPlayer ? '(从未上场,已连带删除)' : '(有历史,保留无主)') : '') +
-        ' by=' + operator.username);
+        ' by=' + maskUsername(operator.username));
       sendJson(res, 200, { ok: true, deleted: adminUserView(target) });
     });
   }
@@ -452,7 +452,7 @@ function createHandlers(options) {
         console.error('[admin] 手工备份失败(' + source + '):', error.message);
       }
     }
-    appendAudit('admin.backup', 'keys=' + keys.filter(Boolean).join(',') + ' by=' + operator.username);
+    appendAudit('admin.backup', 'keys=' + keys.filter(Boolean).join(',') + ' by=' + maskUsername(operator.username));
     if (!keys.some(Boolean)) return sendJson(res, 500, { error: '备份全部失败' });
     sendJson(res, 200, { ok: true, keys });
   }
@@ -484,7 +484,7 @@ function createHandlers(options) {
         console.error('[admin] 恢复失败(' + key + '):', error.message);
         return sendJson(res, 500, { error: '恢复失败' });
       }
-      appendAudit('admin.restore', 'key=' + key + ' by=' + operator.username);
+      appendAudit('admin.restore', 'key=' + key + ' by=' + maskUsername(operator.username));
       sendJson(res, 200, { ok: true });
     });
   }
@@ -581,7 +581,7 @@ function createHandlers(options) {
         await backupData();
         await write(DATA_KEY, ws);
       }
-      appendAudit('admin.deckBackfill', 'resolved=' + resolved + ' failed=' + failed.length + ' skipped=' + skipped + ' by=' + operator.username);
+      appendAudit('admin.deckBackfill', 'resolved=' + resolved + ' failed=' + failed.length + ' skipped=' + skipped + ' by=' + maskUsername(operator.username));
       sendJson(res, 200, { ok: true, resolved, failed, skipped });
     });
   }
