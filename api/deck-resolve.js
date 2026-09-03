@@ -17,8 +17,11 @@ const FETCH_TIMEOUT_MS = 8000;
 const FETCH_ATTEMPTS = 2;
 /* 官方卡牌码字符集 = 字母数字 + . - _(下划线有线上实证:ej_8;fetchOnce 出网前再 encodeURIComponent) */
 const HASH_CHARS = /^[0-9A-Za-z._\-]+$/;
-/* 官方卡组链接:https://shadowverse-wb.com/(chs|cht|en|ja|ko)?/deck/detail/?hash=… */
-const DECK_URL_HOST_RE = /shadowverse-wb\.com\/(?:[a-z]{2,3}\/)?deck\/detail\//i;
+/* 官方卡组链接两种形态(hash 均在查询串):
+ * 详情页 https://shadowverse-wb.com/(chs|cht|en|ja|ko)?/deck/detail/?hash=…
+ * 分享页 https://shadowverse-wb.com/(web|chs|…)?/Deck/share?hash=…&lang=cht
+ * (分享页形 2026-09-03 线上实证:六届两副卡组以该形提交曾被拒解析) */
+const DECK_URL_HOST_RE = /shadowverse-wb\.com\/(?:(?:[a-z]{2,3}\/)?deck\/detail\/|(?:[a-z]{2,3}\/|web\/)?deck\/share(?:[\/?#]|$))/i;
 const HASH_PARAM_RE = /[?&]hash=([^&#\s]+)/i;
 /* 裸卡组码:版本.职业(1-7).卡牌码…(至少一张) */
 const BARE_HASH_RE = /^1\.[1-7]\.[0-9A-Za-z._\-]+(?:\.[0-9A-Za-z._\-]+)+$/;

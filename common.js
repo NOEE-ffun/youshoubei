@@ -2411,8 +2411,10 @@
       : localStorage.getItem(LS_ACTIVE);
     const record = all.find((t) => t.id === activeId) || all[0];
     appInstance.current = record;
-    /* seriesId 供主页总览/页头下拉按系列分组;series 数组序即分组顺序(云端为权威) */
-    appInstance.list = all.map((t) => ({ id: t.id, name: t.name, updatedAt: t.updatedAt, seriesId: t.seriesId || null }));
+    /* seriesId 供主页总览/页头下拉按系列分组;series 数组序即分组顺序(云端为权威)。
+     * status/startTime 供主页总览行渲染状态徽章与开赛时间——摘要曾漏这两个字段,
+     * 致总览恒显「未开始」且无开赛时间(2026-09-03 修复) */
+    appInstance.list = all.map((t) => ({ id: t.id, name: t.name, updatedAt: t.updatedAt, seriesId: t.seriesId || null, status: t.status || 'upcoming', startTime: t.startTime || null }));
     appInstance.series = (mode === 'cloud' && cloudWorkspace && Array.isArray(cloudWorkspace.series))
       ? cloudWorkspace.series
       : [];

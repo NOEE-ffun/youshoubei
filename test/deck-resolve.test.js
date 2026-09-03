@@ -54,6 +54,15 @@ async function main() {
     assert.equal(parseDeckHash(withUnderscore).classByte, 7, 'hash 含下划线(裸码)识别');
   }
   assert.equal(parseDeckHash('https://shadowverse-wb.com/ja/deck/detail/?hash=' + HASH + '#frag').hash, HASH, 'url 锚点不进 hash');
+  /* 分享页链接形(2026-09-03 线上实证:六届精灵/龙族以 share 链接提交,曾被拒解析) */
+  {
+    const share = 'https://shadowverse-wb.com/web/Deck/share?hash=' + HASH + '&lang=cht';
+    assert.equal(parseDeckHash(share).hash, HASH, '分享页链接(/web/Deck/share)识别');
+    assert.equal(parseDeckHash('https://shadowverse-wb.com/chs/Deck/share/?hash=' + HASH).hash, HASH, '语言路径分享页识别');
+    assert.equal(parseDeckHash('https://shadowverse-wb.com/Deck/share?hash=' + HASH).hash, HASH, '无前缀分享页识别');
+    assert.equal(parseDeckHash('https://shadowverse-wb.com/web/Deck/share?foo=1'), null, '分享页无 hash 参数拒判');
+    assert.equal(parseDeckHash('https://shadowverse-wb.com/web/Deck/build?hash=' + HASH), null, 'WB 非分享/详情页拒判');
+  }
   assert.equal(parseDeckHash('https://shadowverse-portal.com/deck/1.2.abc'), null, '非 WB 域名拒判');
   assert.equal(parseDeckHash('https://shadowverse-wb.com/chs/deck/build/'), null, 'WB 非详情页拒判');
   assert.equal(parseDeckHash('https://shadowverse-wb.com/chs/deck/detail/?foo=1'), null, '无 hash 参数拒判');
