@@ -34,49 +34,57 @@
   const MAX_CANVAS_COLS = 200;
   const MAX_CANVAS_ROWS = 200;
 
-/* 画布几何唯一真源:点阵点距、卡片尺寸(每卡 10×6 点)、连接点行位,
+/* 画布几何唯一真源:点阵点距、卡片尺寸(每卡 10×7 点)、连接点布局,
  * bracket.js(渲染)与 canvas-editor.js(编辑)统一引用,改这里即可全局生效 */
 const DOT = 28;
 const CARD_WIDTH = DOT * 10;
-const CARD_HEIGHT = DOT * 6;
-/* 左右连接点纵向位置:与卡内 A/B 两行选手条对齐(标称卡高内) */
-const PORT_ROW_Y = { a: 54, b: 92 };
+const CARD_HEIGHT = DOT * 7;
+/* 四侧连接点对的点间距离(沿用原左右口 A/B 行间距) */
+const PORT_SPAN = 38;
 /* 旧格制间距,仅供格→点迁移换算,勿在新代码中使用 */
 const LEGACY_COL_GAP = 320;
 const LEGACY_ROW_GAP = 210;
 
-/* 六连接点(参考 Obsidian 白板):top/bottom 为上下中点,其余四点与 A/B 行对齐。
- * 上排三点(top/leftTop/rightTop)默认输出胜者、拖入进 A 位;
- * 下排三点(bottom/leftBottom/rightBottom)默认输出败者、拖入进 B 位。 */
+/* 八连接点(参考 Obsidian 白板):四侧各一对、每对以边中点居中、对间距 PORT_SPAN。
+ * 上排四点(topLeft/topRight/leftTop/rightTop)默认输出胜者、拖入进 A 位;
+ * 下排四点(bottomLeft/bottomRight/leftBottom/rightBottom)默认输出败者、拖入进 B 位。
+ * 端口不落盘,renderEdges/临时线均按 pickPort/portOffset 现算。 */
 const PORT_NORMALS = {
-  top: [0, -1],
-  bottom: [0, 1],
+  topLeft: [0, -1],
+  topRight: [0, -1],
+  bottomLeft: [0, 1],
+  bottomRight: [0, 1],
   leftTop: [-1, 0],
   leftBottom: [-1, 0],
   rightTop: [1, 0],
   rightBottom: [1, 0]
 };
 
-/* 连接点相对卡片左上角的偏移 */
+/* 连接点相对卡片左上角的偏移(全部居中分布) */
 function portOffset(port) {
+  const half = PORT_SPAN / 2;
   switch (port) {
-    case 'top': return { x: CARD_WIDTH / 2, y: 0 };
-    case 'bottom': return { x: CARD_WIDTH / 2, y: CARD_HEIGHT };
-    case 'leftTop': return { x: 0, y: PORT_ROW_Y.a };
-    case 'leftBottom': return { x: 0, y: PORT_ROW_Y.b };
-    case 'rightTop': return { x: CARD_WIDTH, y: PORT_ROW_Y.a };
-    default: return { x: CARD_WIDTH, y: PORT_ROW_Y.b };
+    case 'topLeft': return { x: CARD_WIDTH / 2 - half, y: 0 };
+    case 'topRight': return { x: CARD_WIDTH / 2 + half, y: 0 };
+    case 'bottomLeft': return { x: CARD_WIDTH / 2 - half, y: CARD_HEIGHT };
+    case 'bottomRight': return { x: CARD_WIDTH / 2 + half, y: CARD_HEIGHT };
+    case 'leftTop': return { x: 0, y: CARD_HEIGHT / 2 - half };
+    case 'leftBottom': return { x: 0, y: CARD_HEIGHT / 2 + half };
+    case 'rightTop': return { x: CARD_WIDTH, y: CARD_HEIGHT / 2 - half };
+    default: return { x: CARD_WIDTH, y: CARD_HEIGHT / 2 + half };
   }
 }
 
 /* 按两卡相对方位自动选连接点(白板式路由,卡片移动后连线自动跟随):
- * band 'upper'=上排三点(胜者出/A 位入),'lower'=下排三点 */
+ * 横向错开超半卡宽走左右边;纵向连接在上/下对里按水平偏移选左右点,减少斜跨。
+ * band 'upper'=上排四点(胜者出/A 位入),'lower'=下排四点 */
 function pickPort(fromCard, toCard, band) {
   const dx = ((Number(toCard.x) || 0) - (Number(fromCard.x) || 0)) * DOT;
   const side = band === 'lower' ? 'Bottom' : 'Top';
   if (dx < -CARD_WIDTH / 2) return 'left' + side;
   if (dx > CARD_WIDTH / 2) return 'right' + side;
-  return band === 'lower' ? 'bottom' : 'top';
+  const lr = dx < 0 ? 'Left' : 'Right';
+  return (band === 'lower' ? 'bottom' : 'top') + lr;
 }
 
 /* 连接点法线 stub 贝塞尔:两端各自沿连接点法线伸出 stub 再相互弯接 */
@@ -749,7 +757,7 @@ function arrowDefs(prefix) {
     DOT,
     CARD_WIDTH,
     CARD_HEIGHT,
-    PORT_ROW_Y,
+    PORT_SPAN,
     PORT_NORMALS,
     portOffset,
     pickPort,

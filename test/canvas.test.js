@@ -207,7 +207,7 @@ const model = require('../canvas-model.js');
 {
   assert.equal(model.DOT, 28, '点距应为 28');
   assert.equal(model.CARD_WIDTH, 280, '卡宽 = 10 点');
-  assert.equal(model.CARD_HEIGHT, 168, '卡高 = 6 点');
+  assert.equal(model.CARD_HEIGHT, 196, '卡高 = 7 点');
   const legacy = { cards: [
     { id: 'c1', x: 2, y: 1, slots: [] },
     { id: 'c2', x: 0, y: 0, slots: [] }
@@ -222,11 +222,20 @@ const model = require('../canvas-model.js');
   const fresh = createDefaultCanvas([]);
   assert.equal(fresh.grid, 'dot');
   assert.equal(model.migrateCanvasToDot(fresh), false);
-  // 方位选点:目标在右 → 右连接点;上排胜者、下排败者
+  // 方位选点:横向连接按目标在左右定边;纵向连接在上下对里按水平偏移选点(减少斜跨)
   assert.equal(model.pickPort({ x: 0, y: 0 }, { x: 11, y: 0 }, 'upper'), 'rightTop');
   assert.equal(model.pickPort({ x: 0, y: 0 }, { x: 11, y: 0 }, 'lower'), 'rightBottom');
-  assert.equal(model.pickPort({ x: 0, y: 0 }, { x: 1, y: -4 }, 'upper'), 'top');
   assert.equal(model.pickPort({ x: 0, y: 0 }, { x: -11, y: 0 }, 'upper'), 'leftTop');
+  assert.equal(model.pickPort({ x: 0, y: 0 }, { x: 1, y: -4 }, 'upper'), 'topRight');
+  assert.equal(model.pickPort({ x: 0, y: 0 }, { x: -1, y: 4 }, 'lower'), 'bottomLeft');
+  // 八端口四侧居中、同侧对间距 38(= 原左右 A/B 行口距)
+  assert.deepEqual(model.portOffset('topLeft'), { x: 121, y: 0 });
+  assert.deepEqual(model.portOffset('topRight'), { x: 159, y: 0 });
+  assert.deepEqual(model.portOffset('bottomLeft'), { x: 121, y: 196 });
+  assert.deepEqual(model.portOffset('bottomRight'), { x: 159, y: 196 });
+  assert.deepEqual(model.portOffset('leftTop'), { x: 0, y: 79 });
+  assert.deepEqual(model.portOffset('leftBottom'), { x: 0, y: 117 });
+  assert.deepEqual(model.portOffset('rightTop'), { x: 280, y: 79 });
 }
 
 // 14. 报名自动填入:入场卡识别 + 洗牌覆盖
