@@ -11,7 +11,6 @@
 
   let active = false;
   let tool = 'select';
-  let zoomMode = false;
   let scale = 1;
   let baseWidth = 600;
   let baseHeight = 400;
@@ -210,7 +209,6 @@
   function exit() {
     active = false;
     tool = 'select';
-    zoomMode = false;
     selectedCardId = null;
     batchSelected.clear();
     dragState = null;
@@ -221,7 +219,7 @@
     const b = board();
     if (b) {
       b.classList.remove('editing');
-      b.classList.remove('tool-link', 'tool-delete', 'tool-select', 'zoom-mode');
+      b.classList.remove('tool-delete', 'tool-select');
     }
     const sc = scrollEl();
     if (sc) sc.classList.remove('editing');
@@ -245,25 +243,12 @@
   function syncToolClasses() {
     const b = board();
     if (!b) return;
-    b.classList.toggle('tool-link', tool === 'link');
     b.classList.toggle('tool-delete', tool === 'delete');
     b.classList.toggle('tool-select', tool === 'select');
   }
 
   function getTool() {
     return tool;
-  }
-
-  function toggleZoomMode() {
-    zoomMode = !zoomMode;
-    const b = board();
-    if (b) b.classList.toggle('zoom-mode', zoomMode);
-    refreshToolbarUI();
-    notify(zoomMode ? '缩放模式已开启：滚轮直接缩放' : '缩放模式已关闭，滚轮滚动，Ctrl/Cmd+滚轮缩放');
-  }
-
-  function isZoomMode() {
-    return zoomMode;
   }
 
   function getSelectedCount() {
@@ -466,7 +451,7 @@
   function onWheel(event) {
     // Obsidian 白板语义:Ctrl/Cmd+滚轮(含 Mac 捏合)以光标为锚缩放;普通滚轮平移(Shift 转横向)
     event.preventDefault();
-    if (event.ctrlKey || event.metaKey || zoomMode) {
+    if (event.ctrlKey || event.metaKey) {
       const lineDelta = event.deltaY / (event.deltaMode === 1 ? 33.3 : event.deltaMode === 2 ? 100 : 1);
       zoomAtPoint(event.clientX, event.clientY, Math.exp(-lineDelta * 0.0036));
       return;
@@ -644,11 +629,6 @@
       if (event.target.closest('button.class-slot, button.score-open')) return;
       event.preventDefault();
       toggleBatchSelected(cardEl.dataset.match);
-      return;
-    }
-    if (tool === 'link') {
-      if (event.target.closest('button.class-slot, button.score-open')) return;
-      setSelection([cardEl.dataset.match]);
       return;
     }
     if (tool === 'select' && !event.target.closest('button, input, select, a, .port')) {
@@ -960,7 +940,6 @@
     saveCanvas().then(() => {
       requestRender();
       highlightSelected();
-      openCardDialog(card.id);
     });
   }
 
@@ -1410,8 +1389,6 @@
     editCard: openCardDialog,
     setTool,
     getTool,
-    isZoomMode,
-    toggleZoomMode,
     zoomIn,
     zoomOut,
     setZoom,

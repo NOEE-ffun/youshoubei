@@ -17,11 +17,15 @@ test('卡片改名可撤销重做,删除可撤销找回', async ({ page }) => {
   await page.goto('/schedule.html');
   await page.waitForSelector('.canvas-card');
 
-  // 工具栏分组:撤销 / 编辑操作 / 视图缩放 / 外观与保存
+  // 工具栏分组:撤销 / 编辑操作 / 外观
   await expect(page.locator('#edit-toolbar .tool-group[aria-label="撤销"]')).toHaveCount(1);
   await expect(page.locator('#edit-toolbar .tool-group[aria-label="编辑操作"]')).toHaveCount(1);
-  await expect(page.locator('#edit-toolbar .tool-group[aria-label="视图缩放"]')).toHaveCount(1);
-  await expect(page.locator('#edit-toolbar .tool-group[aria-label="外观与保存"]')).toHaveCount(1);
+  await expect(page.locator('#edit-toolbar .tool-group[aria-label="外观"]')).toHaveCount(1);
+  // 精简:连线/加卡/缩放组/保存钮已移除
+  await expect(page.locator('#edit-toolbar [data-tool="link"]')).toHaveCount(0);
+  await expect(page.locator('#edit-toolbar [data-tool="add"]')).toHaveCount(0);
+  await expect(page.locator('#edit-toolbar [data-tool="zoom"]')).toHaveCount(0);
+  await expect(page.locator('#edit-toolbar [data-tool="save"]')).toHaveCount(0);
   await expect(page.locator('#edit-toolbar [data-tool="undo"]')).toBeDisabled();
   await expect(page.locator('#edit-toolbar [data-tool="redo"]')).toBeDisabled();
 

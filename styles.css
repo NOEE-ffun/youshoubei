@@ -1832,10 +1832,6 @@ body.canvas-editing #bg-layer {
   outline-offset: 2px;
 }
 
-.canvas-board.tool-link .card-ports .port {
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-
 /* 编辑模式连线端口:inset -1px 把定位基准对齐到边框盒(卡有 1px 边框,默认内缩 1px),
  * 与 canvas-model portOffset 的卡左上角原点(border-box)严格一致 */
 .card-ports {
@@ -2086,26 +2082,6 @@ body.canvas-editing #bg-layer {
 .tool-btn:disabled:hover {
   background: transparent;
   color: var(--text-muted);
-}
-
-.tool-btn.has-unsaved {
-  position: relative;
-}
-
-.save-dot {
-  display: none;
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--warning);
-  box-shadow: 0 0 0 2px var(--surface-float);
-}
-
-.tool-btn.has-unsaved .save-dot {
-  display: block;
 }
 
 .style-drawer {

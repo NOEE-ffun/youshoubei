@@ -609,10 +609,8 @@
     const toolbar = document.getElementById('edit-toolbar');
     if (!toolbar) return;
     const tool = CanvasEditor.getTool();
-    const zoomMode = CanvasEditor.isZoomMode();
     toolbar.querySelectorAll('.tool-btn[data-tool]').forEach((btn) => {
-      const kind = btn.dataset.tool;
-      btn.classList.toggle('is-active', kind === tool || (kind === 'zoom' && zoomMode));
+      btn.classList.toggle('is-active', btn.dataset.tool === tool);
     });
     const deleteBtn = document.getElementById('edit-delete-selected-btn');
     if (deleteBtn) {
@@ -629,17 +627,11 @@
       const count = CanvasEditor.getSelectedCount();
       tintTarget.textContent = count > 0 ? count + ' 张' : '未选中';
     }
-    /* 撤销/重做随历史栈启用;保存钮未保存时亮圆点 */
+    /* 撤销/重做随历史栈启用 */
     const undoBtn = toolbar.querySelector('[data-tool="undo"]');
     if (undoBtn) undoBtn.disabled = !CanvasEditor.canUndo();
     const redoBtn = toolbar.querySelector('[data-tool="redo"]');
     if (redoBtn) redoBtn.disabled = !CanvasEditor.canRedo();
-    const saveBtn = toolbar.querySelector('[data-tool="save"]');
-    if (saveBtn) {
-      const unsaved = CanvasEditor.isDirty();
-      saveBtn.classList.toggle('has-unsaved', !!unsaved);
-      saveBtn.title = unsaved ? '保存(有未保存更改)' : '保存';
-    }
   }
 
   /* ---------- 比分弹窗 ---------- */
@@ -956,28 +948,10 @@
       const editor = CanvasEditor;
       if (!editor) return;
       if (kind === 'select') editor.setTool('select');
-      else if (kind === 'link') editor.setTool('link');
-      else if (kind === 'add') {
-        const cards = (currentRecord().canvas && currentRecord().canvas.cards) || [];
-        /* 点阵制找空位:步进 = 卡宽 10 点 + 2 点缝,换行步进 = 卡高 6 点 + 2 点缝 */
-        let x = 2;
-        let y = 2;
-        while (cards.some((c) => (Number(c.x) || 0) === x && (Number(c.y) || 0) === y)) {
-          x += 12;
-          if (x > 100) { x = 0; y += 8; }
-        }
-        editor.addCard(x, y);
-      } else if (kind === 'undo') editor.undo();
+      else if (kind === 'undo') editor.undo();
       else if (kind === 'redo') editor.redo();
-      else if (kind === 'zoom') editor.toggleZoomMode();
-      else if (kind === 'zoom-in') editor.zoomIn();
-      else if (kind === 'zoom-out') editor.zoomOut();
-      else if (kind === 'fit') editor.fitCanvas();
       else if (kind === 'style') toggleStyleDrawer();
       else if (kind === 'delete') editor.setTool('delete');
-      else if (kind === 'save') {
-        editor.saveCanvas().then(() => notify('已保存'));
-      }
       updateToolbarState();
     });
   }
