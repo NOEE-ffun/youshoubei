@@ -81,6 +81,14 @@ test('单击选中卡片出现设置抽屉,点空白收起', async ({ page }) =>
   await page.locator('.canvas-card').first().click();
   const panel = page.locator('#card-panel');
   await expect(panel).toBeVisible();
+  /* 面板让位:zoom-dock 中心点不被面板遮挡(elementFromPoint 须命中 dock 自身) */
+  const dockHit = await page.evaluate(() => {
+    const dock = document.getElementById('zoom-dock');
+    const r = dock.getBoundingClientRect();
+    const el = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return Boolean(el && el.closest('#zoom-dock'));
+  });
+  expect(dockHit).toBe(true);
   await clickCanvasBlank(page); // 画布空白
   await expect(panel).toBeHidden();
 });
@@ -149,5 +157,20 @@ test('弹窗保存后面板同步回填,继续面板编辑不回退弹窗改动'
   await expect(page.locator('.canvas-card').first()).toContainText('面板接着改');
   const data = await (await page.request.get('/api/data')).json();
   expect(data.tournaments[0].canvas.cards[0].label).toBe('面板接着改');
+  await page.request.post('/api/dev/reset');
+});
+
+test('空栈撤销不误弃面板待提交(防幽灵编辑)', async ({ page }) => {
+  await enterEdit(page, { fit: true });
+  /* 全新会话无任何历史:Cmd+Z 为空栈无操作,不能顺带取消面板 500ms 防抖 */
+  await page.locator('.canvas-card').first().click();
+  await expect(page.locator('#card-panel')).toBeVisible();
+  await page.locator('#card-panel .cf-label').fill('空栈撤销不丢');
+  /* 焦点移出输入框(抽屉标题非输入元素),Cmd+Z 才走画布撤销路径 */
+  await page.locator('#card-panel .card-panel-title').click();
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(800); // 防抖 500 + 落盘
+  const data = await (await page.request.get('/api/data')).json();
+  expect(data.tournaments[0].canvas.cards[0].label).toBe('空栈撤销不丢');
   await page.request.post('/api/dev/reset');
 });

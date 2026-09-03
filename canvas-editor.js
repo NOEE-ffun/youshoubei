@@ -107,10 +107,12 @@
 
   function restoreHistory(direction) {
     syncHistoryOwner();
-    cancelPanelCommit();
     const current = snapshotState();
     const snap = direction === 'undo' ? history.undo(current) : history.redo(current);
+    /* 空栈=无操作:不能在此取消面板待提交,否则防抖窗口内的已应用编辑
+     * 永不落盘(幽灵编辑,重载即丢);只有撤销/重做真正发生才取消 */
     if (!snap) return false;
+    cancelPanelCommit();
     applySnapshot(snap);
     /* 还原后的卡片集可能不含当前选择:先清选择再重绘 */
     batchSelected.clear();

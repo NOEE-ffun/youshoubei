@@ -2233,8 +2233,10 @@ body.canvas-editing #bg-layer {
 /* 抽屉内 cl-row 允许换行(窄面板,url/悬停文字竖排更从容) */
 .card-panel .cl-row { flex-wrap: wrap; }
 
-/* 面板开着时样式抽屉整体左移让位 */
-body.card-panel-open .style-drawer { right: calc(19rem + 0.5rem); }
+/* 面板开着时缩放控件与样式抽屉整体左移让位
+ * (让位量与面板实际宽度一致:窄视口面板收窄到 min(19rem, 78vw),两抽屉同口径跟随) */
+body.card-panel-open .zoom-dock { inset-inline-end: calc(min(19rem, 78vw) + 1rem); }
+body.card-panel-open .style-drawer { right: calc(min(19rem, 78vw) + 0.5rem); }
 
 /* ---------- 选手下拉 / 赛制规则 ---------- */
 
