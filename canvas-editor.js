@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const { escapeHtml, save, notify, uiConfirm, debounce } = window.TournamentUtils;
+  const { save, notify, uiConfirm, debounce } = window.TournamentUtils;
   /* 画布几何唯一真源在 canvas-model.js */
   const { DOT, PORT_NORMALS, edgePath, arrowDefs } = window.CanvasModel;
 
@@ -1032,22 +1032,7 @@
       '  <button type="button" class="btn btn-ghost btn-sm" data-card-close>关闭</button>' +
       '</div>' +
       '<div class="dialog-body">' +
-      '  <div class="form-field"><label for="card-label">标题</label><input type="text" id="card-label"></div>' +
-      '  <div class="form-field"><label for="card-phase">阶段</label><input type="text" id="card-phase" placeholder="如：胜者组决赛"></div>' +
-      '  <div class="form-field"><label for="card-format">赛制文本</label><input type="text" id="card-format" placeholder="BO3 / BO5 / 自定义"></div>' +
-      '  <div class="form-field"><label for="card-deck-count">卡组数量（留空自动）</label><input type="number" id="card-deck-count" min="1" step="1"></div>' +
-      '  <div class="form-field"><label for="card-slot-a">A 位选手</label><select id="card-slot-a"></select><select id="card-flow-outcome-a" class="flow-outcome" hidden aria-label="A 位连线取哪个出口"><option value="winner">取其胜者</option><option value="loser">取其败者</option></select></div>' +
-      '  <div class="form-field"><label for="card-slot-b">B 位选手</label><select id="card-slot-b"></select><select id="card-flow-outcome-b" class="flow-outcome" hidden aria-label="B 位连线取哪个出口"><option value="winner">取其胜者</option><option value="loser">取其败者</option></select></div>' +
-      '  <div class="form-field"><label for="card-rank-winner">胜者出口名次</label><input type="number" id="card-rank-winner" placeholder="如 1"></div>' +
-      '  <div class="form-field"><label for="card-rank-loser">败者出口名次</label><input type="number" id="card-rank-loser" placeholder="如 2"></div>' +
-      '  <div class="form-field">' +
-      '    <label>职业卡组 · A 位选手(查看模式点击图标跳转)</label>' +
-      '    <div class="cl-list" id="card-cl-a"></div>' +
-      '  </div>' +
-      '  <div class="form-field">' +
-      '    <label>职业卡组 · B 位选手</label>' +
-      '    <div class="cl-list" id="card-cl-b"></div>' +
-      '  </div>' +
+      CardForm.fieldsHtml() +
       '  <p class="hint">连线:从连接点拖出箭头,拖到目标卡片连接点松手。上排连接点默认输出胜者、接入 A 位,下排默认输出败者、接入 B 位,均可在上面下拉中自定义。</p>' +
       '  <div class="dialog-actions">' +
       '    <button type="button" class="btn btn-secondary" data-card-close>取消</button>' +
@@ -1061,93 +1046,14 @@
     cardDialog.addEventListener('close', () => {
       dialogBeforeSnapshot = null;
     });
-    /* 行删除走事件委托:renderClassLinkRows 重建行不需要重复绑定 */
-    for (const listId of ['#card-cl-a', '#card-cl-b']) {
-      cardDialog.querySelector(listId).addEventListener('click', (event) => {
-        const del = event.target.closest('[data-cl-del]');
-        if (del) del.closest('.cl-row').remove();
-      });
-    }
+    /* 行删除走事件委托(与选中抽屉共用同一绑定逻辑) */
+    CardForm.bindRowDeletion(cardDialog);
   }
 
-  /* ---------- 职业卡组链接列表编辑(A/B 两组) ---------- */
+  /* ---------- 职业卡组链接列表编辑(A/B 两组):字段/回填/读取在 card-form.js ---------- */
 
-  function classOptions(selected) {
-    let html = '<option value="">未选择</option>';
-    for (const cls of CanvasModel.CLASS_LIST) {
-      html += '<option value="' + escapeHtml(cls) + '"' + (cls === selected ? ' selected' : '') + '>' +
-        escapeHtml(cls) + '</option>';
-    }
-    return html;
-  }
-
-  function clRowHtml(entry) {
-    const e = entry || {};
-    return (
-      '<div class="cl-row">' +
-      '<select class="cl-cls" aria-label="职业">' + classOptions(e.cls) + '</select>' +
-      '<input type="url" class="cl-url" placeholder="卡组链接 https://" value="' + escapeHtml(e.url || '') + '">' +
-      '<input type="text" class="cl-text" placeholder="悬停文字" value="' + escapeHtml(e.text || '') + '">' +
-      '<button type="button" class="btn btn-ghost btn-sm cl-del" data-cl-del title="删除此行" aria-label="删除此行">×</button>' +
-      '</div>'
-    );
-  }
-
-  /* 每组末尾永远有一行空行供新增。
-   * 预填:own 模式(该侧已填过,含显式清空 null)回显自己的;
-   * 未填过的侧回显继承值。保存时:
-   * - own 模式:行内容原样写入;清空到零行写 null(显式阻断继承)
-   * - inherited 模式:未改动则不动原值(继续继承),有改动写入固化 */
-  function renderClassLinkRows(card) {
-    const record = currentRecord();
-    const eff = (record && CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {}).get(card.id)) || {};
-    const cl = card.classLinks || {};
-    for (const [groupId, listId] of [['a', '#card-cl-a'], ['b', '#card-cl-b']]) {
-      const own = cl[groupId];
-      const list = cardDialog.querySelector(listId);
-      if (own === null || (Array.isArray(own) && own.length)) {
-        list.dataset.fill = 'own';
-        list.innerHTML = (own || []).map(clRowHtml).join('') + clRowHtml(null);
-      } else {
-        list.dataset.fill = 'inherited';
-        const effRows = (eff[groupId] || []);
-        list.dataset.effSig = JSON.stringify(effRows);
-        list.innerHTML = effRows.map(clRowHtml).join('') + clRowHtml(null);
-      }
-    }
-  }
-
-  function readClassLinkGroup(listId) {
-    const list = cardDialog.querySelector(listId);
-    const out = [];
-    let invalid = 0;
-    list.querySelectorAll('.cl-row').forEach((row) => {
-      const cls = row.querySelector('.cl-cls').value;
-      const url = row.querySelector('.cl-url').value.trim().slice(0, 500);
-      const text = row.querySelector('.cl-text').value.trim().slice(0, 60);
-      if (cls && (url || text)) {
-        out.push({ cls, url, text });
-      } else if (cls || url || text) {
-        /* 选了职业没内容,或填了内容没选职业:不完整行 */
-        invalid += 1;
-      }
-    });
-    const unchangedInherited = list.dataset.fill === 'inherited' &&
-      JSON.stringify(out) === list.dataset.effSig;
-    return { links: out, invalid, fill: list.dataset.fill, unchangedInherited };
-  }
-
-  function playerOptions(selectedId) {
-    const players = window.TournamentApp.players || [];
-    let html = '<option value="">空</option>';
-    for (const p of players) {
-      html += '<option value="' + p.id + '"' + (p.id === selectedId ? ' selected' : '') + '>' +
-        escapeHtml(p.name) + '</option>';
-    }
-    return html;
-  }
-
-  /* 连线来源卡片的可读名称：优先 label（如 胜者组 1/4 决赛 1） */
+  /* 连线来源卡片的可读名称:优先 label(如 胜者组 1/4 决赛 1)。
+   * card-form.js 零依赖本模块,此名由调用方算好经 fill 的 flowSourceLabels 传入 */
   function flowSourceLabel(cardId) {
     const source = findCard(cardId);
     return source ? (source.label || source.id) : cardId;
@@ -1159,88 +1065,26 @@
     buildCardDialog();
     editingCardId = cardId;
     dialogBeforeSnapshot = snapshotState();
-    cardDialog.querySelector('#card-label').value = card.label || '';
-    cardDialog.querySelector('#card-phase').value = card.phase || '';
-    cardDialog.querySelector('#card-format').value = card.format || 'BO3';
-    cardDialog.querySelector('#card-deck-count').value = card.deckCount || '';
+    const record = currentRecord();
+    const effOf = (c) => (record && CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {}).get(c.id)) || {};
+    const flowSourceLabels = { a: '', b: '' };
     const slotA = card.slots && card.slots[0];
     const slotB = card.slots && card.slots[1];
-    cardDialog.querySelector('#card-slot-a').innerHTML = playerOptions(slotA && slotA.type === 'player' ? slotA.playerId : '');
-    cardDialog.querySelector('#card-slot-b').innerHTML = playerOptions(slotB && slotB.type === 'player' ? slotB.playerId : '');
-    /* 连线位的出口切换:显示并回填当前 outcome(拖拽侧默认之外的自定义入口) */
-    const flowOutcomeA = cardDialog.querySelector('#card-flow-outcome-a');
-    const flowOutcomeB = cardDialog.querySelector('#card-flow-outcome-b');
-    flowOutcomeA.hidden = !(slotA && slotA.type === 'flow');
-    flowOutcomeB.hidden = !(slotB && slotB.type === 'flow');
-    if (slotA && slotA.type === 'flow') {
-      flowOutcomeA.value = slotA.outcome === 'loser' ? 'loser' : 'winner';
-      cardDialog.querySelector('#card-slot-a').insertAdjacentHTML('beforeend',
-        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotA.cardId)) + '</option>');
-    }
-    if (slotB && slotB.type === 'flow') {
-      flowOutcomeB.value = slotB.outcome === 'loser' ? 'loser' : 'winner';
-      cardDialog.querySelector('#card-slot-b').insertAdjacentHTML('beforeend',
-        '<option value="__flow" selected>来自 ' + escapeHtml(flowSourceLabel(slotB.cardId)) + '</option>');
-    }
-    cardDialog.querySelector('#card-rank-winner').value = card.exitRanks && card.exitRanks.winner != null ? card.exitRanks.winner : '';
-    cardDialog.querySelector('#card-rank-loser').value = card.exitRanks && card.exitRanks.loser != null ? card.exitRanks.loser : '';
-    renderClassLinkRows(card);
+    if (slotA && slotA.type === 'flow') flowSourceLabels.a = flowSourceLabel(slotA.cardId);
+    if (slotB && slotB.type === 'flow') flowSourceLabels.b = flowSourceLabel(slotB.cardId);
+    CardForm.fill(cardDialog, card, effOf(card), flowSourceLabels);
     cardDialog.showModal();
-  }
-
-  /* 保存时一侧的最终值:own 模式清空到零行 → null(显式阻断继承);
-   * inherited 模式未改动 → 不动原值(继续继承);其余写入行内容 */
-  function resolveGroup(currentLinks, groupId, result) {
-    if (result.fill === 'own') {
-      return result.links.length ? result.links : null;
-    }
-    if (result.unchangedInherited) {
-      return (currentLinks && currentLinks[groupId] !== undefined) ? currentLinks[groupId] : [];
-    }
-    return result.links;
   }
 
   function saveCardDialog() {
     const card = findCard(editingCardId);
     if (!card) return;
-    card.label = cardDialog.querySelector('#card-label').value.trim() || '未命名对局';
-    card.phase = cardDialog.querySelector('#card-phase').value.trim();
-    card.format = cardDialog.querySelector('#card-format').value.trim() || 'BO3';
-    const deckCount = Number(cardDialog.querySelector('#card-deck-count').value);
-    card.deckCount = Number.isFinite(deckCount) && deckCount > 0 ? deckCount : null;
-    const slotAValue = cardDialog.querySelector('#card-slot-a').value;
-    const slotBValue = cardDialog.querySelector('#card-slot-b').value;
-    if (slotAValue === '') {
-      card.slots[0] = { type: 'empty' };
-    } else if (slotAValue && slotAValue !== '__flow') {
-      card.slots[0] = { type: 'player', playerId: slotAValue };
-    } else if (slotAValue === '__flow' && card.slots[0] && card.slots[0].type === 'flow') {
-      card.slots[0].outcome = cardDialog.querySelector('#card-flow-outcome-a').value === 'loser' ? 'loser' : 'winner';
-    }
-    if (slotBValue === '') {
-      card.slots[1] = { type: 'empty' };
-    } else if (slotBValue && slotBValue !== '__flow') {
-      card.slots[1] = { type: 'player', playerId: slotBValue };
-    } else if (slotBValue === '__flow' && card.slots[1] && card.slots[1].type === 'flow') {
-      card.slots[1].outcome = cardDialog.querySelector('#card-flow-outcome-b').value === 'loser' ? 'loser' : 'winner';
-    }
-    card.exitRanks = card.exitRanks || {};
-    const rw = Number(cardDialog.querySelector('#card-rank-winner').value);
-    const rl = Number(cardDialog.querySelector('#card-rank-loser').value);
-    card.exitRanks.winner = Number.isFinite(rw) ? rw : null;
-    card.exitRanks.loser = Number.isFinite(rl) ? rl : null;
-    /* 职业链接:不完整行(选职业没内容/填内容没选职业)提示且不关弹窗 */
-    const ga = readClassLinkGroup('#card-cl-a');
-    const gb = readClassLinkGroup('#card-cl-b');
-    const invalid = ga.invalid + gb.invalid;
+    const { invalid, data } = CardForm.read(cardDialog);
     if (invalid > 0) {
-      window.TournamentUtils.notify('有 ' + invalid + ' 行职业链接不完整(职业与链接/悬停文字需成对填写),请补全或清空该行', 'danger');
+      notify('有 ' + invalid + ' 行职业链接不完整(职业与链接/悬停文字需成对填写),请补全或清空该行', 'danger');
       return;
     }
-    card.classLinks = {
-      a: resolveGroup(card.classLinks, 'a', ga),
-      b: resolveGroup(card.classLinks, 'b', gb)
-    };
+    CardForm.applyToCard(card, data);
     /* 真有改动才入历史(打开又原样保存不产生空撤销步) */
     if (dialogBeforeSnapshot) {
       if (JSON.stringify(snapshotState()) !== JSON.stringify(dialogBeforeSnapshot)) {

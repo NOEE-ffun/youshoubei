@@ -71,7 +71,7 @@ test('卡片弹窗打开时 Cmd+Z 不触发画布撤销', async ({ page }) => {
   await card0.dblclick();
   const dlg = page.locator('#card-edit-dialog');
   await dlg.waitFor({ state: 'visible' });
-  await page.locator('#card-label').fill('弹窗守卫卡');
+  await page.locator('#card-edit-dialog .cf-label').fill('弹窗守卫卡');
   await page.locator('#card-edit-dialog [data-card-save]').click();
   await dlg.waitFor({ state: 'hidden' });
   await page.waitForTimeout(400);

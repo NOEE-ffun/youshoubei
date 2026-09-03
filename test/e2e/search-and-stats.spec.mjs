@@ -40,8 +40,8 @@ test('统计页:多选范围与选手职业视图', async ({ page }) => {
   const card0 = page.locator('.canvas-card').first();
   await card0.locator('.class-slot').first().click();
   await page.waitForSelector('#card-edit-dialog');
-  await page.locator('#card-slot-a').selectOption({ label: '选手 1' });
-  await page.locator('#card-slot-b').selectOption({ label: '选手 2' });
+  await page.locator('#card-edit-dialog .cf-slot-a').selectOption({ label: '选手 1' });
+  await page.locator('#card-edit-dialog .cf-slot-b').selectOption({ label: '选手 2' });
   await page.locator('#card-edit-dialog [data-card-save]').click();
   await page.waitForSelector('#card-edit-dialog', { state: 'hidden' });
   await card0.locator('.score-open').click();

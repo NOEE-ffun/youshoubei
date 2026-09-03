@@ -40,7 +40,7 @@ test('卡片改名可撤销重做,删除可撤销找回', async ({ page }) => {
   // 改名:双击卡片 → 弹窗改标题保存
   await card0.dblclick();
   await page.waitForSelector('#card-edit-dialog');
-  await page.locator('#card-label').fill('撤销测试卡');
+  await page.locator('#card-edit-dialog .cf-label').fill('撤销测试卡');
   await page.locator('#card-edit-dialog [data-card-save]').click();
   await page.waitForSelector('#card-edit-dialog', { state: 'hidden' });
   await page.waitForTimeout(400);

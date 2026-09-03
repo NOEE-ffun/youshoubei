@@ -49,7 +49,7 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
   const card0 = admin.locator('.canvas-card').first();
   await card0.locator('.class-slot').first().click();
   await admin.waitForSelector('#card-edit-dialog');
-  await admin.locator('#card-slot-a').selectOption({ label: 'e2e提交者' });
+  await admin.locator('#card-edit-dialog .cf-slot-a').selectOption({ label: 'e2e提交者' });
   await admin.locator('#card-edit-dialog [data-card-save]').click();
   await admin.waitForSelector('#card-edit-dialog', { state: 'hidden' });
   await admin.waitForTimeout(600);

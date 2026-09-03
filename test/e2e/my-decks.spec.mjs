@@ -47,8 +47,8 @@ test('卡组公示锁:开关手动开启后,未开始的卡显示锁占位', asy
   const card0 = page.locator('.canvas-card').first();
   await card0.locator('.class-slot').first().click();
   await page.waitForSelector('#card-edit-dialog');
-  await page.locator('#card-slot-a').selectOption({ label: '选手 1' });
-  await page.locator('#card-slot-b').selectOption({ label: '选手 2' });
+  await page.locator('#card-edit-dialog .cf-slot-a').selectOption({ label: '选手 1' });
+  await page.locator('#card-edit-dialog .cf-slot-b').selectOption({ label: '选手 2' });
   await page.locator('#card-edit-dialog [data-card-save]').click();
   await page.waitForSelector('#card-edit-dialog', { state: 'hidden' });
   /* 退出编辑模式(编辑态=管理员视角,按设计可见全部卡组,不出锁) */
