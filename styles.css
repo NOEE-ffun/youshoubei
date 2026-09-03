@@ -2185,8 +2185,17 @@ body.canvas-editing #bg-layer {
   border: 1px solid var(--border);
   border-right: 0; /* 与工具栏贴合处无接缝 */
   border-radius: var(--radius) 0 0 var(--radius);
-  box-shadow: var(--shadow);
+  /* 无 box-shadow:轮廓靠 top/left/bottom 边框 + 左圆角勾勒,
+   * 阴影向右晕染会把面板与工具栏读作两个分离浮层 */
   animation: card-panel-in var(--dur-ui) var(--ease-out) both;
+}
+
+/* 面板开着时工具栏左边框(恰在接缝线上)隐去,并补齐与面板相同的背景模糊——
+ * 两侧同为半透明浮面,合成底色一致才不会在接缝处读出色差分界 */
+body.card-panel-open .edit-toolbar {
+  border-left-color: transparent;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
 }
 
 .card-panel[hidden] {
