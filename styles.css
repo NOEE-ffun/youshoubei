@@ -1207,7 +1207,7 @@ dialog::backdrop {
 
 .match-card {
   border-radius: var(--radius);
-  padding: 0.75rem;
+  padding: 0.55rem;
   background: rgb(var(--card-glass-base) / var(--card-glass, 0.72));
   transition:
     border-color var(--dur-ui) var(--ease-out),
@@ -1279,13 +1279,18 @@ dialog::backdrop {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
-  margin-block-end: 0.5rem;
+  margin-block-end: 0.35rem;
+  min-inline-size: 0;
 }
 
 .match-title {
   margin: 0;
   font-size: 0.88rem;
   font-weight: 700;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .match-state {
@@ -1330,13 +1335,13 @@ dialog::backdrop {
   align-items: center;
   gap: 0.5rem;
   border-radius: var(--radius-sm);
-  padding: 0.45rem 0.55rem;
+  padding: 0.4rem 0.55rem;
   border: 1px solid transparent;
   background: var(--surface-2);
 }
 
 .match-player + .match-player {
-  margin-block-start: 0.375rem;
+  margin-block-start: 0.3rem;
 }
 
 .match-player.tbd {
@@ -1389,13 +1394,16 @@ dialog::backdrop {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.375rem;
-  margin-block-start: 0.625rem;
+  margin-block-start: 0.45rem;
 }
 
 .match-phase {
   font-size: 0.72rem;
   color: var(--text-muted);
   margin: -0.25rem 0 0.35rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 职业卡组行 */
@@ -1404,6 +1412,13 @@ dialog::backdrop {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
+}
+
+/* 画布卡固定 196 高:卡组行封顶单行,超长横向滚动,几何永不被打破 */
+.canvas-card .deck-class-row {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  min-inline-size: 0;
 }
 
 .class-slot {
@@ -1713,7 +1728,7 @@ body.canvas-editing #bg-layer {
 .canvas-card {
   position: absolute;
   width: 280px;
-  min-height: 168px;
+  height: 196px;
   box-sizing: border-box;
   z-index: 2;
   cursor: default;
@@ -1821,10 +1836,11 @@ body.canvas-editing #bg-layer {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-/* 编辑模式连线端口 */
+/* 编辑模式连线端口:inset -1px 把定位基准对齐到边框盒(卡有 1px 边框,默认内缩 1px),
+ * 与 canvas-model portOffset 的卡左上角原点(border-box)严格一致 */
 .card-ports {
   position: absolute;
-  inset: 0;
+  inset: -1px;
   pointer-events: none;
 }
 
@@ -1850,24 +1866,16 @@ body.canvas-editing #bg-layer {
   transform: translate(-50%, -50%);
 }
 
-/* 编辑模式六连接点(白板式):上排 = 胜者出 / A 位入,下排 = 败者出 / B 位入;
- * 左右连接点纵向与卡内 A/B 选手行对齐(标称 168 卡高,卡超高时下排悬于卡内) */
-.card-ports .port-node[data-port='top'] {
-  left: 50%;
-  top: -7px;
-  transform: translateX(-50%);
-}
-
-.card-ports .port-node[data-port='bottom'] {
-  left: 50%;
-  bottom: -7px;
-  transform: translateX(-50%);
-}
-
-.card-ports .port-node[data-port='leftTop'] { left: -7px; top: 48px; }
-.card-ports .port-node[data-port='leftBottom'] { left: -7px; top: 86px; }
-.card-ports .port-node[data-port='rightTop'] { right: -7px; top: 48px; }
-.card-ports .port-node[data-port='rightBottom'] { right: -7px; top: 86px; }
+/* 编辑模式八连接点(白板式):上排四点 = 胜者出 / A 位入,下排四点 = 败者出 / B 位入;
+ * 四侧各一对居中,对间距 38(PORT_SPAN),与 canvas-model portOffset 严格一致 */
+.card-ports .port-node[data-port='topLeft']     { left: calc(50% - 19px); top: 0;    translate: -50% -50%; }
+.card-ports .port-node[data-port='topRight']    { left: calc(50% + 19px); top: 0;    translate: -50% -50%; }
+.card-ports .port-node[data-port='bottomLeft']  { left: calc(50% - 19px); bottom: 0; translate: -50% 50%; }
+.card-ports .port-node[data-port='bottomRight'] { left: calc(50% + 19px); bottom: 0; translate: -50% 50%; }
+.card-ports .port-node[data-port='leftTop']     { left: 0; top: calc(50% - 19px);  translate: -50% -50%; }
+.card-ports .port-node[data-port='leftBottom']  { left: 0; top: calc(50% + 19px);  translate: -50% -50%; }
+.card-ports .port-node[data-port='rightTop']    { left: 100%; top: calc(50% - 19px);  translate: -50% -50%; }
+.card-ports .port-node[data-port='rightBottom'] { left: 100%; top: calc(50% + 19px);  translate: -50% -50%; }
 
 .card-ports .port-node[data-band='upper'] { border-color: #3b7e3e; }
 .card-ports .port-node[data-band='lower'] { border-color: #cc3a2b; }
@@ -1875,13 +1883,8 @@ body.canvas-editing #bg-layer {
 [data-theme='dark'] .card-ports .port-node[data-band='upper'] { border-color: #6bc26e; }
 [data-theme='dark'] .card-ports .port-node[data-band='lower'] { border-color: #f26d5f; }
 
-.card-ports .port-node[data-port='top']:hover,
-.card-ports .port-node[data-port='bottom']:hover {
-  transform: translateX(-50%) scale(1.25);
-}
-
-.card-ports .port-node:not([data-port='top']):not([data-port='bottom']):hover {
-  transform: scale(1.25);
+.card-ports .port-node:hover {
+  scale: 1.25;
 }
 
 /* 连线箭头 marker:与 winner/loser 线色一致 */

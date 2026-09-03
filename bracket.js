@@ -458,15 +458,17 @@
     board.appendChild(wrap);
     CanvasEditor.syncZoom();
     if (editMode) {
-      // 编辑模式额外显示六连接点(连线交互在 canvas-editor.js 中实现):
-      // 上排三点 = 胜者输出 / A 位输入,下排三点 = 败者输出 / B 位输入
+      // 编辑模式额外显示八连接点(连线交互在 canvas-editor.js 中实现):
+      // 上排四点 = 胜者输出 / A 位输入,下排四点 = 败者输出 / B 位输入
       board.querySelectorAll('.canvas-card').forEach((el) => {
         const cardId = el.dataset.match;
         const ports = [
-          ['top', 'upper', '上连接点:拖出胜者 / 拖入 A 位'],
+          ['topLeft', 'upper', '上左连接点:拖出胜者 / 拖入 A 位'],
+          ['topRight', 'upper', '上右连接点:拖出胜者 / 拖入 A 位'],
           ['leftTop', 'upper', '左上连接点:拖出胜者 / 拖入 A 位'],
           ['rightTop', 'upper', '右上连接点:拖出胜者 / 拖入 A 位'],
-          ['bottom', 'lower', '下连接点:拖出败者 / 拖入 B 位'],
+          ['bottomLeft', 'lower', '下左连接点:拖出败者 / 拖入 B 位'],
+          ['bottomRight', 'lower', '下右连接点:拖出败者 / 拖入 B 位'],
           ['leftBottom', 'lower', '左下连接点:拖出败者 / 拖入 B 位'],
           ['rightBottom', 'lower', '右下连接点:拖出败者 / 拖入 B 位']
         ];
