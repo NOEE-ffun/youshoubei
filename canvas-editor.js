@@ -68,10 +68,6 @@
     refreshToolbarUI();
   }
 
-  function isDirty() {
-    return dirty;
-  }
-
   /* 快照 = 卡片 + 比分 + 每场卡组(删除卡片会连带清理后两者,撤销须整体还原) */
   function snapshotState() {
     const record = currentRecord();
@@ -111,6 +107,7 @@
 
   function restoreHistory(direction) {
     syncHistoryOwner();
+    cancelPanelCommit();
     const current = snapshotState();
     const snap = direction === 'undo' ? history.undo(current) : history.redo(current);
     if (!snap) return false;
@@ -181,8 +178,14 @@
     refreshToolbarUI();
   }
 
+  /* 外部入口(bracket.js class-slot 编辑态):选中单卡并打开设置抽屉 */
+  function selectCard(id) {
+    if (findCard(id)) setSelection([id]);
+  }
+
   function refreshToolbarUI() {
     if (toolbarHook) toolbarHook();
+    syncPanel();
   }
 
   /* ---------- 编辑模式生命周期 ---------- */
@@ -209,6 +212,8 @@
   function exit() {
     active = false;
     tool = 'select';
+    /* 面板先收起(顺带 flush 待提交改动),再清选择 */
+    hidePanel();
     selectedCardId = null;
     batchSelected.clear();
     dragState = null;
@@ -1093,8 +1098,141 @@
       dialogBeforeSnapshot = null;
     }
     cardDialog.close();
+    /* 弹窗保存后面板强制回填:面板表单停在弹窗打开前的旧值,不重置的话
+     * 下一次面板输入(CardForm.read 读全量旧值→applyToCard)会静默回退弹窗改动;
+     * 置空 panelCardId 让 syncPanel 走"换卡"分支,用最新 card+effLinks 重填 */
+    panelCardId = null;
+    refreshToolbarUI();
     saveCanvas().then(() => {
       requestRender();
+    });
+  }
+
+  /* ---------- 卡片设置抽屉(选中单卡实时编辑) ---------- */
+
+  let panelCardId = null;
+  let panelBeforeSnapshot = null;
+  let panelCommitTimer = null;
+  /* 防重入守卫:syncPanel→flushPanelCommit→commitHistory→refreshToolbarUI→syncPanel
+   * 链路里嵌套的 syncPanel 一律跳过(外层那一帧会完成完整同步) */
+  let panelSyncing = false;
+
+  function panelEl() {
+    return document.getElementById('card-panel');
+  }
+
+  function effLinksOf(card) {
+    const record = currentRecord();
+    return (CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {}).get(card.id)) || {};
+  }
+
+  /* 连线来源可读名(与弹窗路径 openCardDialog 同算法,card-form.js 不自己算) */
+  function flowLabelsOf(card) {
+    const labels = { a: '', b: '' };
+    const slotA = card.slots && card.slots[0];
+    const slotB = card.slots && card.slots[1];
+    if (slotA && slotA.type === 'flow') labels.a = flowSourceLabel(slotA.cardId);
+    if (slotB && slotB.type === 'flow') labels.b = flowSourceLabel(slotB.cardId);
+    return labels;
+  }
+
+  /* 唯一显隐同步点:refreshToolbarUI 每次选择变化后调用 */
+  function syncPanel() {
+    if (panelSyncing) return;
+    if (!active) return hidePanel();
+    const ids = selectedIds();
+    if (ids.length !== 1) return hidePanel();
+    const card = findCard(ids[0]);
+    if (!card) return hidePanel();
+    const el = panelEl();
+    if (!el) return;
+    panelSyncing = true;
+    try {
+      if (panelCardId !== card.id) {
+        flushPanelCommit();
+        panelCardId = card.id;
+        el.hidden = false;
+        document.body.classList.add('card-panel-open');
+        const body = document.getElementById('card-panel-body');
+        if (!body.dataset.built) {
+          body.innerHTML = CardForm.fieldsHtml();
+          body.dataset.built = '1';
+          bindPanelEvents(body);
+        }
+        CardForm.fill(body, card, effLinksOf(card), flowLabelsOf(card));
+      }
+    } finally {
+      panelSyncing = false;
+    }
+    const tag = document.getElementById('card-panel-label');
+    if (tag) tag.textContent = card.label || card.id;
+  }
+
+  function hidePanel() {
+    flushPanelCommit();
+    panelCardId = null;
+    const el = panelEl();
+    if (el && !el.hidden) el.hidden = true;
+    document.body.classList.remove('card-panel-open');
+  }
+
+  function flushPanelCommit() {
+    if (panelCommitTimer) {
+      clearTimeout(panelCommitTimer);
+      panelCommitTimer = null;
+    }
+    const pre = panelBeforeSnapshot;
+    if (!pre) return;
+    /* 先清再提交:commitHistory 会经 refreshToolbarUI 重入 syncPanel,
+     * 重入路径(flushPanelCommit/hidePanel)须看到"无待提交"才不会二次入栈 */
+    panelBeforeSnapshot = null;
+    commitHistory(pre);
+    saveCanvas().then(() => {
+      requestRender();
+      highlightSelected();
+    });
+  }
+
+  /* 撤销/重做不 flush 面板待提交项:restoreHistory 自带整体快照交换,
+   * 已实时应用的改动会进 redo 栈;此刻再把首改前快照推入历史只会多出一步空撤销 */
+  function cancelPanelCommit() {
+    if (panelCommitTimer) {
+      clearTimeout(panelCommitTimer);
+      panelCommitTimer = null;
+    }
+    panelBeforeSnapshot = null;
+  }
+
+  /* 实时应用:读→写回→重绘;防抖落盘,首改快照合并撤销步 */
+  function applyPanelEdits() {
+    const card = panelCardId && findCard(panelCardId);
+    const body = document.getElementById('card-panel-body');
+    if (!card || !body) return;
+    const read = CardForm.read(body);
+    if (read.invalid > 0 || !read.data) return; /* 输入中间态:跳过,不弹提示 */
+    if (!panelBeforeSnapshot) panelBeforeSnapshot = snapshotState();
+    CardForm.applyToCard(card, read.data);
+    CardForm.ensureTrailingRow(body);
+    requestRender();
+    /* 重绘会重建 board DOM:补一次选中高亮(同拖拽/微调落盘先例) */
+    highlightSelected();
+    const tag = document.getElementById('card-panel-label');
+    if (tag) tag.textContent = card.label || card.id;
+    if (panelCommitTimer) clearTimeout(panelCommitTimer);
+    panelCommitTimer = setTimeout(flushPanelCommit, 500);
+  }
+
+  function bindPanelEvents(body) {
+    /* 行删除委托与弹窗共用同一绑定(card-form.js) */
+    CardForm.bindRowDeletion(body);
+    body.addEventListener('input', (event) => {
+      if (event.target.matches('.cl-url, .cl-text')) CardForm.ensureTrailingRow(body);
+      applyPanelEdits();
+    });
+    body.addEventListener('change', applyPanelEdits);
+    /* 删行本身由 CardForm.bindRowDeletion 完成,这里只负责删后实时应用 */
+    body.addEventListener('click', (event) => {
+      if (event.target.closest('[data-cl-del]')) applyPanelEdits();
     });
   }
 
@@ -1231,6 +1369,7 @@
     deleteSelected,
     getSelectedIds: selectedIds,
     editCard: openCardDialog,
+    selectCard,
     setTool,
     getTool,
     zoomIn,
@@ -1245,7 +1384,6 @@
     redo,
     canUndo,
     canRedo,
-    isDirty,
     saveCanvas,
     restoreSavedZoom
   };

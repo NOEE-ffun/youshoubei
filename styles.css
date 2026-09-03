@@ -2169,6 +2169,73 @@ body.canvas-editing #bg-layer {
   flex: 1;
 }
 
+/* ---------- 卡片设置抽屉(选中单卡滑出,与工具栏同面无接缝) ---------- */
+.card-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0; /* main 右缘即工具栏左缘 */
+  z-index: 25;
+  width: min(19rem, 78vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-float);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border);
+  border-right: 0; /* 与工具栏贴合处无接缝 */
+  border-radius: var(--radius) 0 0 var(--radius);
+  box-shadow: var(--shadow);
+  animation: card-panel-in var(--dur-ui) var(--ease-out) both;
+}
+
+.card-panel[hidden] {
+  display: none;
+}
+
+@keyframes card-panel-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.card-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.7rem 0.85rem 0.45rem;
+  border-block-end: 1px solid var(--border);
+}
+
+.card-panel-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.card-panel-card {
+  font-size: 0.78rem;
+  font-weight: 700;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.75rem 0.85rem;
+}
+
+/* 抽屉内 cl-row 允许换行(窄面板,url/悬停文字竖排更从容) */
+.card-panel .cl-row { flex-wrap: wrap; }
+
+/* 面板开着时样式抽屉整体左移让位 */
+body.card-panel-open .style-drawer { right: calc(19rem + 0.5rem); }
+
 /* ---------- 选手下拉 / 赛制规则 ---------- */
 
 .roster-dropdown,
@@ -2861,7 +2928,8 @@ body[data-page="me"] #bg-layer {
 
 body[data-view='list'] .canvas-wrap-full,
 body[data-view='list'] .zoom-dock,
-body[data-view='list'] .style-drawer {
+body[data-view='list'] .style-drawer,
+body[data-view='list'] .card-panel {
   display: none;
 }
 

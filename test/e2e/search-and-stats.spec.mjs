@@ -32,18 +32,17 @@ test('查找:高亮计数、Enter 跳转、Esc 清除', async ({ page }) => {
 });
 
 test('统计页:多选范围与选手职业视图', async ({ page }) => {
-  // 布置数据:首卡设选手 + 比分 2:0
+  // 布置数据:首卡设选手 + 比分 2:0;class-slot 编辑态改走选中抽屉
   await page.goto('/schedule.html');
   await page.waitForSelector('.canvas-card');
   await page.locator('#header-edit-btn').click();
   await page.waitForSelector('.canvas-board.editing');
   const card0 = page.locator('.canvas-card').first();
   await card0.locator('.class-slot').first().click();
-  await page.waitForSelector('#card-edit-dialog');
-  await page.locator('#card-edit-dialog .cf-slot-a').selectOption({ label: '选手 1' });
-  await page.locator('#card-edit-dialog .cf-slot-b').selectOption({ label: '选手 2' });
-  await page.locator('#card-edit-dialog [data-card-save]').click();
-  await page.waitForSelector('#card-edit-dialog', { state: 'hidden' });
+  await page.waitForSelector('#card-panel');
+  await page.locator('#card-panel .cf-slot-a').selectOption({ label: '选手 1' });
+  await page.locator('#card-panel .cf-slot-b').selectOption({ label: '选手 2' });
+  await page.waitForTimeout(800); /* 防抖 500 + 落盘 */
   await card0.locator('.score-open').click();
   await page.waitForSelector('#score-dialog');
   await page.locator('[data-score-preset]').nth(1).click(); // 2:1

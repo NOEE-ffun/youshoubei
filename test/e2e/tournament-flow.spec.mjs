@@ -21,17 +21,16 @@ test('首卡比分后下游继承选手与职业卡组,改比分连锁重算', a
   await page.waitForSelector('.canvas-board.editing');
 
   const card0 = page.locator('.canvas-card').first();
-  // 打开卡片编辑:设 A=选手1 B=选手2,A 组填法师
+  // 打开卡片设置抽屉(class-slot 编辑态):设 A=选手1 B=选手2,A 组填法师
   await card0.locator(".class-slot[data-cl-group='a']").first().click();
-  await page.waitForSelector('#card-edit-dialog');
-  await page.locator('#card-edit-dialog .cf-slot-a').selectOption({ label: '选手 1' });
-  await page.locator('#card-edit-dialog .cf-slot-b').selectOption({ label: '选手 2' });
-  const lastA = page.locator('#card-edit-dialog .cf-cl-a .cl-row').last();
+  await page.waitForSelector('#card-panel');
+  await page.locator('#card-panel .cf-slot-a').selectOption({ label: '选手 1' });
+  await page.locator('#card-panel .cf-slot-b').selectOption({ label: '选手 2' });
+  const lastA = page.locator('#card-panel .cf-cl-a .cl-row').last();
   await lastA.locator('.cl-cls').selectOption('法师');
   await lastA.locator('.cl-url').fill('https://example.com/mage');
   await lastA.locator('.cl-text').fill('E2E继承卡组');
-  await page.locator('#card-edit-dialog [data-card-save]').click();
-  await page.waitForSelector('#card-edit-dialog', { state: 'hidden' });
+  await page.waitForTimeout(800); /* 防抖 500 + 落盘 */
 
   // 填比分 2:0(选手1 胜)
   await card0.locator('.score-open').click();

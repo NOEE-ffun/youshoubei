@@ -809,7 +809,8 @@
       const classSlot = event.target.closest('[data-cl-card]');
       if (classSlot) {
         if (editMode) {
-          CanvasEditor.editCard(classSlot.dataset.clCard);
+          /* 编辑态:选中该卡并滑出设置抽屉(实时应用),不再弹窗 */
+          CanvasEditor.selectCard(classSlot.dataset.clCard);
         } else {
           const url = classSlot.dataset.url || '';
           if (/^https?:\/\//i.test(url)) window.open(url, '_blank', 'noopener');

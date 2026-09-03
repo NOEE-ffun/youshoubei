@@ -43,16 +43,14 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
   await admin.locator('#manage-dialog [data-dialog-close]').click();
   await admin.waitForTimeout(300);
 
-  /* ---- 3. 指派选手:首卡 A 位 = e2e提交者(B 留待定) ---- */
+  /* ---- 3. 指派选手:首卡 A 位 = e2e提交者(B 留待定);class-slot 编辑态改走选中抽屉 ---- */
   await admin.locator('#header-edit-btn').click();
   await admin.waitForSelector('.canvas-board.editing');
   const card0 = admin.locator('.canvas-card').first();
   await card0.locator('.class-slot').first().click();
-  await admin.waitForSelector('#card-edit-dialog');
-  await admin.locator('#card-edit-dialog .cf-slot-a').selectOption({ label: 'e2e提交者' });
-  await admin.locator('#card-edit-dialog [data-card-save]').click();
-  await admin.waitForSelector('#card-edit-dialog', { state: 'hidden' });
-  await admin.waitForTimeout(600);
+  await admin.waitForSelector('#card-panel');
+  await admin.locator('#card-panel .cf-slot-a').selectOption({ label: 'e2e提交者' });
+  await admin.waitForTimeout(800); /* 防抖 500 + 落盘 */
 
   /* ---- 4. 开窗(手动:开启) ---- */
   await admin.locator('#settings-btn').click();
