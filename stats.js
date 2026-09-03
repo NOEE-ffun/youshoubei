@@ -295,7 +295,7 @@
       const rows = deckCompRows(agg);
       const costIcon = (cost) => {
         const n = Math.max(0, Math.min(10, Number(cost) || 0));
-        return '<img class="cost-icon" src="icons/cost/cost-' + n + '.png" alt="' + n + '费" title="' + n + ' 费" width="20" height="20" loading="lazy">';
+        return '<img class="cost-icon" src="icons/cost/cost-' + n + '.webp" alt="' + n + '费" title="' + n + ' 费" width="20" height="20" loading="lazy">';
       };
       /* 百分比文字:非 0 时套对应段颜色(红3/黄2/绿1/蓝0),0 保持灰 */
       const pt = (n, cls) => '<span' + (n ? ' class="dist-pt ' + cls + '"' : '') + '>' + pct(n) + '%</span>';

@@ -39,6 +39,7 @@ function mockRes() {
   return {
     status(code) { captured.status = code; return this; },
     cacheControl() { return this; },
+    etag() { return this; },
     setHeader(n, v) { captured.headers[n] = v; return this; },
     json(p) { captured.body = p; return captured; },
     _captured: captured

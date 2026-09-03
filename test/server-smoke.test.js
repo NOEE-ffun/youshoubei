@@ -6,13 +6,13 @@ const assert = require('node:assert');
 const http = require('node:http');
 const { createServer } = require('../server.js');
 
-function request(server, pathname) {
+function request(server, pathname, encoding) {
   return new Promise((resolve, reject) => {
     const req = http.request({
       host: '127.0.0.1',
       port: server.address().port,
       path: pathname,
-      headers: { 'Accept-Encoding': 'identity' }
+      headers: { 'Accept-Encoding': encoding || 'identity' }
     }, (res) => {
       const chunks = [];
       res.on('data', (chunk) => chunks.push(chunk));
@@ -54,11 +54,19 @@ async function main() {
     assert.strictEqual(schedule.status, 200);
     assert.strictEqual(schedule.headers['cache-control'], 'no-cache');
 
-    /* 5. JS/CSS 使用短缓存 + SWR */
+    /* 5. JS/CSS 引用恒带 ?v= → 一年 immutable;图片/字体一天强缓存 + SWR */
     const js = await request(server, '/canvas-model.js');
     assert.strictEqual(js.status, 200);
-    assert(js.headers['cache-control'].includes('max-age=300'));
-    assert(js.headers['cache-control'].includes('stale-while-revalidate'));
+    assert(js.headers['cache-control'].includes('max-age=31536000'), 'js 应长缓存: ' + js.headers['cache-control']);
+    assert(js.headers['cache-control'].includes('immutable'));
+    const icon = await request(server, '/icons/home.svg');
+    assert(icon.headers['cache-control'].includes('max-age=86400'), '图片应一天缓存: ' + icon.headers['cache-control']);
+    assert(icon.headers['cache-control'].includes('stale-while-revalidate'));
+
+    /* 5b. 带 br 的请求静态下发走 brotli 压缩 */
+    const jsBr = await request(server, '/canvas-model.js', 'br');
+    assert.strictEqual(jsBr.headers['content-encoding'], 'br');
+    assert(jsBr.body.length > 0);
 
     /* 6. 不存在的静态文件 404 */
     const missing = await request(server, '/not-exists.html');

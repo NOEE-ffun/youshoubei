@@ -1566,7 +1566,7 @@
   }
 
   /* ---------- 跨文件共享工具 ----------
-   * escapeHtml/debounce/canEdit/save/medalMap 原在 bracket.js、deck-modal.js、home.js
+   * escapeHtml/debounce/canEdit/save 等原在 bracket.js、deck-modal.js、home.js
    * 各复制一份，改一处漏三处；统一收敛到此处，经 window.TournamentUtils 暴露。 */
 
   function debounce(fn, wait) {
@@ -1596,18 +1596,6 @@
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return '';
     return (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-  }
-
-  /* 比赛已分出冠亚季军时，返回 playerId → 奖牌信息 的映射；未结束返回空 Map */
-  function medalMap(record) {
-    const map = new Map();
-    if (!record || !record.canvas || !Array.isArray(record.roster)) return map;
-    const standings = CanvasModel.deriveStandings(record);
-    if (!standings.champion) return map;
-    if (standings.champion) map.set(standings.champion, { type: 'gold', emoji: '🥇' });
-    if (standings.runnerUp) map.set(standings.runnerUp, { type: 'silver', emoji: '🥈' });
-    if (standings.thirdPlace) map.set(standings.thirdPlace, { type: 'bronze', emoji: '🥉' });
-    return map;
   }
 
   /* 赛事状态徽章（upcoming/ongoing/finished），渲染在赛程页顶栏标题旁；
@@ -1703,7 +1691,6 @@
     canManage,
     save,
     formatStartTime,
-    medalMap,
     avatarMarkup,
     normalizePlayer,
     notify,

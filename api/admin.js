@@ -139,9 +139,12 @@ async function defaultBackupManual(sourceKey, ts) {
 }
 
 /** 恢复真实现:把备份 key 拷回 data.json(留底由调用方先 backupData;
- * 拷贝语义同 scripts/restore-data.js 的 client.copy) */
+ * 拷贝语义同 scripts/restore-data.js 的 client.copy)。
+ * server-side copy 绕过 writeJson,须显式失效进程内读缓存,
+ * 否则恢复成功后 TTL 窗口内仍下发恢复前的旧数据 */
 async function defaultRestoreCopy(key) {
   await oss.getClient().copy(DATA_KEY, key);
+  oss.invalidateReadCache(DATA_KEY);
 }
 
 /** 超管保护:目标 effectiveRole 为 super(env 名单命中也算)或目标即操作者本人 */

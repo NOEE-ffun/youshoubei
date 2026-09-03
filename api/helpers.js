@@ -1,11 +1,13 @@
 'use strict';
 
-const { isOssConfigured, readJson, writeJson } = require('./oss');
+const { isOssConfigured, readJsonCached, writeJson } = require('./oss');
 const devStore = require('./dev-store');
 
 /* api/ 共享工具:JSON 响应与请求体收集。
  * 逐块收集后一次性 concat 再解码:中文等多字节字符跨 chunk 时,
- * 逐块 utf8 解码会产生 U+FFFD 替换符损坏数据。 */
+ * 逐块 utf8 解码会产生 U+FFFD 替换符损坏数据。
+ * OSS 读走 readJsonCached(进程内短 TTL+write-through,见 oss.js);注入存储
+ * 与开发内存存储分支不经缓存,测试语义不变。 */
 
 function sendJson(res, status, payload) {
   res.status(status).json(payload);
@@ -51,7 +53,7 @@ function createStorage(storage) {
     async read(key) {
       if (storage && storage.readJson) return storage.readJson(key);
       if (!isOssConfigured()) return devStore.readJson(key);
-      return readJson(key);
+      return readJsonCached(key);
     },
     async write(key, value) {
       if (storage && storage.writeJson) return storage.writeJson(key, value);

@@ -7,6 +7,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const crypto = require('crypto');
 
 const ROOT = __dirname;
 
@@ -92,11 +93,18 @@ const MIME = {
   '.woff2': 'font/woff2'
 };
 
-/* 静态资源允许短缓存 + SWR;页面与数据文件保持每次校验 */
+/* 静态缓存分级:
+ * - js/css:所有 HTML 引用恒带 ?v= 版本参数,改版即换 URL → 一年 immutable(入口
+ *   HTML 本身 no-cache,新页面必然引用新地址,不存在改版不生效窗口)
+ * - 图片/字体(svg/webp/png/jpg/woff2):HTML 引用不带版本参数,取一天强缓存 +
+ *   7 天 stale-while-revalidate;图标/字体改动频率极低,急需生效时给引用补 ?v=
+ * - 其余(HTML/json/txt):no-cache 每次校验 */
 function cacheControlFor(filePath) {
-  return /\.(js|css|svg)$/i.test(filePath)
-    ? 'public, max-age=300, stale-while-revalidate=604800'
-    : 'no-cache';
+  if (/\.(js|css)$/i.test(filePath)) return 'public, max-age=31536000, immutable';
+  if (/\.(svg|webp|png|jpe?g|gif|ico|woff2?)$/i.test(filePath)) {
+    return 'public, max-age=86400, stale-while-revalidate=604800';
+  }
+  return 'no-cache';
 }
 
 /* 本站文件都是小文本,同步压缩足够;按 Accept-Encoding 优先 br */
@@ -107,13 +115,18 @@ function encodeBody(req, data) {
   return { body: data, encoding: '' };
 }
 
-/* Vercel res 的最小适配:api/*.js 只用 status().json()。
- * 默认 Cache-Control no-store;个别接口(如 /api/poster-stage GET,
- * 登录墙内的私有读)可用 .cacheControl('private, max-age=300') 覆盖;
- * setHeader 供登录接口写 Set-Cookie。 */
+/* Vercel res 的最小适配:api/*.js 只用 status()/cacheControl()/etag().json()。
+ * 默认 Cache-Control no-store;个别接口(如 /api/poster-stage GET,登录墙内的
+ * 私有读)可用 .cacheControl('private, max-age=300') 覆盖;数据读接口可用
+ * .etag() 开启协商缓存(命中 If-None-Match 直接 304 零传输,需搭配
+ * no-cache 级 Cache-Control 每次向服务器校验);setHeader 供登录接口写 Set-Cookie。
+ * JSON 响应同样吃 br/gzip 压缩;阈值以下的小体(轮询/健康检查)直发省 CPU。 */
+const JSON_COMPRESS_THRESHOLD = 512;
+
 function apiResponse(rawRes) {
   let statusCode = 200;
   let cacheControl = 'no-store';
+  let etagEnabled = false;
   const extraHeaders = [];
   return {
     status(code) {
@@ -124,20 +137,47 @@ function apiResponse(rawRes) {
       cacheControl = value;
       return this;
     },
+    etag() {
+      etagEnabled = true;
+      return this;
+    },
     setHeader(name, value) {
       extraHeaders.push([String(name), String(value)]);
       return this;
     },
     json(payload) {
       const body = Buffer.from(JSON.stringify(payload), 'utf8');
+      /* 单测注入的 mock res 没有 .req(真实 http.ServerResponse 恒指向请求) */
+      const req = rawRes.req && rawRes.req.headers ? rawRes.req : null;
       rawRes.statusCode = statusCode;
       rawRes.setHeader('Content-Type', 'application/json; charset=utf-8');
       rawRes.setHeader('Cache-Control', cacheControl);
       rawRes.setHeader('X-Content-Type-Options', 'nosniff');
       for (const [key, value] of Object.entries(SECURITY_HEADERS)) rawRes.setHeader(key, value);
       for (const [key, value] of extraHeaders) rawRes.setHeader(key, value);
-      rawRes.setHeader('Content-Length', body.length);
-      rawRes.end(body);
+      if (req) rawRes.setHeader('Vary', 'Accept-Encoding');
+      /* ETag 按响应体指纹:不同请求者被剥离出不同响应时 tag 自然不同,
+       * 304 只会在"本次为该请求者生成的体"与缓存体逐字节一致时发生 */
+      if (etagEnabled && req && statusCode === 200 && req.method === 'GET') {
+        const etag = '"' + crypto.createHash('sha1').update(body).digest('hex').slice(0, 16) + '"';
+        rawRes.setHeader('ETag', etag);
+        if (String(req.headers['if-none-match'] || '') === etag) {
+          rawRes.statusCode = 304;
+          rawRes.setHeader('Content-Length', 0);
+          rawRes.end();
+          return;
+        }
+      }
+      let out = body;
+      if (req && body.length >= JSON_COMPRESS_THRESHOLD) {
+        const { body: compressed, encoding } = encodeBody(req, body);
+        if (encoding) {
+          rawRes.setHeader('Content-Encoding', encoding);
+          out = compressed;
+        }
+      }
+      rawRes.setHeader('Content-Length', out.length);
+      rawRes.end(out);
     }
   };
 }

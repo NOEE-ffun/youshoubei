@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { requireUser, requireRole } = require('./auth');
 const { sendJson, readBody } = require('./helpers');
-const { readJson, writeJson, appendAudit } = require('./oss');
+const { readJsonCached, writeJson, appendAudit } = require('./oss');
 
 /* OBS 舞台(浏览器源)一次性生成接口：
  *   POST → 管理员(admin/super)创建新舞台，返回自包含 URL(/poster-stage.html?id=…)
@@ -59,7 +59,7 @@ function validatePosterStagePayload(body) {
 /* 存储层依赖注入：默认用 OSS；测试可传入内存实现。 */
 function createHandler(storage, options) {
   const o = options || {};
-  const read = (storage && storage.readJson) || readJson;
+  const read = (storage && storage.readJson) || readJsonCached;
   const write = (storage && storage.writeJson) || writeJson;
   const ttlDays = typeof o.ttlDays === 'number' ? o.ttlDays : defaultTtlDays();
   const now = typeof o.now === 'function' ? o.now : Date.now;

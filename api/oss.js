@@ -65,10 +65,35 @@ async function readJson(key) {
   }
 }
 
+/* ========== 进程内读缓存(仅 OSS 分支;开发内存存储本就零网络) ==========
+ * GET 类接口(data/notices/docs)每次页面加载都打 OSS,同区域网络往返+JSON 解析
+ * 是 API TTFB 主头。写路径 write-through 同步换新;TTL 兜底绕过 writeJson 的
+ * 外部写入(admin 恢复备份的 server-side copy 已显式失效)。
+ * 命中/写入都必须深拷贝:stripHiddenDecks 等调用方会原地改写响应,
+ * 调用方 write 后也可能继续 mutate 自持引用——任何一侧穿透都会污染缓存。 */
+const READ_CACHE_TTL = 3000;
+const readCache = new Map();
+
+async function readJsonCached(key) {
+  const hit = readCache.get(key);
+  if (hit && Date.now() - hit.at < READ_CACHE_TTL) {
+    return hit.value === null ? null : structuredClone(hit.value);
+  }
+  const value = await readJson(key);
+  readCache.set(key, { at: Date.now(), value });
+  return value === null ? null : structuredClone(value);
+}
+
+function invalidateReadCache(key) {
+  if (key === undefined) readCache.clear();
+  else readCache.delete(key);
+}
+
 async function writeJson(key, value) {
   await withRetry(() => getClient().put(key, Buffer.from(JSON.stringify(value), 'utf8'), {
     headers: { 'Content-Type': 'application/json; charset=utf-8' }
   }));
+  readCache.set(key, { at: Date.now(), value: structuredClone(value) });
 }
 
 /* ========== data.json 版本化备份 ==========
@@ -214,6 +239,8 @@ module.exports = {
   isOssConfigured,
   getClient,
   readJson,
+  readJsonCached,
+  invalidateReadCache,
   writeJson,
   backupJson,
   uploadImageBuffer,

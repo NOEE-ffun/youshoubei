@@ -81,6 +81,9 @@ module.exports = async function handler(req, res) {
       if (!isAdminRole(effectiveRole(user))) {
         payload = stripHiddenDecks(JSON.parse(JSON.stringify(payload)), (user && user.playerId) || null);
       }
+      /* 协商缓存:数据未变时 304 零传输(前端每页加载+60s 后台校新都打这里);
+       * no-cache 保证每次仍向服务器校验,ETag 按剥离后响应体计算,不越权 */
+      res.cacheControl('private, no-cache').etag();
       sendJson(res, 200, payload);
     } catch (error) {
       console.error('[data] GET 失败:', error.message);

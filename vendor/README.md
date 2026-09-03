@@ -4,7 +4,7 @@
 
 | 文件 | 包 | 版本 | 许可 | 取自 npm 包内路径 |
 |---|---|---|---|---|
-| marked.umd.js | marked | 12.0.2 | MIT | lib/marked.umd.js |
+| marked.umd.min.js | marked | 12.0.2 | MIT | lib/marked.umd.js 经 terser 压缩(页面只引 min 版;原版留在 marked.umd.js 供升级 diff) |
 | purify.min.js | dompurify | 3.1.6 | MPL-2.0 / Apache-2.0 双许可 | dist/purify.min.js |
 
 官方源:marked https://github.com/markedjs/marked ;DOMPurify https://github.com/cure53/DOMPurify 。

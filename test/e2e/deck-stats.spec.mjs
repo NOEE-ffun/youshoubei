@@ -73,7 +73,7 @@ test('统计页:快照聚合携带率表格 + 稀有度着色 + 未解析计数'
   await expect(page.locator('#deck-comp-table thead th')).toHaveText(['费用', '卡名', '分布(3·2·1·0)']);
   /* 排序:费用升序 → 稀有度升序(须臾1费 → 焦灼4费 → 统音5费 → 超费12费) */
   await expect(rows.nth(0).locator('.deck-name-r1')).toContainText('须臾剑士');
-  await expect(rows.nth(0).locator('.cost-icon')).toHaveAttribute('src', 'icons/cost/cost-1.png');
+  await expect(rows.nth(0).locator('.cost-icon')).toHaveAttribute('src', 'icons/cost/cost-1.webp');
   await expect(rows.nth(0)).toContainText('50%·50%·0%·0%');
   await expect(rows.nth(0).locator('.dist-bar')).toBeVisible();
   /* 百分比着色:非 0 段按红3/黄2 着色加粗,0 段保持弱化灰 */
@@ -86,7 +86,7 @@ test('统计页:快照聚合携带率表格 + 稀有度着色 + 未解析计数'
   await expect(rows.nth(2)).toContainText('50%·0%·0%·50%');
   /* 费用 ≥10 统一用 10+ 图标(渲染层钳制,排序仍按真实费用) */
   await expect(rows.nth(3).locator('.deck-name-r1')).toContainText('超费验证卡');
-  await expect(rows.nth(3).locator('.cost-icon')).toHaveAttribute('src', 'icons/cost/cost-10.png');
+  await expect(rows.nth(3).locator('.cost-icon')).toHaveAttribute('src', 'icons/cost/cost-10.webp');
 
   await expect(page.locator('#deck-comp-foot')).toContainText('共 2 副');
   await expect(page.locator('#deck-comp-foot')).toContainText('1 条链接未解析');
