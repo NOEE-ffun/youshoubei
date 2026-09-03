@@ -16,25 +16,37 @@
     return window.TournamentUtils.escapeHtml(str);
   }
 
-  /* 字段标记(不含弹窗标题/按钮/提示);container.innerHTML = CardForm.fieldsHtml() */
+  /* 字段标记(不含弹窗标题/按钮/提示);container.innerHTML = CardForm.fieldsHtml()
+   * 结构:四分区(基本信息/对阵/出口名次/职业卡组),短字段两列栅格,弹窗与抽屉共用;
+   * 所有控件 class(cf- 与 cl- 前缀)是跨容器契约,改动须同步两侧调用方与 e2e 选择器 */
   function fieldsHtml() {
     return (
-      '  <div class="form-field"><label>标题</label><input type="text" class="cf-label" aria-label="标题"></div>' +
-      '  <div class="form-field"><label>阶段</label><input type="text" class="cf-phase" placeholder="如：胜者组决赛" aria-label="阶段"></div>' +
-      '  <div class="form-field"><label>赛制文本</label><input type="text" class="cf-format" placeholder="BO3 / BO5 / 自定义" aria-label="赛制文本"></div>' +
-      '  <div class="form-field"><label>卡组数量（留空自动）</label><input type="number" class="cf-deck-count" min="1" step="1" aria-label="卡组数量"></div>' +
+      '<div class="cf-section">' +
+      '  <div class="cf-section-title">基本信息</div>' +
+      '  <div class="cf-grid">' +
+      '    <div class="form-field span-2"><label>标题</label><input type="text" class="cf-label" aria-label="标题"></div>' +
+      '    <div class="form-field"><label>阶段</label><input type="text" class="cf-phase" placeholder="胜者组决赛" aria-label="阶段"></div>' +
+      '    <div class="form-field"><label>赛制</label><input type="text" class="cf-format" placeholder="BO3 / 自定义" aria-label="赛制文本"></div>' +
+      '    <div class="form-field span-2"><label>卡组数量（留空自动）</label><input type="number" class="cf-deck-count" min="1" step="1" aria-label="卡组数量"></div>' +
+      '  </div>' +
+      '</div>' +
+      '<div class="cf-section">' +
+      '  <div class="cf-section-title">对阵</div>' +
       '  <div class="form-field"><label>A 位选手</label><select class="cf-slot-a" aria-label="A 位选手"></select><select class="cf-flow-outcome-a flow-outcome" hidden aria-label="A 位连线取哪个出口"><option value="winner">取其胜者</option><option value="loser">取其败者</option></select></div>' +
       '  <div class="form-field"><label>B 位选手</label><select class="cf-slot-b" aria-label="B 位选手"></select><select class="cf-flow-outcome-b flow-outcome" hidden aria-label="B 位连线取哪个出口"><option value="winner">取其胜者</option><option value="loser">取其败者</option></select></div>' +
-      '  <div class="form-field"><label>胜者出口名次</label><input type="number" class="cf-rank-winner" placeholder="如 1" aria-label="胜者出口名次"></div>' +
-      '  <div class="form-field"><label>败者出口名次</label><input type="number" class="cf-rank-loser" placeholder="如 2" aria-label="败者出口名次"></div>' +
-      '  <div class="form-field">' +
-      '    <label>职业卡组 · A 位选手(查看模式点击图标跳转)</label>' +
-      '    <div class="cl-list cf-cl-a"></div>' +
+      '</div>' +
+      '<div class="cf-section">' +
+      '  <div class="cf-section-title">出口名次</div>' +
+      '  <div class="cf-grid">' +
+      '    <div class="form-field"><label>胜者名次</label><input type="number" class="cf-rank-winner" placeholder="如 1" aria-label="胜者出口名次"></div>' +
+      '    <div class="form-field"><label>败者名次</label><input type="number" class="cf-rank-loser" placeholder="如 2" aria-label="败者出口名次"></div>' +
       '  </div>' +
-      '  <div class="form-field">' +
-      '    <label>职业卡组 · B 位选手</label>' +
-      '    <div class="cl-list cf-cl-b"></div>' +
-      '  </div>'
+      '</div>' +
+      '<div class="cf-section">' +
+      '  <div class="cf-section-title">职业卡组</div>' +
+      '  <div class="form-field"><label>A 位选手(查看模式点击图标跳转)</label><div class="cl-list cf-cl-a"></div></div>' +
+      '  <div class="form-field"><label>B 位选手</label><div class="cl-list cf-cl-b"></div></div>' +
+      '</div>'
     );
   }
 

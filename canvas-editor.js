@@ -1152,6 +1152,8 @@
     try {
       if (panelCardId !== card.id) {
         flushPanelCommit();
+        /* 上一次收回的滑出动画还没走完就重新选中:中断收合,面板原地复开 */
+        cancelPanelClose(el);
         panelCardId = card.id;
         el.hidden = false;
         document.body.classList.add('card-panel-open');
@@ -1170,12 +1172,35 @@
     if (tag) tag.textContent = card.label || card.id;
   }
 
+  /* 收回动画:滑出 200ms(CSS card-panel-out)后才真正 hidden;
+   * 立即 hidden 会跳帧收闪。时长 >= 动画时长,reduced-motion 下动画为 none、定时器照走 */
+  let panelCloseTimer = null;
+  const PANEL_CLOSE_MS = 220;
+
+  function cancelPanelClose(el) {
+    if (!panelCloseTimer) return;
+    clearTimeout(panelCloseTimer);
+    panelCloseTimer = null;
+    el.classList.remove('closing');
+  }
+
   function hidePanel() {
     flushPanelCommit();
     panelCardId = null;
     const el = panelEl();
-    if (el && !el.hidden) el.hidden = true;
-    document.body.classList.remove('card-panel-open');
+    if (!el || el.hidden) {
+      document.body.classList.remove('card-panel-open');
+      return;
+    }
+    if (panelCloseTimer) return; /* 已在收回途中 */
+    el.classList.add('closing');
+    /* 让位样式(zoom-dock/样式抽屉位移、接缝边框透明)与面板一起等到收回完成再撤,避免中途跳变 */
+    panelCloseTimer = setTimeout(() => {
+      panelCloseTimer = null;
+      el.classList.remove('closing');
+      el.hidden = true;
+      document.body.classList.remove('card-panel-open');
+    }, PANEL_CLOSE_MS);
   }
 
   function flushPanelCommit() {
