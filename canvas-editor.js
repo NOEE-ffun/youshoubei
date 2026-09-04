@@ -187,12 +187,19 @@
     });
   }
 
-  function setSelection(ids) {
+  function setSelection(ids, opts) {
+    /* silent = 拖拽意图的静默选中:置抑制位(松手无位移才开抽屉);常规选择一律解除 */
+    panelSuppressed = Boolean(opts && opts.silent);
     batchSelected = new Set(ids || []);
     selectedCardId = [...batchSelected][0] || null;
     highlightSelected();
     refreshToolbarUI();
   }
+
+  /* 按下≠点击:卡片的 pointerdown 先静默选中,置粘性抑制位(syncPanel 跳过开抽屉);
+   * 松手无位移(纯点击)清除并补开——拖动卡片及其落盘刷新(markClean→refreshToolbarUI)
+   * 都不再自动弹设置抽屉;其它选择入口(setCard class-slot/框选基底/外部选中)不抑制 */
+  let panelSuppressed = false;
 
   /* 外部入口(bracket.js class-slot 编辑态):选中单卡并打开设置抽屉 */
   function selectCard(id) {
@@ -694,7 +701,8 @@
         return;
       }
       /* 点已选中的卡 = 整组拖拽;点未选中卡 = 先单选再拖 */
-      if (!batchSelected.has(id)) setSelection([id]);
+      /* 点未选中卡 = 先单选再拖拽(静默,开抽屉推迟到松手按位移判定) */
+      if (!batchSelected.has(id)) setSelection([id], { silent: true });
       dragState = {
         cards: [...batchSelected].map((cid) => {
           const c = findCard(cid);
@@ -814,6 +822,10 @@
           requestRender();
           highlightSelected();
         });
+      } else {
+        /* 纯点击(无位移):清除抑制并补开设置抽屉 */
+        panelSuppressed = false;
+        syncPanel();
       }
       dragBeforeSnapshot = null;
       dragState = null;
@@ -980,6 +992,8 @@
   /* ---------- 选择 ---------- */
 
   function toggleBatchSelected(id) {
+    /* Shift+点 = 显式点选意图:解除拖拽静默抑制(单选结果即时开抽屉) */
+    panelSuppressed = false;
     if (batchSelected.has(id)) batchSelected.delete(id);
     else batchSelected.add(id);
     selectedCardId = batchSelected.size ? [...batchSelected][0] : null;
@@ -1224,6 +1238,8 @@
     panelSyncing = true;
     try {
       if (panelCardId !== card.id) {
+        /* 拖动意图的静默选中:只换选择不开抽屉,松手无位移才补开 */
+        if (panelSuppressed) return;
         flushPanelCommit();
         /* 上一次收回的滑出动画还没走完就重新选中:中断收合,面板原地复开 */
         cancelPanelClose(el);

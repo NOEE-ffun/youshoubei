@@ -174,3 +174,25 @@ test('空栈撤销不误弃面板待提交(防幽灵编辑)', async ({ page }) =
   expect(data.tournaments[0].canvas.cards[0].label).toBe('空栈撤销不丢');
   await page.request.post('/api/dev/reset');
 });
+
+test('拖动卡片不开设置抽屉,纯点击才开', async ({ page }) => {
+  await enterEdit(page, { fit: true });
+  const panel = page.locator('#card-panel');
+  const card = page.locator('.canvas-card').first();
+  const head = await card.locator('.match-head').boundingBox();
+
+  /* 拖动 3×1 格:松手落盘后抽屉不应被自动打开 */
+  await page.mouse.move(head.x + head.width * 0.3, head.y + 8);
+  await page.mouse.down();
+  for (let i = 1; i <= 6; i += 1) {
+    await page.mouse.move(head.x + head.width * 0.3 + (84 * i) / 6, head.y + 8 + (28 * i) / 6);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(900);
+  await expect(panel).toBeHidden();
+
+  /* 同一张卡纯点击(无位移)仍即时开抽屉 */
+  await card.locator('.match-head').click();
+  await expect(panel).toBeVisible();
+  await page.request.post('/api/dev/reset');
+});
