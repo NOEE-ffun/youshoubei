@@ -304,9 +304,42 @@
     if (label) label.textContent = Math.round(scale * 100) + '%';
   }
 
+  /* 渲染层世界原点镜像(bracket 每次全量渲染重算,此处经 syncZoom 对齐):
+   * 原点变化时相机等量补偿,世界坐标在屏上纹丝不动 */
+  let renderOrigin = { x: 0, y: 0 };
+
+  /* 拖拽/微调把卡片推入更负象限时原点即时外扩:全部卡片 DOM 平移、
+   * 板尺寸补齐、相机等量补偿——画面世界坐标不动,负象限内容不被
+   * scroll 层左/上边裁掉;原点回缩(负卡移回/删除)不在此处理,
+   * 留待下次全量重渲染取齐。 */
+  function expandOriginTo(o) {
+    if (o.x === renderOrigin.x && o.y === renderOrigin.y) return;
+    const dx = (o.x - renderOrigin.x) * DOT;
+    const dy = (o.y - renderOrigin.y) * DOT;
+    renderOrigin = { x: o.x, y: o.y };
+    const b = board();
+    if (!b) return;
+    b.querySelectorAll('.canvas-card').forEach((el) => {
+      el.style.left = ((parseFloat(el.style.left) || 0) - dx) + 'px';
+      el.style.top = ((parseFloat(el.style.top) || 0) - dy) + 'px';
+    });
+    b.style.width = Math.max(600, (parseFloat(b.style.width) || 600) - dx) + 'px';
+    b.style.height = Math.max(400, (parseFloat(b.style.height) || 400) - dy) + 'px';
+    tx += dx * scale;
+    ty += dy * scale;
+    applyCamera();
+  }
+
   function syncZoom() {
     const b = board();
     if (!b) return;
+    const record = currentRecord();
+    const o = CanvasModel.canvasOrigin(record && record.canvas);
+    if (o.x !== renderOrigin.x || o.y !== renderOrigin.y) {
+      tx += (o.x - renderOrigin.x) * DOT * scale;
+      ty += (o.y - renderOrigin.y) * DOT * scale;
+      renderOrigin = { x: o.x, y: o.y };
+    }
     baseWidth = parseFloat(b.style.width) || 600;
     baseHeight = parseFloat(b.style.height) || 400;
     applyCamera();
@@ -693,18 +726,28 @@
     for (const entry of dragState.cards) {
       const card = findCard(entry.id);
       if (!card) continue;
-      /* 无限画布:正方向不设上限,但坐标不为负 */
-      const nextX = Math.max(0, entry.originX + stepX);
-      const nextY = Math.max(0, entry.originY + stepY);
+      /* 真无限画布:四向不设限,坐标可负 */
+      const nextX = entry.originX + stepX;
+      const nextY = entry.originY + stepY;
       if (nextX !== card.x || nextY !== card.y) {
         card.x = nextX;
         card.y = nextY;
         dragState.moved = true;
-        const el = cardElement(entry.id);
-        if (el) {
-          el.style.left = (nextX * DOT) + 'px';
-          el.style.top = (nextY * DOT) + 'px';
-        }
+      }
+    }
+    /* 拖入更负象限:原点即时外扩(DOM 全体平移+板扩+相机补偿)再写拖拽卡位置 */
+    let nextOrigin = { x: renderOrigin.x, y: renderOrigin.y };
+    for (const entry of dragState.cards) {
+      if (entry.originX + stepX < nextOrigin.x) nextOrigin.x = entry.originX + stepX;
+      if (entry.originY + stepY < nextOrigin.y) nextOrigin.y = entry.originY + stepY;
+    }
+    expandOriginTo(nextOrigin);
+    for (const entry of dragState.cards) {
+      const card = findCard(entry.id);
+      const el = cardElement(entry.id);
+      if (card && el) {
+        el.style.left = ((card.x - renderOrigin.x) * DOT) + 'px';
+        el.style.top = ((card.y - renderOrigin.y) * DOT) + 'px';
       }
     }
   }
@@ -771,8 +814,9 @@
     }
     if (tool === 'delete') return;
     const rect = board().getBoundingClientRect();
-    const x = Math.round((event.clientX - rect.left) / (DOT * scale));
-    const y = Math.round((event.clientY - rect.top) / (DOT * scale));
+    /* 世界坐标 = DOM 坐标 + 渲染原点(负象限卡片包围盒左上归一在 DOM 0,0) */
+    const x = Math.round((event.clientX - rect.left) / (DOT * scale)) + renderOrigin.x;
+    const y = Math.round((event.clientY - rect.top) / (DOT * scale)) + renderOrigin.y;
     addCard(x, y);
   }
 
@@ -854,12 +898,24 @@
     for (const id of batchSelected) {
       const card = findCard(id);
       if (!card) continue;
-      card.x = Math.max(0, (Number(card.x) || 0) + dx);
-      card.y = Math.max(0, (Number(card.y) || 0) + dy);
+      card.x = (Number(card.x) || 0) + dx;
+      card.y = (Number(card.y) || 0) + dy;
+    }
+    /* 真无限画布:微调入负象限同样即时外扩(防抖落盘前的间隙不被左/上边裁掉) */
+    let nextOrigin = { x: renderOrigin.x, y: renderOrigin.y };
+    for (const id of batchSelected) {
+      const card = findCard(id);
+      if (!card) continue;
+      if (card.x < nextOrigin.x) nextOrigin.x = card.x;
+      if (card.y < nextOrigin.y) nextOrigin.y = card.y;
+    }
+    expandOriginTo(nextOrigin);
+    for (const id of batchSelected) {
+      const card = findCard(id);
       const el = cardElement(id);
-      if (el) {
-        el.style.left = (card.x * DOT) + 'px';
-        el.style.top = (card.y * DOT) + 'px';
+      if (card && el) {
+        el.style.left = ((card.x - renderOrigin.x) * DOT) + 'px';
+        el.style.top = ((card.y - renderOrigin.y) * DOT) + 'px';
       }
     }
     if (!nudgeCommit) {
@@ -893,8 +949,8 @@
         card.y = entry.originY;
         const el = cardElement(entry.id);
         if (el) {
-          el.style.left = (card.x * DOT) + 'px';
-          el.style.top = (card.y * DOT) + 'px';
+          el.style.left = ((card.x - renderOrigin.x) * DOT) + 'px';
+          el.style.top = ((card.y - renderOrigin.y) * DOT) + 'px';
         }
       }
       /* 拖拽被取消:还原原位,快照作废 */
@@ -934,8 +990,8 @@
       label: '新对局',
       phase: '',
       format: 'BO3',
-      x: Math.max(0, x || 0),
-      y: Math.max(0, y || 0),
+      x: Number(x) || 0,
+      y: Number(y) || 0,
       slots: [{ type: 'empty' }, { type: 'empty' }],
       exitRanks: {}
     };

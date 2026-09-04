@@ -276,4 +276,23 @@ const model = require('../canvas-model.js');
   assert.equal(model.autoFillEntries(tiny, ['A', 'B', 'C', 'D', 'E'], () => 0.999), 2, '超过容量只填入场空位数');
 }
 
-console.log('canvas-model 全部 14 组测试通过 ✓');
+
+// 15. 无限画布:负坐标保留 + 原点归一(渲染层把包围盒左上对到 DOM 0,0)
+{
+  const negWorld = model.normalizeCanvas({ cards: [
+    { id: 'n1', label: 'N1', x: -4, y: -7, slots: [{ type: 'empty' }, { type: 'empty' }] },
+    { id: 'n2', label: 'N2', x: 2.5, y: 1, slots: [{ type: 'empty' }, { type: 'empty' }] }
+  ] });
+  const n1 = negWorld.cards.find((c) => c.id === 'n1');
+  assert.equal(n1.x, -4, 'normalizeCard 应保留负坐标(无限画布四向)');
+  assert.equal(n1.y, -7, 'normalizeCard 应保留负 y');
+
+  assert.deepEqual(model.canvasOrigin({ cards: [{ x: 3, y: 2 }, { x: 5, y: 1 }] }), { x: 0, y: 0 },
+    '全正坐标时原点为 0(旧行为不变)');
+  assert.deepEqual(model.canvasOrigin({ cards: [{ x: 3, y: -2 }, { x: -5, y: 1 }] }), { x: -5, y: -2 },
+    '原点取各轴最小负值');
+  assert.deepEqual(model.canvasOrigin({ cards: [] }), { x: 0, y: 0 }, '空画布原点 0');
+  assert.deepEqual(model.canvasOrigin(null), { x: 0, y: 0 }, '空对象安全');
+}
+
+console.log('canvas-model 全部 15 组测试通过 ✓');

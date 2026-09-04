@@ -53,7 +53,7 @@
   } = window.TournamentUtils;
   const {
     DOT, CARD_WIDTH, CARD_HEIGHT, PORT_NORMALS, portOffset, pickPort, edgePath, arrowDefs,
-    DEFAULT_CANVAS_COLS, DEFAULT_CANVAS_ROWS
+    DEFAULT_CANVAS_COLS, DEFAULT_CANVAS_ROWS, canvasOrigin
   } = window.CanvasModel;
 
   let editMode = false;
@@ -266,12 +266,16 @@
     return n;
   }
 
+  /* 无限画布世界原点(DOT 网格单位):负象限卡片经它归一到 DOM(0,0),
+   * 每次全量渲染重算;CanvasEditor 以 renderOrigin 镜像,拖拽外扩时实时同步 */
+  let worldOrigin = { x: 0, y: 0 };
+
   function cardLeft(card) {
-    return (Number(card.x) || 0) * DOT;
+    return ((Number(card.x) || 0) - worldOrigin.x) * DOT;
   }
 
   function cardTop(card) {
-    return (Number(card.y) || 0) * DOT;
+    return ((Number(card.y) || 0) - worldOrigin.y) * DOT;
   }
 
   function playerRow(match, side) {
@@ -435,13 +439,15 @@
       record.roster = CanvasModel.deriveRoster(record.canvas).filter((id) => known.has(id));
     }
     const canvas = record.canvas || { cards: [] };
+    /* 无限画布原点先行:下方 cardsHtml 与板尺寸都经 cardLeft/cardTop 消费它 */
+    worldOrigin = canvasOrigin(canvas);
     const resolved = CanvasModel.resolveCanvas(canvas, record.roster || [], record.scores || {});
     const names = new Map((window.TournamentApp.players || []).map((p) => [p.id, p.name]));
     const effLinksMap = CanvasModel.resolveEffectiveClassLinks(canvas, record.scores || {});
     const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match, effLinksMap)).join('');
-    /* 无限画布:board 尺寸纯由卡片范围决定,无边界框;无卡时保留最小底 */
-    const cardMaxX = Math.max(600, ...(canvas.cards || []).map((c) => (Number(c.x) || 0) * DOT + CARD_WIDTH + 40));
-    const cardMaxY = Math.max(400, ...(canvas.cards || []).map((c) => (Number(c.y) || 0) * DOT + CARD_HEIGHT + 40));
+    /* 无限画布:board 尺寸纯由卡片范围决定(负象限经原点归一),无边界框;无卡时保留最小底 */
+    const cardMaxX = Math.max(600, ...(canvas.cards || []).map((c) => cardLeft(c) + CARD_WIDTH + 40));
+    const cardMaxY = Math.max(400, ...(canvas.cards || []).map((c) => cardTop(c) + CARD_HEIGHT + 40));
     board.style.width = cardMaxX + 'px';
     board.style.height = cardMaxY + 'px';
     /* 玻璃样式:写在内联变量上,卡片 CSS 消费;点阵层在 scroll 上由相机同步 */

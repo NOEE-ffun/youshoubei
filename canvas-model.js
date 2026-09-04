@@ -111,6 +111,21 @@ function edgePath(p1, n1, p2, n2) {
     return size;
   }
 
+  /* 无限画布原点(DOT 网格单位):卡片坐标四向可负,渲染层把包围盒左上
+   * 归一到 DOM(0,0)——origin = min(0, 各轴最左卡坐标);全正时为 0,
+   * 旧行为(原点即世界原点)完全不变。编辑器拖拽外扩时与之保持同源。 */
+  function canvasOrigin(canvas) {
+    let x = 0;
+    let y = 0;
+    for (const card of (canvas && canvas.cards) || []) {
+      const cx = Number(card && card.x);
+      const cy = Number(card && card.y);
+      if (Number.isFinite(cx) && cx < x) x = cx;
+      if (Number.isFinite(cy) && cy < y) y = cy;
+    }
+    return { x, y };
+  }
+
   function createEmptyCanvas() {
     return { cards: [], size: { cols: DEFAULT_CANVAS_COLS, rows: DEFAULT_CANVAS_ROWS } };
   }
@@ -198,8 +213,8 @@ function edgePath(p1, n1, p2, n2) {
       label: c.label || '第 ' + ((index || 0) + 1) + ' 场',
       phase: c.phase || '',
       format: c.format || 'BO3',
-      x: Math.max(0, Number.isFinite(Number(c.x)) ? Number(c.x) : 0),
-      y: Math.max(0, Number.isFinite(Number(c.y)) ? Number(c.y) : 0),
+      x: Number.isFinite(Number(c.x)) ? Number(c.x) : 0,
+      y: Number.isFinite(Number(c.y)) ? Number(c.y) : 0,
       slots: Array.isArray(c.slots) && c.slots.length >= 2
         ? c.slots.slice(0, 2).map((s) => normalizeSlot(s))
         : [{ type: 'empty' }, { type: 'empty' }],
@@ -771,6 +786,7 @@ function arrowDefs(prefix) {
     cloneCardsForPaste,
     normalizeCanvas,
     normalizeCard,
+    canvasOrigin,
     deriveRoster,
     entryCards,
     autoFillEntries,
