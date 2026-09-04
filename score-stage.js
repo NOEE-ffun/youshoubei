@@ -83,7 +83,7 @@
       pollTimer = null;
     }
     document.body.innerHTML = '<div class="stage-login-required"><p>大屏需要登录后使用。</p>' +
-      '<a class="btn btn-primary" href="login.html?returnTo=' + encodeURIComponent(location.pathname) + '">去登录</a></div>';
+      '<a class="btn btn-primary" href="login.html?returnTo=' + encodeURIComponent(location.pathname) + '"><img class="icon" src="icons/login.svg" alt="" aria-hidden="true">去登录</a></div>';
   }
 
   function load() {

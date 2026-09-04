@@ -2,18 +2,24 @@
   'use strict';
 
   /* 赛程列表视图(比赛页内,与画布同页切换):resolveCanvas 后按阶段分组,
-   * 行 = 场次 + A vs B + 比分 + 状态;点行展开职业卡组(有效继承,图标可点跳链接)。
-   * 视图显隐由 bracket.js 的 body[data-view] 管理;本模块只负责渲染 #list-body。 */
+   * 扁平行 = 场次 + A vs B + 状态 + 职业卡组(有效继承,图标可点跳链接) + 比分,
+   * 全部信息直出、不可折叠;视图显隐由 bracket.js 的 body[data-view] 管理,
+   * 列表视图下隐藏赛事背景图由 CSS 负责;本模块只渲染 #list-body。 */
 
   const { escapeHtml } = window.TournamentUtils;
 
-  function stateText(m) {
-    if (m.invalid) return '无效';
-    if (m.draw) return '平局';
-    if (m.played) return '已结束';
-    if (m.cycle) return '连线成环';
-    if (m.a && m.b) return '未开始';
-    return '待定';
+  /* 状态口径与画布卡片(bracket.js)对齐:invalid > 平局 > 已结束 > 成环 > 进行中/未开始 > 待定 */
+  function stateInfo(m) {
+    if (m.invalid) return { text: '无效', cls: ' is-invalid' };
+    if (m.draw) return { text: '平局', cls: '' };
+    if (m.played) return { text: '已结束', cls: '' };
+    if (m.cycle) return { text: '连线成环', cls: '' };
+    if (m.a && m.b) {
+      const record = window.TournamentApp.current;
+      const live = record && record.status === 'ongoing';
+      return live ? { text: '进行中', cls: ' is-live' } : { text: '未开始', cls: '' };
+    }
+    return { text: '待定', cls: '' };
   }
 
   function classGroupHtml(eff, group) {
@@ -40,18 +46,15 @@
     const clsA = classGroupHtml(eff, 'a');
     const clsB = classGroupHtml(eff, 'b');
     const sep = (clsA && clsB) ? '<span class="vs-sep">对</span>' : '';
-    const decks = (clsA || clsB)
-      ? '<div class="deck-class-row">' + clsA + sep + clsB + '</div>'
-      : '';
+    const st = stateInfo(m);
     return (
-      '<details class="list-row' + (m.played ? ' played' : '') + '">' +
-      '<summary>' +
+      '<div class="list-row' + (m.played ? ' played' : '') + '">' +
       '<span class="list-label">' + escapeHtml(m.label || m.id) + '</span>' +
       '<span class="list-vs">' + escapeHtml(a) + ' vs ' + escapeHtml(b) + '</span>' +
-      '<span class="list-score">' + (score || '—') + '</span>' +
-      '</summary>' +
-      decks +
-      '</details>'
+      '<span class="list-status' + st.cls + '">' + escapeHtml(st.text) + '</span>' +
+      '<div class="deck-class-row">' + clsA + sep + clsB + '</div>' +
+      '<span class="list-score">' + escapeHtml(score) + '</span>' +
+      '</div>'
     );
   }
 

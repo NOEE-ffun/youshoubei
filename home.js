@@ -267,7 +267,7 @@
         : '');
     const close = n.dismissible === false
       ? ''
-      : '<button type="button" class="notice-close" data-notice-close="1" aria-label="关闭此通知">×</button>';
+      : '<button type="button" class="notice-close" data-notice-close="1" aria-label="关闭此通知"><img class="icon" src="icons/close.svg" alt="" aria-hidden="true"></button>';
     /* class 与附加属性分开拼:收款码的 role/tabindex 不能混进 class 串(引号会截断属性) */
     const cls = 'notice-slide level-' + (n.level === 'important' ? 'important' : 'info') +
       (n.qrImage ? ' notice-has-qr' : '') + (i === noticeIndex ? ' is-active' : '');

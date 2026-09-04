@@ -93,8 +93,7 @@ test('底栏「更多」收纳:不溢出,菜单项完整可达,Escape 关闭', a
   await page.keyboard.press('Escape');
   await expect(page.locator('.side-more-menu')).toBeHidden();
 
-  /* 列表视图职业链接(看卡组入口,收在 details 展开区)触控 ≥44 */
-  await page.locator('.list-row summary').first().click();
+  /* 列表视图职业链接(看卡组入口)扁平直出,不再折叠;触控 ≥44 */
   const lc = await page.locator('.list-class').first().boundingBox();
   expect(lc.height).toBeGreaterThanOrEqual(44);
   expect(lc.width).toBeGreaterThanOrEqual(44);

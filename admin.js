@@ -21,6 +21,11 @@
     }[ch]));
   }
 
+  /* 行内按钮图标(与主站 icons/ 同源的 Material 单色 SVG) */
+  function iconImg(name) {
+    return '<img class="icon" src="icons/' + name + '.svg" alt="" aria-hidden="true">';
+  }
+
   function setStatus(el, text, danger) {
     el.textContent = text || '';
     el.classList.toggle('is-danger', Boolean(danger));
@@ -185,10 +190,10 @@
       const protectedRow = u.role === 'super' || (meId != null && u.id === meId);
       const actions = protectedRow
         ? '—'
-        : '<button type="button" class="btn ' + (banned ? 'btn-secondary' : 'btn-danger') + ' btn-sm" data-act="status" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-banned="' + (banned ? '0' : '1') + '">' + (banned ? '解封' : '封禁') + '</button> ' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-act="role" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-role="' + (u.role === 'admin' ? 'player' : 'admin') + '">' + (u.role === 'admin' ? '降为选手' : '升为管理员') + '</button> ' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-act="rebind" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '">换绑</button> ' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-act="delete" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-player="' + escapeHtml(u.playerName || (u.playerId || '')) + '">删除</button>';
+        : '<button type="button" class="btn ' + (banned ? 'btn-secondary' : 'btn-danger') + ' btn-sm" data-act="status" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-banned="' + (banned ? '0' : '1') + '">' + iconImg(banned ? 'lock_open' : 'block') + (banned ? '解封' : '封禁') + '</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="role" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-role="' + (u.role === 'admin' ? 'player' : 'admin') + '">' + iconImg(u.role === 'admin' ? 'person_remove' : 'security') + (u.role === 'admin' ? '降为选手' : '升为管理员') + '</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="rebind" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '">' + iconImg('phone_iphone') + '换绑</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="delete" data-id="' + escapeHtml(u.id) + '" data-name="' + escapeHtml(u.username) + '" data-player="' + escapeHtml(u.playerName || (u.playerId || '')) + '">' + iconImg('delete') + '删除</button>';
       return '<tr><td>' + escapeHtml(u.username || '—') + '</td>' +
         '<td>' + escapeHtml(u.nickname || '—') + '</td>' +
         '<td>' + escapeHtml(ROLE_LABELS[u.role] || u.role || '—') + '</td>' +
@@ -439,7 +444,7 @@
         '<td>' + escapeHtml(kind || '—') + '</td>' +
         '<td>' + escapeHtml(fmtDateTime(backupTimeOf(key))) + '</td>' +
         '<td>' + (kind === '数据'
-          ? '<button type="button" class="btn btn-ghost btn-sm" data-key="' + escapeHtml(key) + '">填入恢复框</button>'
+          ? '<button type="button" class="btn btn-ghost btn-sm" data-key="' + escapeHtml(key) + '">' + iconImg('content_paste') + '填入恢复框</button>'
           : '') + '</td></tr>';
     }).join('');
     setStatus(status, d.oss ? '' : '未配置 OSS:备份/恢复不可用,其余数据为开发存储口径。', !d.oss);
@@ -576,11 +581,11 @@
         '<td class="admin-detail-cell">' + escapeHtml(timeWindow || '长期') + '</td>' +
         '<td class="code-cell">' + (typeof n.sortOrder === 'number' ? n.sortOrder : 0) + '</td>' +
         '<td><span class="admin-row-actions">' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-act="edit" data-id="' + escapeHtml(n.id) + '">编辑</button> ' +
-          '<button type="button" class="btn ' + (toggle ? 'btn-secondary' : 'btn-primary') + ' btn-sm" data-act="toggle" data-id="' + escapeHtml(n.id) + '">' + (toggle ? '撤下' : '启用') + '</button> ' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-act="up" data-id="' + escapeHtml(n.id) + '"' + (i === 0 ? ' disabled' : '') + '>上移</button> ' +
-          '<button type="button" class="btn btn-ghost btn-sm" data-act="down" data-id="' + escapeHtml(n.id) + '"' + (i === noticesCache.length - 1 ? ' disabled' : '') + '>下移</button> ' +
-          '<button type="button" class="btn btn-danger btn-sm" data-act="delete" data-id="' + escapeHtml(n.id) + '">删除</button>' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="edit" data-id="' + escapeHtml(n.id) + '">' + iconImg('edit') + '编辑</button> ' +
+          '<button type="button" class="btn ' + (toggle ? 'btn-secondary' : 'btn-primary') + ' btn-sm" data-act="toggle" data-id="' + escapeHtml(n.id) + '">' + iconImg(toggle ? 'pause_circle' : 'play_circle') + (toggle ? '撤下' : '启用') + '</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="up" data-id="' + escapeHtml(n.id) + '"' + (i === 0 ? ' disabled' : '') + '>' + iconImg('arrow_upward') + '上移</button> ' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="down" data-id="' + escapeHtml(n.id) + '"' + (i === noticesCache.length - 1 ? ' disabled' : '') + '>' + iconImg('arrow_downward') + '下移</button> ' +
+          '<button type="button" class="btn btn-danger btn-sm" data-act="delete" data-id="' + escapeHtml(n.id) + '">' + iconImg('delete') + '删除</button>' +
         '</span></td></tr>';
     }).join('');
   }
@@ -772,8 +777,8 @@
       '<td class="code-cell">' + (typeof d.sort === 'number' ? d.sort : 0) + '</td>' +
       '<td class="admin-detail-cell">' + fmtDateTime(d.updatedAt) + '</td>' +
       '<td><span class="admin-row-actions">' +
-        '<button type="button" class="btn btn-ghost btn-sm" data-act="edit" data-id="' + escapeHtml(d.id) + '">编辑</button> ' +
-        '<button type="button" class="btn btn-danger btn-sm" data-act="delete" data-id="' + escapeHtml(d.id) + '">删除</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-act="edit" data-id="' + escapeHtml(d.id) + '">' + iconImg('edit') + '编辑</button> ' +
+        '<button type="button" class="btn btn-danger btn-sm" data-act="delete" data-id="' + escapeHtml(d.id) + '">' + iconImg('delete') + '删除</button>' +
       '</span></td></tr>'
     ).join('');
   }

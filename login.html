@@ -7,8 +7,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>登录 - 右手杯</title>
   <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="styles.css?v=2026090039">
-  <script src="theme-init.js?v=2026090039" defer></script>
+  <link rel="stylesheet" href="styles.css?v=2026090040">
+  <script src="theme-init.js?v=2026090040" defer></script>
 </head>
 <body class="login-body">
   <main class="login-shell" id="login-shell">
@@ -26,10 +26,10 @@
         <span class="form-label">验证码</span>
         <span class="login-code-row">
           <input type="text" id="sms-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" required placeholder="6 位验证码">
-          <button type="button" class="btn btn-secondary" id="sms-send-btn">获取验证码</button>
+          <button type="button" class="btn btn-secondary" id="sms-send-btn"><img class="icon" src="icons/sms.svg" alt="" aria-hidden="true">获取验证码</button>
         </span>
       </label>
-      <button type="submit" class="btn btn-primary login-submit">登录 / 注册</button>
+      <button type="submit" class="btn btn-primary login-submit"><img class="icon" src="icons/login.svg" alt="" aria-hidden="true">登录 / 注册</button>
       <p class="hint">未注册的手机号验证后将自动创建账号。</p>
     </form>
     <form id="login-panel-pw" role="tabpanel" aria-labelledby="login-tab-pw" class="login-panel" hidden>
@@ -41,13 +41,13 @@
         <span class="form-label">密码</span>
         <input type="password" id="pw-pass" autocomplete="current-password" required>
       </label>
-      <button type="submit" class="btn btn-primary login-submit">登录</button>
+      <button type="submit" class="btn btn-primary login-submit"><img class="icon" src="icons/login.svg" alt="" aria-hidden="true">登录</button>
       <p class="hint">账号密码登录仅对早期账号开放。</p>
     </form>
     <p class="login-status" id="login-status" role="status" aria-live="polite"></p>
     <p class="hint login-legal">登录 / 注册即表示同意<a href="privacy.html">《隐私政策》</a></p>
 
   </main>
-  <script src="login.js?v=2026090039" defer></script>
+  <script src="login.js?v=2026090040" defer></script>
 </body>
 </html>

@@ -315,7 +315,7 @@
     let html = links.map((entry, idx) => classSlotHtml(card, group, entry, idx)).join('');
     if (editMode) {
       html += '<button type="button" class="class-slot empty" data-cl-card="' + card.id + '" data-cl-group="' + group + '" data-cl-idx="new"' +
-        ' title="添加职业卡组" aria-label="添加职业卡组">+</button>';
+        ' title="添加职业卡组" aria-label="添加职业卡组"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true"></button>';
     }
     return html;
   }
@@ -365,7 +365,7 @@
         (ready ? '' : ' disabled') + ' data-score-open="' + match.id + '"' +
         ' title="' + (current ? '比分 ' + formatScore(current.a) + ':' + formatScore(current.b) : '填写比分') + '"' +
         ' aria-label="填写比分">' +
-        iconMarkup('edit', current ? '比分 ' + formatScore(current.a) + ':' + formatScore(current.b) : '填写比分') +
+        iconMarkup('scoreboard', current ? '比分 ' + formatScore(current.a) + ':' + formatScore(current.b) : '填写比分') +
         '</button>'
       : '';
     return (
@@ -747,9 +747,9 @@
       '  <p class="form-error" id="score-error" role="alert" hidden></p>' +
       '  <p class="hint">预设按赛制自动生成；自定义输入保留 -1 弃权、相等为平局。</p>' +
       '  <div class="dialog-actions">' +
-      '    <button type="button" class="btn btn-danger btn-sm" data-score-clear>清除比分</button>' +
+      '    <button type="button" class="btn btn-danger btn-sm" data-score-clear>' + iconMarkup('delete_forever', '清除比分') + '清除比分</button>' +
       '    <button type="button" class="btn btn-secondary" data-score-close>取消</button>' +
-      '    <button type="button" class="btn btn-primary" data-score-save>保存</button>' +
+      '    <button type="button" class="btn btn-primary" data-score-save>' + iconMarkup('save', '保存') + '保存</button>' +
       '  </div>' +
       '</div>';
     document.body.appendChild(scoreDialog);

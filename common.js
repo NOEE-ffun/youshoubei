@@ -849,13 +849,13 @@
       '      <option value="double">8 人双败模板</option>' +
       '    </select>' +
       '    <select id="new-tournament-series" aria-label="所属系列" hidden></select>' +
-      '    <button type="submit" class="btn btn-primary btn-sm">新建比赛</button>' +
+      '    <button type="submit" class="btn btn-primary btn-sm">' + iconMarkup('add', '新建比赛') + '新建比赛</button>' +
       '  </form>' +
       '  <div class="manage-subsection" id="series-subsection" hidden>' +
       '    <h3>系列</h3>' +
       '    <div class="dialog-actions">' +
       '      <span class="hint">系列用于主页与切换下拉的分组;创建后可在主页小节标题旁编辑名称与简介。</span>' +
-      '      <button type="button" id="manage-new-series-btn" class="btn btn-secondary btn-sm">新建系列</button>' +
+      '      <button type="button" id="manage-new-series-btn" class="btn btn-secondary btn-sm">' + iconMarkup('create_new_folder', '新建系列') + '新建系列</button>' +
       '    </div>' +
       '  </div>' +
       '  <div class="manage-subsection">' +
@@ -948,7 +948,7 @@
       '    </div>' +
       '    <div class="dialog-actions">' +
       '      <button type="button" class="btn btn-secondary" data-dialog-close>取消</button>' +
-      '      <button type="submit" class="btn btn-primary" id="series-save-btn">保存</button>' +
+      '      <button type="submit" class="btn btn-primary" id="series-save-btn">' + iconMarkup('save', '保存') + '保存</button>' +
       '    </div>' +
       '  </div>' +
       '</form>';
@@ -1062,8 +1062,8 @@
       '      <span id="bg-label">背景图片</span>' +
       '      <div class="bg-controls">' +
       '        <div class="bg-preview" id="bg-preview" role="img" aria-label="背景图预览"></div>' +
-      '        <button type="button" id="bg-upload" class="btn btn-secondary btn-sm" aria-describedby="bg-hint">上传背景</button>' +
-      '        <button type="button" id="bg-remove" class="btn btn-danger btn-sm">移除背景</button>' +
+    '        <button type="button" id="bg-upload" class="btn btn-secondary btn-sm" aria-describedby="bg-hint">' + iconMarkup('upload', '上传背景') + '上传背景</button>' +
+    '        <button type="button" id="bg-remove" class="btn btn-danger btn-sm">' + iconMarkup('delete', '移除背景') + '移除背景</button>' +
       '      </div>' +
       '      <p class="hint" id="bg-hint">支持常见图片格式，上传后自动压缩至最长边 1600px。</p>' +
       '    </div>' +
@@ -1099,17 +1099,17 @@
 '      </div>' +
 '      <p class="hint">开放期间选手在「我的比赛」页自助报名/取消;已上场的选手不能自助退赛。</p>' +
 '      <div class="dialog-actions" id="signup-autofill-row">' +
-'        <button type="button" id="signup-autofill" class="btn btn-secondary btn-sm">自动填入选手</button>' +
+    '        <button type="button" id="signup-autofill" class="btn btn-secondary btn-sm">' + iconMarkup('auto_fix_high', '自动填入选手') + '自动填入选手</button>' +
 '        <span class="hint">报名关闭后可用:前 N 名随机填入无箭头指向的比赛,已指派选手会被覆盖。</span>' +
 '      </div>' +
 '    </div>' +
       '    <div class="dialog-actions" id="migration-actions" hidden>' +
-      '      <button type="button" id="migrate-up" class="btn btn-secondary btn-sm">将本机数据上传到云端</button>' +
-      '      <button type="button" id="migrate-down" class="btn btn-secondary btn-sm">从云端拉取覆盖本机</button>' +
+    '      <button type="button" id="migrate-up" class="btn btn-secondary btn-sm">' + iconMarkup('cloud_upload', '将本机数据上传到云端') + '将本机数据上传到云端</button>' +
+    '      <button type="button" id="migrate-down" class="btn btn-secondary btn-sm">' + iconMarkup('cloud_download', '从云端拉取覆盖本机') + '从云端拉取覆盖本机</button>' +
       '    </div>' +
       '    <div class="dialog-actions">' +
       '      <button type="button" class="btn btn-secondary" data-dialog-close>取消</button>' +
-      '      <button type="submit" class="btn btn-primary">保存</button>' +
+      '      <button type="submit" class="btn btn-primary">' + iconMarkup('save', '保存') + '保存</button>' +
       '    </div>' +
       '  </div>' +
       '</form>' +
@@ -1458,9 +1458,9 @@
         '<div class="manage-item' + (active ? ' is-active' : '') + '">' +
         (active ? '<span class="active-badge">当前</span>' : '') +
         '<input class="manage-item-name" value="' + escapeHtml(item.name) + '" aria-label="比赛名称">' +
-        '<button type="button" class="btn btn-secondary btn-sm" data-switch="' + item.id + '">切换</button>' +
-        '<button type="button" class="btn btn-secondary btn-sm" data-copy="' + item.id + '">复制</button>' +
-        '<button type="button" class="btn btn-danger btn-sm" data-delete="' + item.id + '">删除</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-switch="' + item.id + '">' + iconMarkup('swap_horiz', '切换') + '切换</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm" data-copy="' + item.id + '">' + iconMarkup('content_copy', '复制') + '复制</button>' +
+        '<button type="button" class="btn btn-danger btn-sm" data-delete="' + item.id + '">' + iconMarkup('delete', '删除') + '删除</button>' +
         '</div>'
       );
     }).join('');
@@ -1772,7 +1772,7 @@
       { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' },
       { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' },
       { page: 'stats', href: 'stats.html', icon: 'bar_chart', label: '数据统计' },
-      { page: 'docs', href: 'docs.html', icon: 'rule', label: '官方文档' },
+      { page: 'docs', href: 'docs.html', icon: 'menu_book', label: '官方文档' },
       { page: 'me', href: 'me.html', icon: 'person', label: '选手中心' }
     ];
     const isActive = (page) => {
@@ -1804,7 +1804,7 @@
     link.dataset.page = 'admin';
     link.title = '后台';
     link.setAttribute('aria-label', '后台');
-    link.innerHTML = '<span class="side-icon" aria-hidden="true">' + iconMarkup('dashboard', '后台') + '</span>';
+    link.innerHTML = '<span class="side-icon" aria-hidden="true">' + iconMarkup('admin_panel_settings', '后台') + '</span>';
     /* 文字标签与既有链接同构:侧栏功能组已建好(本次 sync 晚于 buildSideActions)
      * 则自补;否则交给 buildSideActions 统一注入,避免重复标签 */
     if (sideActionsBuilt) appendSideLabel(link, '后台');
@@ -1859,7 +1859,7 @@
       ? '<button type="button" id="view-toggle" class="btn btn-ghost btn-sm icon-btn" title="切换到列表视图" aria-label="切换到列表视图">' + iconMarkup('view_list', '切换到列表视图') + '</button>' +
         searchBox +
         '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
-        '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单" aria-label="选手名单">' + iconMarkup('groups', '选手名单') + '</button>' +
+        '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单" aria-label="选手名单">' + iconMarkup('how_to_reg', '选手名单') + '</button>' +
         '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>' +
         '<button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="赛事设置" aria-label="赛事设置">' + iconMarkup('settings', '赛事设置') + '</button>'
       : '';
@@ -1871,7 +1871,7 @@
         '</div>' +
         '<form id="add-player-form" class="header-add">' +
         '<input type="text" id="new-player-name" placeholder="新增选手名" required autocomplete="off" aria-label="新增选手名">' +
-        '<button type="submit" class="btn btn-primary btn-sm">新增</button>' +
+        '<button type="submit" class="btn btn-primary btn-sm">' + iconMarkup('person_add', '新增') + '新增</button>' +
         '</form>'
       : '';
 
@@ -1887,8 +1887,8 @@
         '  </div>' +
         '  <label class="field field--inline poster-resolution" for="poster-resolution"><span class="field__label">分辨率</span>' +
         '    <select id="poster-resolution" class="field__control"><option value="1080p">1080p</option><option value="2k">2K</option><option value="4k">4K</option></select></label>' +
-        '  <button type="button" id="poster-export" class="btn btn-primary btn-sm"><span id="poster-export-label">导出 PNG</span></button>' +
-        '  <button type="button" id="poster-obs" class="btn btn-ghost btn-sm" title="复制 OBS 浏览器源链接">OBS 源</button>' +
+        '  <button type="button" id="poster-export" class="btn btn-primary btn-sm">' + iconMarkup('download', '导出 PNG') + '<span id="poster-export-label">导出 PNG</span></button>' +
+        '  <button type="button" id="poster-obs" class="btn btn-ghost btn-sm" title="复制 OBS 浏览器源链接">' + iconMarkup('link', 'OBS 源') + 'OBS 源</button>' +
         '</div>'
       : '';
     placeholder.innerHTML =
@@ -2061,7 +2061,7 @@
         } else {
           loginBtn.title = '登录';
           loginBtn.setAttribute('aria-label', '登录');
-          loginBtn.innerHTML = iconMarkup('person', '登录') + '<span class="side-label">登录</span>';
+          loginBtn.innerHTML = iconMarkup('login', '登录') + '<span class="side-label">登录</span>';
         }
       }
     }

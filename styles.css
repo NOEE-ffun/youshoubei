@@ -345,6 +345,15 @@ main > h1 {
   background: rgb(204 58 43 / 0.16);
 }
 
+/* 主色按钮内的图标:浅色蓝底白字配反白图标,暗色按钮文字转深色时图标还原黑色 */
+.btn.btn-primary .icon {
+  filter: invert(1);
+}
+
+[data-theme='dark'] .btn.btn-primary .icon {
+  filter: none;
+}
+
 .btn-sm {
   min-block-size: 2rem;
   padding: 0.25rem 0.65rem;
@@ -3050,7 +3059,9 @@ body[data-page="me"] #bg-layer {
   margin-inline-start: auto;
 }
 
-/* ---------- 比赛页:列表视图 ---------- */
+/* ---------- 比赛页:列表视图 ----------
+ * 扁平紧凑:无卡片边框/底色,行间发丝线分隔;全部信息(场次/对阵/状态/卡组/比分)
+ * 直出无折叠;赛事背景图在列表视图下隐藏,只留纯色底 */
 
 body[data-view='list'] .canvas-wrap-full,
 body[data-view='list'] .zoom-dock,
@@ -3059,80 +3070,106 @@ body[data-view='list'] .card-panel {
   display: none;
 }
 
+body[data-view='list'] #bg-layer {
+  display: none;
+}
+
 body[data-view='canvas'] .list-view {
   display: none;
 }
 
 .list-view {
-  max-inline-size: 46rem;
+  max-inline-size: 50rem;
   margin-inline: auto;
   padding: 0.5rem 1rem 2rem;
   animation: rise var(--dur-slow) var(--ease-out);
 }
 
 .list-group {
-  margin-block-end: 1.5rem;
+  margin-block-end: 1.25rem;
 }
 
 .list-group h2 {
-  margin: 0 0 0.5rem;
-  font-size: 0.9rem;
+  margin: 0 0 0.15rem;
+  padding-inline: 0.5rem;
+  font-size: 0.78rem;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--text-muted);
 }
 
 .list-row {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  margin-block-end: 0.5rem;
-  overflow: hidden;
-  transition: border-color var(--dur-ui) var(--ease-out);
+  display: grid;
+  grid-template-columns: minmax(2.5rem, auto) 1fr auto auto minmax(2.75rem, auto);
+  grid-template-areas: "label vs status decks score";
+  align-items: center;
+  gap: 0.15rem 0.6rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.list-row + .list-row {
+  border-block-start: 1px solid var(--border);
 }
 
 .list-row:hover {
-  border-color: rgb(47 107 227 / 0.45);
-}
-
-.list-row summary {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.15rem 0.75rem;
-  padding: 0.65rem 0.85rem;
-  cursor: pointer;
-  list-style: none;
-}
-
-.list-row summary::-webkit-details-marker {
-  display: none;
+  background: var(--surface-2);
 }
 
 .list-label {
-  font-size: 0.85rem;
+  grid-area: label;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.list-vs {
+  grid-area: vs;
+  font-size: 0.88rem;
+  font-weight: 600;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.list-status {
+  grid-area: status;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.list-status.is-live {
+  color: var(--accent);
   font-weight: 700;
 }
 
+.list-status.is-invalid {
+  color: var(--danger-strong);
+  font-weight: 700;
+}
+
+.list-row .deck-class-row {
+  grid-area: decks;
+  justify-self: end;
+}
+
+.list-row .deck-class-row:empty {
+  display: none;
+}
+
 .list-score {
-  grid-row: span 2;
-  align-self: center;
-  font-size: 1.15rem;
+  grid-area: score;
+  font-size: 1rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--accent);
+  text-align: end;
+  white-space: nowrap;
 }
 
 .list-row.played .list-score {
   color: var(--text-muted);
-}
-
-.list-vs {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
-.list-row .deck-class-row {
-  padding: 0.15rem 0.85rem 0.65rem;
 }
 
 .list-class {
@@ -3144,6 +3181,25 @@ body[data-view='canvas'] .list-view {
 .list-class .icon {
   inline-size: 1.42rem;
   block-size: 1.42rem;
+}
+
+/* 窄屏:首行 = 场次 + 对阵 + 比分,次行 = 卡组 + 状态;场次纵跨两行锚定 */
+@media (max-width: 40rem) {
+  .list-row {
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "label vs score"
+      "label decks status";
+    row-gap: 0.2rem;
+  }
+
+  .list-row .deck-class-row {
+    justify-self: start;
+  }
+
+  .list-status {
+    justify-self: end;
+  }
 }
 
 /* ---------- 选手中心 ---------- */

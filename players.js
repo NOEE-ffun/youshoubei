@@ -52,7 +52,7 @@
       const avatarCell = editable
         ? '<button type="button" class="avatar-btn" data-avatar-upload="' + p.id + '"' +
           ' title="' + (p.avatar ? '更换' : '上传') + '头像" aria-label="' + (p.avatar ? '更换' : '上传') + escapeHtml(p.name) + '的头像">' +
-          avatar + '<img class="icon avatar-edit" src="icons/edit.svg" alt="" aria-hidden="true"></button>'
+          avatar + '<img class="icon avatar-edit" src="icons/upload.svg" alt="" aria-hidden="true"></button>'
         : avatar;
       const tagCell = (p.tagImg ? '<img class="tag-img" src="' + escapeHtml(p.tagImg) + '" alt="" aria-hidden="true">' : '') +
         (p.tag ? escapeHtml(p.tag) : EMPTY);

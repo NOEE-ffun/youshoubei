@@ -12,8 +12,8 @@
   <link rel="prefetch" href="index.html">
   <link rel="prefetch" href="schedule.html">
   <link rel="prefetch" href="poster.html">
-  <script src="theme-init.js?v=2026090039"></script>
-  <link rel="stylesheet" href="styles.css?v=2026090039">
+  <script src="theme-init.js?v=2026090040"></script>
+  <link rel="stylesheet" href="styles.css?v=2026090040">
 </head>
 <body data-page="me">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -26,7 +26,7 @@
       <a class="side-link" href="players.html" data-page="players" title="选手库" aria-label="选手库"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/groups.svg" alt="选手库" aria-hidden="true"></span></a>
       <a class="side-link" href="poster.html" data-page="poster" title="海报" aria-label="海报"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/vs_poster.svg" alt="海报" aria-hidden="true"></span></a>
       <a class="side-link" href="stats.html" data-page="stats" title="数据统计" aria-label="数据统计"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/bar_chart.svg" alt="数据统计" aria-hidden="true"></span></a>
-      <a class="side-link" href="docs.html?v=2026090039" data-page="docs" title="官方文档" aria-label="官方文档"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/rule.svg" alt="官方文档" aria-hidden="true"></span></a>
+      <a class="side-link" href="docs.html?v=2026090040" data-page="docs" title="官方文档" aria-label="官方文档"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/menu_book.svg" alt="官方文档" aria-hidden="true"></span></a>
       <a class="side-link" href="me.html" data-page="me" title="选手中心" aria-label="选手中心"><span class="side-icon" aria-hidden="true"><img class="icon" src="icons/person.svg" alt="选手中心" aria-hidden="true"></span></a>
     </nav>
   </aside>
@@ -35,7 +35,7 @@
     <main id="main-content" tabindex="-1">
       <div id="me-empty" hidden>
         <p id="me-empty-text" class="hint">未登录。</p>
-        <button type="button" id="me-login-btn" class="btn btn-primary" hidden>登录</button>
+        <button type="button" id="me-login-btn" class="btn btn-primary" hidden><img class="icon" src="icons/login.svg" alt="" aria-hidden="true">登录</button>
       </div>
 
       <div id="me-shell" hidden>
@@ -49,7 +49,7 @@
         <section class="me-panel" id="me-panel-decks" role="tabpanel" aria-labelledby="me-tab-decks" hidden>
           <div id="my-decks-empty" hidden>
             <p id="my-decks-empty-text" class="hint">未登录。</p>
-            <button type="button" id="my-decks-login-btn" class="btn btn-primary" hidden>登录</button>
+            <button type="button" id="my-decks-login-btn" class="btn btn-primary" hidden><img class="icon" src="icons/login.svg" alt="" aria-hidden="true">登录</button>
           </div>
 
           <div id="my-decks-body" hidden>
@@ -65,7 +65,7 @@
         <section class="me-panel" id="me-panel-tourneys" role="tabpanel" aria-labelledby="me-tab-tourneys" hidden>
           <div id="my-tourneys-empty" hidden>
             <p id="my-tourneys-empty-text" class="hint">未登录。</p>
-            <button type="button" id="my-tourneys-login-btn" class="btn btn-primary" hidden>登录</button>
+            <button type="button" id="my-tourneys-login-btn" class="btn btn-primary" hidden><img class="icon" src="icons/login.svg" alt="" aria-hidden="true">登录</button>
           </div>
 
           <div id="my-tourneys-body" hidden>
@@ -76,7 +76,7 @@
         <section class="me-panel" id="me-panel-profile" role="tabpanel" aria-labelledby="me-tab-profile" hidden>
           <div id="profile-empty" hidden>
             <p id="profile-empty-text" class="hint">未登录。</p>
-            <button type="button" id="profile-login-btn" class="btn btn-primary" hidden>登录</button>
+            <button type="button" id="profile-login-btn" class="btn btn-primary" hidden><img class="icon" src="icons/login.svg" alt="" aria-hidden="true">登录</button>
           </div>
 
           <section id="redeem-section" aria-labelledby="redeem-title" class="me-subsection" hidden>
@@ -86,7 +86,7 @@
                 <span class="form-label">验证码</span>
                 <input type="text" id="redeem-code" maxlength="16" placeholder="管理员码" autocomplete="off">
               </label>
-              <button type="submit" class="btn btn-primary btn-sm">兑换</button>
+              <button type="submit" class="btn btn-primary btn-sm"><img class="icon" src="icons/redeem.svg" alt="" aria-hidden="true">兑换</button>
               <span class="hint">管理员码升级为管理员;选手档案注册时已自动创建。</span>
             </form>
             <form id="phone-bind-form" class="phone-bind" hidden>
@@ -98,17 +98,17 @@
                 <span class="form-label">验证码</span>
                 <span class="bind-code-row">
                   <input type="text" id="bind-code" maxlength="6" placeholder="先点右侧获取">
-                  <button type="button" class="btn btn-secondary btn-sm" id="bind-send-btn">获取验证码</button>
+                  <button type="button" class="btn btn-secondary btn-sm" id="bind-send-btn"><img class="icon" src="icons/sms.svg" alt="" aria-hidden="true">获取验证码</button>
                 </span>
               </label>
-              <button type="submit" class="btn btn-primary btn-sm">绑定</button>
+              <button type="submit" class="btn btn-primary btn-sm"><img class="icon" src="icons/link.svg" alt="" aria-hidden="true">绑定</button>
             </form>
             <form id="nickname-form" class="redeem-form">
               <label class="form-field">
                 <span class="form-label">账号昵称</span>
                 <input type="text" id="account-nickname" maxlength="24" placeholder="账号展示名;注册时已自动创建选手档案">
               </label>
-              <button type="submit" class="btn btn-secondary btn-sm">保存昵称</button>
+              <button type="submit" class="btn btn-secondary btn-sm"><img class="icon" src="icons/save.svg" alt="" aria-hidden="true">保存昵称</button>
             </form>
             <p class="hint" id="redeem-status" role="status" aria-live="polite"></p>
           </section>
@@ -122,8 +122,8 @@
               <div class="profile-avatar-row">
                 <span id="profile-avatar-preview"></span>
                 <input type="file" id="profile-avatar-file" accept="image/*" class="visually-hidden">
-                <button type="button" id="profile-avatar-upload" class="btn btn-secondary btn-sm">上传头像</button>
-                <button type="button" id="profile-avatar-remove" class="btn btn-ghost btn-sm" hidden>移除</button>
+                <button type="button" id="profile-avatar-upload" class="btn btn-secondary btn-sm"><img class="icon" src="icons/upload.svg" alt="" aria-hidden="true">上传头像</button>
+                <button type="button" id="profile-avatar-remove" class="btn btn-ghost btn-sm" hidden><img class="icon" src="icons/delete.svg" alt="" aria-hidden="true">移除</button>
               </div>
             </div>
 
@@ -142,8 +142,8 @@
               <div class="profile-avatar-row">
                 <img id="profile-tagimg-preview" class="profile-tagimg-preview" alt="队标预览" hidden>
                 <input type="file" id="profile-tagimg-file" accept="image/*" class="visually-hidden">
-                <button type="button" id="profile-tagimg-upload" class="btn btn-secondary btn-sm">上传队标</button>
-                <button type="button" id="profile-tagimg-remove" class="btn btn-ghost btn-sm" hidden>移除队标</button>
+                <button type="button" id="profile-tagimg-upload" class="btn btn-secondary btn-sm"><img class="icon" src="icons/upload.svg" alt="" aria-hidden="true">上传队标</button>
+                <button type="button" id="profile-tagimg-remove" class="btn btn-ghost btn-sm" hidden><img class="icon" src="icons/delete.svg" alt="" aria-hidden="true">移除队标</button>
               </div>
               <div class="profile-range-row">
                 <label for="profile-tagimg-size">队标大小</label>
@@ -160,13 +160,13 @@
               <label for="profile-color">海报颜色</label>
               <div class="profile-avatar-row">
                 <input type="color" id="profile-color" value="#4a5568">
-                <button type="button" id="profile-color-clear" class="btn btn-ghost btn-sm">跟随主题</button>
+                <button type="button" id="profile-color-clear" class="btn btn-ghost btn-sm"><img class="icon" src="icons/format_color_reset.svg" alt="" aria-hidden="true">跟随主题</button>
                 <span class="hint" id="profile-color-hint"></span>
               </div>
             </div>
 
             <div class="dialog-actions">
-              <button type="button" id="profile-save" class="btn btn-primary">保存资料</button>
+              <button type="button" id="profile-save" class="btn btn-primary"><img class="icon" src="icons/save.svg" alt="" aria-hidden="true">保存资料</button>
             </div>
           </section>
 
@@ -181,12 +181,12 @@
               <input type="password" id="profile-pass-next" autocomplete="new-password" maxlength="72">
             </div>
             <div class="dialog-actions">
-              <button type="button" id="profile-pass-save" class="btn btn-secondary">修改密码</button>
+              <button type="button" id="profile-pass-save" class="btn btn-secondary"><img class="icon" src="icons/password.svg" alt="" aria-hidden="true">修改密码</button>
             </div>
           </section>
 
           <div class="dialog-actions" id="profile-logout-row" hidden>
-            <button type="button" id="profile-logout" class="btn btn-ghost">退出登录</button>
+            <button type="button" id="profile-logout" class="btn btn-ghost"><img class="icon" src="icons/logout.svg" alt="" aria-hidden="true">退出登录</button>
           </div>
         </section>
 
@@ -198,7 +198,7 @@
                 <option value="admin">管理员码</option>
               </select>
             </label>
-            <button type="submit" class="btn btn-primary btn-sm">生成</button>
+            <button type="submit" class="btn btn-primary btn-sm"><img class="icon" src="icons/key.svg" alt="" aria-hidden="true">生成</button>
             <output id="codes-gen-out" class="codes-gen-out" aria-live="polite"></output>
           </form>
           <div class="table-wrap">
@@ -213,12 +213,12 @@
     </main>
   </div>
 
-  <script src="canvas-model.js?v=2026090039" defer></script>
-  <script src="common.js?v=2026090039" defer></script>
-  <script src="vs-poster/js/upload.js?v=2026090039" defer></script>
-  <script src="my-decks.js?v=2026090039" defer></script>
-  <script src="my-tourneys.js?v=2026090039" defer></script>
-  <script src="profile.js?v=2026090039" defer></script>
-  <script src="me.js?v=2026090039" defer></script>
+  <script src="canvas-model.js?v=2026090040" defer></script>
+  <script src="common.js?v=2026090040" defer></script>
+  <script src="vs-poster/js/upload.js?v=2026090040" defer></script>
+  <script src="my-decks.js?v=2026090040" defer></script>
+  <script src="my-tourneys.js?v=2026090040" defer></script>
+  <script src="profile.js?v=2026090040" defer></script>
+  <script src="me.js?v=2026090040" defer></script>
 </body>
 </html>

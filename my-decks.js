@@ -120,8 +120,8 @@
       body = '<div class="md-form" data-card="' + escape(card.id) + '" data-side="' + side + '">' +
         rows.join('') +
         '<div class="md-form-actions">' +
-        '<button type="button" class="btn btn-primary btn-sm" data-md-save>保存卡组</button>' +
-        '<button type="button" class="btn btn-ghost btn-sm" data-md-clear>清空(恢复继承)</button>' +
+        '<button type="button" class="btn btn-primary btn-sm" data-md-save><img class="icon" src="icons/save.svg" alt="" aria-hidden="true">保存卡组</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-md-clear><img class="icon" src="icons/restart_alt.svg" alt="" aria-hidden="true">清空(恢复继承)</button>' +
         '<span class="hint md-save-hint"></span>' +
         '</div></div>';
     } else {

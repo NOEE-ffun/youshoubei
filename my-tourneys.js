@@ -77,9 +77,9 @@
     if (open) {
       chip = '<span class="md-chip md-chip-open">开放报名</span>';
       if (joined) {
-        action = '<button type="button" class="btn btn-ghost btn-sm" data-signup="leave" data-id="' + escape(record.id) + '">已报名 · 取消报名</button>';
+        action = '<button type="button" class="btn btn-ghost btn-sm" data-signup="leave" data-id="' + escape(record.id) + '"><img class="icon" src="icons/event_busy.svg" alt="" aria-hidden="true">已报名 · 取消报名</button>';
       } else {
-        action = '<button type="button" class="btn btn-primary btn-sm" data-signup="join" data-id="' + escape(record.id) + '">报名</button>';
+        action = '<button type="button" class="btn btn-primary btn-sm" data-signup="join" data-id="' + escape(record.id) + '"><img class="icon" src="icons/event_available.svg" alt="" aria-hidden="true">报名</button>';
       }
     } else if (playing) {
       chip = '<span class="md-chip md-chip-locked">已参加</span>';

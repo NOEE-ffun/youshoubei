@@ -1043,7 +1043,7 @@
       '  <p class="hint">连线:从连接点拖出箭头,拖到目标卡片连接点松手。上排连接点默认输出胜者、接入 A 位,下排默认输出败者、接入 B 位,均可在上面下拉中自定义。</p>' +
       '  <div class="dialog-actions">' +
       '    <button type="button" class="btn btn-secondary" data-card-close>取消</button>' +
-      '    <button type="button" class="btn btn-primary" data-card-save>保存</button>' +
+      '    <button type="button" class="btn btn-primary" data-card-save>' + (window.TournamentUtils ? window.TournamentUtils.iconMarkup('save', '保存') : '') + '保存</button>' +
       '  </div>' +
       '</div>';
     document.body.appendChild(cardDialog);

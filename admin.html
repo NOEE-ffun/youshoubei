@@ -8,8 +8,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>超管后台 - 右手杯</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
-  <script src="theme-init.js?v=2026090039"></script>
-  <link rel="stylesheet" href="styles.css?v=2026090039">
+  <script src="theme-init.js?v=2026090040"></script>
+  <link rel="stylesheet" href="styles.css?v=2026090040">
 </head>
 <body class="admin-body" data-page="admin">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -19,7 +19,7 @@
     <div class="admin-header-inner">
       <h1 class="admin-title">超管后台</h1>
       <div class="admin-header-actions">
-        <a class="btn btn-ghost btn-sm" href="index.html">返回站点</a>
+        <a class="btn btn-ghost btn-sm" href="index.html"><img class="icon" src="icons/home.svg" alt="" aria-hidden="true">返回站点</a>
       </div>
     </div>
   </header>
@@ -29,7 +29,7 @@
       <!-- 首帧即显示「加载中…」,角色判定完成后由 admin.js 隐藏/替换 -->
       <div id="admin-empty">
         <p id="admin-empty-text" class="hint">加载中…</p>
-        <a id="admin-login-btn" class="btn btn-primary" href="login.html" hidden>登录</a>
+        <a id="admin-login-btn" class="btn btn-primary" href="login.html" hidden><img class="icon" src="icons/login.svg" alt="" aria-hidden="true">登录</a>
       </div>
 
       <div id="admin-shell" hidden>
@@ -96,7 +96,7 @@
             <h2 class="subsection-title">健康</h2>
             <p class="hint admin-status" id="admin-health-status" role="status" aria-live="polite"></p>
             <dl class="admin-kv" id="admin-health-kv"></dl>
-            <button type="button" id="admin-backup-btn" class="btn btn-primary btn-sm">一键备份</button>
+            <button type="button" id="admin-backup-btn" class="btn btn-primary btn-sm"><img class="icon" src="icons/backup.svg" alt="" aria-hidden="true">一键备份</button>
             <p class="hint admin-status" id="admin-backup-status" role="status" aria-live="polite"></p>
           </section>
           <section class="me-subsection">
@@ -106,7 +106,7 @@
                 <span class="form-label">备份对象名</span>
                 <input type="text" id="admin-restore-key" placeholder="backups/data-….json" autocomplete="off">
               </label>
-              <button type="submit" class="btn btn-danger btn-sm">恢复 data.json</button>
+              <button type="submit" class="btn btn-danger btn-sm"><img class="icon" src="icons/restore.svg" alt="" aria-hidden="true">恢复 data.json</button>
             </form>
             <p class="hint">恢复会覆盖 data.json(恢复前自动留底);仅支持 data 类备份;提交后需在确认框输入 RESTORE。</p>
             <p class="hint admin-status" id="admin-restore-status" role="status" aria-live="polite"></p>
@@ -124,7 +124,7 @@
 
         <section class="me-panel" id="admin-panel-notices" role="tabpanel" aria-labelledby="admin-tab-notices" hidden>
           <div class="admin-toolbar">
-            <button type="button" id="nf-new" class="btn btn-primary btn-sm">新建通知</button>
+            <button type="button" id="nf-new" class="btn btn-primary btn-sm"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true">新建通知</button>
             <span class="hint">主页顶部横幅,多条生效时轮播;带收款码的通知点击横幅弹大图。</span>
           </div>
           <form id="nf-form" class="admin-notice-form" hidden>
@@ -178,10 +178,10 @@
                 <span class="form-label">收款码(可选,点击横幅弹大图)</span>
                 <input type="file" id="nf-qr-file" accept="image/png,image/jpeg,image/webp,image/gif">
               </label>
-              <span class="nf-qr-box"><img id="nf-qr-preview" alt="收款码预览" hidden><button type="button" id="nf-qr-clear" class="btn btn-ghost btn-sm" hidden>清除</button></span>
+              <span class="nf-qr-box"><img id="nf-qr-preview" alt="收款码预览" hidden><button type="button" id="nf-qr-clear" class="btn btn-ghost btn-sm" hidden><img class="icon" src="icons/delete.svg" alt="" aria-hidden="true">清除</button></span>
             </div>
             <div class="nf-row">
-              <button type="submit" class="btn btn-primary btn-sm">保存</button>
+              <button type="submit" class="btn btn-primary btn-sm"><img class="icon" src="icons/save.svg" alt="" aria-hidden="true">保存</button>
               <button type="button" id="nf-cancel" class="btn btn-ghost btn-sm">取消</button>
               <span class="hint" id="nf-hint" role="status" aria-live="polite"></span>
             </div>
@@ -197,7 +197,7 @@
 
         <section class="me-panel" id="admin-panel-docs" role="tabpanel" aria-labelledby="admin-tab-docs" hidden>
           <div class="admin-toolbar">
-            <button type="button" id="df-new" class="btn btn-primary btn-sm">新建文档</button>
+            <button type="button" id="df-new" class="btn btn-primary btn-sm"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true">新建文档</button>
             <span class="hint">Markdown 文档,按分类分组展示在官方文档页;勾选「仅管理员可见」的篇目普通账号读不到。</span>
           </div>
           <form id="df-form" class="admin-notice-form" hidden>
@@ -231,12 +231,12 @@
               </div>
             </div>
             <div class="nf-row">
-              <button type="button" id="df-insert-image" class="btn btn-secondary btn-sm">插入图片</button>
+              <button type="button" id="df-insert-image" class="btn btn-secondary btn-sm"><img class="icon" src="icons/add_photo_alternate.svg" alt="" aria-hidden="true">插入图片</button>
               <input type="file" id="df-image-file" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
               <span class="hint">PNG/JPEG/GIF/WebP ≤5MB,上传后插入到光标处</span>
             </div>
             <div class="nf-row">
-              <button type="submit" class="btn btn-primary btn-sm">保存</button>
+              <button type="submit" class="btn btn-primary btn-sm"><img class="icon" src="icons/save.svg" alt="" aria-hidden="true">保存</button>
               <button type="button" id="df-cancel" class="btn btn-ghost btn-sm">取消</button>
               <span class="hint" id="df-hint" role="status" aria-live="polite"></span>
             </div>
@@ -253,11 +253,11 @@
     </main>
   </div>
 
-  <script src="canvas-model.js?v=2026090039" defer></script>
-  <script src="vendor/marked.umd.js?v=2026090039" defer></script>
-  <script src="vendor/purify.min.js?v=2026090039" defer></script>
-  <script src="docs-meta.js?v=2026090039" defer></script>
-  <script src="md-render.js?v=2026090039" defer></script>
-  <script src="admin.js?v=2026090039" defer></script>
+  <script src="canvas-model.js?v=2026090040" defer></script>
+  <script src="vendor/marked.umd.js?v=2026090040" defer></script>
+  <script src="vendor/purify.min.js?v=2026090040" defer></script>
+  <script src="docs-meta.js?v=2026090040" defer></script>
+  <script src="md-render.js?v=2026090040" defer></script>
+  <script src="admin.js?v=2026090040" defer></script>
 </body>
 </html>

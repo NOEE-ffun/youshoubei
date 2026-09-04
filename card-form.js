@@ -66,7 +66,7 @@
       '<select class="cl-cls" aria-label="职业">' + classOptions(e.cls) + '</select>' +
       '<input type="url" class="cl-url" placeholder="卡组链接 https://" value="' + escapeHtml(e.url || '') + '">' +
       '<input type="text" class="cl-text" placeholder="悬停文字" value="' + escapeHtml(e.text || '') + '">' +
-      '<button type="button" class="btn btn-ghost btn-sm cl-del" data-cl-del title="删除此行" aria-label="删除此行">×</button>' +
+      '<button type="button" class="btn btn-ghost btn-sm cl-del" data-cl-del title="删除此行" aria-label="删除此行"><img class="icon" src="icons/close.svg" alt="" aria-hidden="true"></button>' +
       '</div>'
     );
   }
