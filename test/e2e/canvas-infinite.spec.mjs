@@ -90,3 +90,75 @@ test('无限画布:负坐标渲染归一 + 微调/拖拽可入负象限', async 
   expect(cbLeft).toBeGreaterThanOrEqual(0);
   await expect(page.locator('.canvas-card[data-match="cb"] .match-title')).toContainText('正卡');
 });
+
+/* 连线实时跟随:拖拽(含原点外扩)途中,连线锚点须与卡片同步——
+ * path 起点 M 相对卡片 offsetLeft 的偏移在端口选择不变时应恒定 */
+test('连线实时跟随:普通拖拽与原点外扩途中锚点不移位', async ({ page }) => {
+  const context = page.context();
+  await resetStore(context);
+  await smsLogin(context, ADMIN_PHONE);
+  await seedWorkspace(context, {
+    activeId: 't1',
+    players: [{ id: 'pz1', name: '选手甲' }, { id: 'pz2', name: '选手乙' }],
+    tournaments: [{
+      id: 't1', name: '连线跟随届', roster: ['pz1', 'pz2'],
+      canvas: { grid: 'dot', cards: [
+        { id: 'ca', label: '源卡', format: 'BO3', x: -4, y: -2,
+          slots: [{ type: 'player', playerId: 'pz1' }, { type: 'player', playerId: 'pz2' }] },
+        { id: 'cb', label: '目标卡', format: 'BO3', x: 6, y: 0,
+          slots: [{ type: 'flow', cardId: 'ca', outcome: 'winner' }, { type: 'empty' }] }
+      ] },
+      scores: {}, updatedAt: 1
+    }]
+  });
+
+  await page.goto('/schedule.html');
+  await page.waitForSelector('.canvas-card');
+  await page.locator('#header-edit-btn').click();
+  await page.waitForSelector('.canvas-board.editing');
+
+  const anchor = () => page.evaluate(() => {
+    const board = document.getElementById('canvas-board');
+    const ca = board.querySelector('.canvas-card[data-match="ca"]');
+    const path = board.querySelector('.canvas-edges path.canvas-edge');
+    const m = /^M (-?[\d.]+) (-?[\d.]+)/.exec(path.getAttribute('d') || '');
+    return { left: ca.offsetLeft, top: ca.offsetTop, ex: parseFloat(m[1]), ey: parseFloat(m[2]) };
+  });
+  const rel = async () => {
+    const a = await anchor();
+    return { dx: a.ex - a.left, dy: a.ey - a.top };
+  };
+
+  const dragBy = async (px) => {
+    const head = await page.locator('.canvas-card[data-match="ca"] .match-head').boundingBox();
+    await page.mouse.move(head.x + head.width * 0.3, head.y + 8);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i += 1) {
+      await page.mouse.move(head.x + head.width * 0.3 + (px * i) / 10, head.y + 8);
+    }
+    await page.waitForTimeout(120); /* 等 rAF 重绘连线 */
+  };
+
+  const base = await rel();
+
+  /* 段一:正向拖拽(不触发外扩),连线锚点应实时跟随卡片 */
+  await dragBy(3 * 28);
+  const mid1 = await rel();
+  expect(Math.abs(mid1.dx - base.dx)).toBeLessThanOrEqual(2);
+  expect(Math.abs(mid1.dy - base.dy)).toBeLessThanOrEqual(2);
+  await page.mouse.up();
+  await page.waitForTimeout(1100);
+
+  /* 段二:大幅负向拖拽(触发原点外扩),锚点偏移仍须恒定 */
+  await dragBy(-16 * 28);
+  const mid2 = await rel();
+  expect(Math.abs(mid2.dx - base.dx)).toBeLessThanOrEqual(2);
+  expect(Math.abs(mid2.dy - base.dy)).toBeLessThanOrEqual(2);
+  await page.mouse.up();
+  await page.waitForTimeout(1100);
+
+  /* 落定后全量重渲染,锚点偏移依旧 */
+  const after = await rel();
+  expect(Math.abs(after.dx - base.dx)).toBeLessThanOrEqual(2);
+  expect(Math.abs(after.dy - base.dy)).toBeLessThanOrEqual(2);
+});

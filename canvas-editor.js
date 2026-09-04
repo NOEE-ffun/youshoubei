@@ -165,12 +165,26 @@
   }
 
   /* bracket.js 经 connect() 注入的回调,使依赖单向化:editor 不再反向引用 BracketRender。
-   * renderCanvas 在编辑操作落盘后重绘画布;updateToolbar 刷新编辑工具栏按钮状态 */
+   * renderCanvas 在编辑操作落盘后重绘画布;updateToolbar 刷新编辑工具栏按钮状态;
+   * rerenderEdges 在手势期轻量重算连线(带实时渲染原点) */
   let renderHook = null;
   let toolbarHook = null;
+  let edgesHook = null;
 
   function requestRender() {
     if (renderHook) renderHook();
+  }
+
+  /* 手势期连线实时跟随:拖拽/微调/外扩后按 rAF 合帧重算,
+   * 传入当前渲染原点使连线锚点与卡片 DOM 用同一坐标系 */
+  let edgesScheduled = false;
+  function scheduleEdges() {
+    if (!edgesHook || edgesScheduled) return;
+    edgesScheduled = true;
+    requestAnimationFrame(() => {
+      edgesScheduled = false;
+      try { edgesHook(renderOrigin); } catch (error) { /* 手势期连线失败不致命,下次全量渲染自愈 */ }
+    });
   }
 
   function setSelection(ids) {
@@ -750,6 +764,7 @@
         el.style.top = ((card.y - renderOrigin.y) * DOT) + 'px';
       }
     }
+    scheduleEdges();
   }
 
   function onPointerUp(event) {
@@ -918,6 +933,7 @@
         el.style.top = ((card.y - renderOrigin.y) * DOT) + 'px';
       }
     }
+    scheduleEdges();
     if (!nudgeCommit) {
       nudgeCommit = debounce(() => {
         if (nudgeBeforeSnapshot) {
@@ -956,6 +972,7 @@
       /* 拖拽被取消:还原原位,快照作废 */
       dragState = null;
       dragBeforeSnapshot = null;
+      scheduleEdges();
     }
     highlightSelected();
   }
@@ -1442,6 +1459,7 @@
   function connect(handlers) {
     renderHook = handlers && typeof handlers.renderCanvas === 'function' ? handlers.renderCanvas : null;
     toolbarHook = handlers && typeof handlers.updateToolbar === 'function' ? handlers.updateToolbar : null;
+    edgesHook = handlers && typeof handlers.rerenderEdges === 'function' ? handlers.rerenderEdges : null;
   }
 
   window.CanvasEditor = {

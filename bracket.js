@@ -395,6 +395,19 @@
   /* 连线箭头 marker(与编辑器临时线共用同一模板,canvas-model.js 唯一真源) */
   const EDGE_ARROW_DEFS = arrowDefs('edge');
 
+  /* 手势期轻量连线重算:编辑器拖拽/微调/原点外扩时经 rAF 调用,
+   * origin 为编辑器实时渲染原点(与卡片 DOM 写入同源,锚点才能一致);
+   * 缺省回落模型原点。svg 尺寸取 board.scrollWidth,含拖出右侧的卡。 */
+  function rerenderEdges(origin) {
+    const record = currentRecord();
+    const board = document.getElementById('canvas-board');
+    if (!record || !record.canvas || !board) return;
+    worldOrigin = origin || CanvasModel.canvasOrigin(record.canvas);
+    const resolved = CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {});
+    const resolvedById = new Map(resolved.cards.map((c) => [c.id, c]));
+    renderEdges(record.canvas, resolvedById, board);
+  }
+
   function renderEdges(canvas, resolvedById, container) {
     let svg = container.querySelector('.canvas-edges');
     if (!svg) {
@@ -999,8 +1012,8 @@
   };
 
   document.addEventListener('ts:ready', () => {
-    /* 依赖单向化:把重绘/工具栏刷新注入编辑器,编辑器经回调请求重绘 */
-    CanvasEditor.connect({ renderCanvas, updateToolbar: updateToolbarState });
+    /* 依赖单向化:把重绘/工具栏刷新/连线轻量重算注入编辑器,编辑器经回调请求 */
+    CanvasEditor.connect({ renderCanvas, updateToolbar: updateToolbarState, rerenderEdges });
     renderAll();
     autoFitCanvas();
     maybeAutoOpenRoster();
