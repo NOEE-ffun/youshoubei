@@ -19,6 +19,7 @@
   let tx = 0;
   let ty = 0;
   let selectedCardId = null;
+let listActive = false;
   let batchSelected = new Set();
   let dragState = null;
   let connectState = null;
@@ -103,6 +104,22 @@
     history.push(pre || snapshotState());
     dirty = true;
     refreshToolbarUI();
+  }
+
+  /* 列表编辑统一改动入口:mutator 内改数据(排序/phase/染色等),返回 false 拒绝。
+   * 拒绝时回滚改动前快照不入栈;成功则入历史一步 + 落盘 + 重绘(双视图)。 */
+  function commitListChange(mutator) {
+    const pre = snapshotState();
+    const ok = mutator() !== false;
+    if (!ok) {
+      applySnapshot(pre);
+      return Promise.resolve(false);
+    }
+    commitHistory(pre);
+    return saveCanvas().then((result) => {
+      requestRender();
+      return result;
+    });
   }
 
   function restoreHistory(direction) {
@@ -196,6 +213,12 @@
     refreshToolbarUI();
   }
 
+  /* 纯点击(无位移松手):解除拖拽静默,补开设置抽屉——列表行点击与画布卡点击同语义 */
+  function confirmClickSelection() {
+    panelSuppressed = false;
+    syncPanel();
+  }
+
   /* 按下≠点击:卡片的 pointerdown 先静默选中,置粘性抑制位(syncPanel 跳过开抽屉);
    * 松手无位移(纯点击)清除并补开——拖动卡片及其落盘刷新(markClean→refreshToolbarUI)
    * 都不再自动弹设置抽屉;其它选择入口(setCard class-slot/框选基底/外部选中)不抑制 */
@@ -253,6 +276,59 @@
     if (sc) sc.classList.remove('editing');
     document.body.classList.remove('canvas-editing');
     if (cardDialog && cardDialog.open) cardDialog.close();
+    refreshToolbarUI();
+  }
+
+  /* ---------- 编辑模式双视图(canvas / list) ----------
+   * active=画布手势态(相机/端口/框选);listActive=列表编辑态(面板/选择/历史/键盘可用)。
+   * 两态互斥;enterList/enterCanvas 支持编辑中切视图的平滑互换——选择、面板、历史栈保留,
+   * 只清对侧手势态与 DOM 类。 */
+
+  function enterList() {
+    if (listActive) return;
+    if (active) {
+      dragState = null;
+      connectState = null;
+      marqueeState = null;
+      removeTempLine();
+      removeMarqueeRect();
+      const b = board();
+      if (b) b.classList.remove('editing', 'tool-delete', 'tool-select');
+      const sc = scrollEl();
+      if (sc) sc.classList.remove('editing');
+      document.body.classList.remove('canvas-editing');
+      active = false;
+    }
+    listActive = true;
+    highlightSelected();
+    refreshToolbarUI();
+  }
+
+  function exitList() {
+    if (!listActive) return;
+    hidePanel(); /* 顺带 flush 待提交改动 */
+    selectedCardId = null;
+    batchSelected.clear();
+    listActive = false;
+    refreshToolbarUI();
+  }
+
+  function enterCanvas() {
+    if (active) return;
+    listActive = false;
+    active = true;
+    const b = board();
+    if (b) {
+      b.classList.add('editing');
+      syncToolClasses();
+    }
+    const sc = scrollEl();
+    if (sc) sc.classList.add('editing');
+    document.body.classList.add('canvas-editing');
+    bindBoardEvents();
+    bindWheel();
+    syncZoom();
+    highlightSelected();
     refreshToolbarUI();
   }
 
@@ -848,7 +924,7 @@
   }
 
   function onKeyDown(event) {
-    if (!active) return;
+    if (!active && !listActive) return;
     if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
     /* 模态弹窗打开时不响应画布快捷键:撤销/删除会在弹窗底下改数据,
      * 弹窗里再点保存会把旧值写回,造成静默数据错乱 */
@@ -859,6 +935,23 @@
       event.preventDefault();
       if (event.shiftKey) redo();
       else undo();
+      return;
+    }
+    if (listActive) {
+      /* 列表编辑快捷键面:撤销/重做(上方已处理)+ 删除 + Esc;
+       * 画布专属键(方向键微调/剪贴板)全部短路 */
+      if (event.key === 'Escape') {
+        cancelActiveGesture();
+        setSelection([]);
+        return;
+      }
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        const ids = selectedIds();
+        if (ids.length) {
+          event.preventDefault();
+          deleteCards(ids);
+        }
+      }
       return;
     }
     if (mod && (event.key === 'c' || event.key === 'C')) {
@@ -1002,12 +1095,21 @@
   }
 
   function highlightSelected() {
-    const b = board();
-    if (!b) return;
     const ids = selectedIds();
-    b.querySelectorAll('.canvas-card').forEach((el) => {
-      el.classList.toggle('selected', ids.includes(el.dataset.match));
-    });
+    const b = board();
+    if (b) {
+      b.querySelectorAll('.canvas-card').forEach((el) => {
+        el.classList.toggle('selected', ids.includes(el.dataset.match));
+      });
+    }
+    if (listActive) {
+      const listBody = document.getElementById('list-body');
+      if (listBody) {
+        listBody.querySelectorAll('.list-row').forEach((el) => {
+          el.classList.toggle('selected', ids.includes(el.dataset.match));
+        });
+      }
+    }
   }
 
   /* ---------- 编辑操作 ---------- */
@@ -1228,7 +1330,7 @@
   /* 唯一显隐同步点:refreshToolbarUI 每次选择变化后调用 */
   function syncPanel() {
     if (panelSyncing) return;
-    if (!active) return hidePanel();
+    if (!active && !listActive) return hidePanel();
     const ids = selectedIds();
     if (ids.length !== 1) return hidePanel();
     const card = findCard(ids[0]);
@@ -1482,11 +1584,18 @@
     connect,
     enter,
     exit,
+    enterList,
+    exitList,
+    enterCanvas,
     addCard,
     deleteSelected,
     getSelectedIds: selectedIds,
     editCard: openCardDialog,
     selectCard,
+    setSelection,
+    confirmClickSelection,
+    commitListChange,
+    isListActive: () => listActive,
     setTool,
     getTool,
     zoomIn,
