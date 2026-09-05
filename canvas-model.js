@@ -729,6 +729,41 @@ function arrowDefs(prefix) {
     };
   }
 
+  /* ========== 列表排序(列表视图编辑用) ==========
+   * 列表顺序唯一真源 = cards 数组序:阶段按首次出现分组、组内按数组序。
+   * listGroups 只派生不改入参;applyListOrder 把分组序写回并做集合一致性守卫
+   * (多/少/重/换卡一律拒绝返回 false,数据不动),调用方据此回滚。 */
+  function listGroups(cards) {
+    const groups = [];
+    const index = new Map();
+    for (const card of Array.isArray(cards) ? cards : []) {
+      const phase = String((card && card.phase) || '');
+      const key = phase === '' ? '__other__' : phase;
+      if (!index.has(key)) {
+        index.set(key, []);
+        groups.push({ key, phase, cards: index.get(key) });
+      }
+      index.get(key).push(card);
+    }
+    return groups;
+  }
+
+  function applyListOrder(canvas, groups) {
+    const flat = [];
+    const seen = new Set();
+    for (const group of Array.isArray(groups) ? groups : []) {
+      for (const card of (group && group.cards) || []) {
+        if (!card || !card.id || seen.has(card.id)) return false;
+        seen.add(card.id);
+        flat.push(card);
+      }
+    }
+    const current = canvas && Array.isArray(canvas.cards) ? canvas.cards : [];
+    if (seen.size !== current.length || current.some((c) => !seen.has(c.id))) return false;
+    canvas.cards = flat;
+    return true;
+  }
+
   /* ========== 多卡剪贴板 ========== */
 
   /* 深拷贝一组卡片用于粘贴：全部换新 id、整体平移 (dx, dy) 格、label 加「副本」后缀；
@@ -799,6 +834,8 @@ function arrowDefs(prefix) {
     resolveCanvas,
     resolveCardById,
     deriveStandings,
+    listGroups,
+    applyListOrder,
     migrateLegacyTournament
   };
 });
