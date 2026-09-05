@@ -1,10 +1,12 @@
 (function () {
   'use strict';
 
-  /* 赛程列表视图(比赛页内,与画布同页切换):resolveCanvas 后按阶段分组,
-   * 扁平行 = 场次 + A vs B + 状态 + 职业卡组(有效继承,图标可点跳链接) + 比分,
-   * 全部信息直出、不可折叠;视图显隐由 bracket.js 的 body[data-view] 管理,
-   * 列表视图下隐藏赛事背景图由 CSS 负责;本模块只渲染 #list-body。 */
+  /* 赛程列表视图(比赛页内,与画布同页切换):resolveCanvas 后经 CanvasModel.listGroups
+   * 按阶段分组,列序 = 赛制 | 标题 | 对阵(比分并入) | 状态 | 卡组(有效继承,图标可点);
+   * 编辑态由 body.list-editing 标记(置位/交互在 list-editor.js):行加 data-match、
+   * 拖拽手柄格与组头手柄;染色行带 data-tint 与 --list-tint(与画布 card.color 同源)。
+   * 视图显隐由 bracket.js 的 body[data-view] 管理,列表视图隐藏赛事背景图由 CSS 负责;
+   * 本模块只渲染 #list-body,渲染结束派发 ts:list-render(list-editor 借此重挂编辑态)。 */
 
   const { escapeHtml } = window.TournamentUtils;
 
@@ -37,27 +39,6 @@
     }).join('');
   }
 
-  function rowHtml(m, eff) {
-    const a = m.a ? playerName(m.a) : '待定';
-    const b = m.b ? playerName(m.b) : '待定';
-    const score = m.played || m.draw
-      ? (m.scoreA == null ? '?' : m.scoreA) + ':' + (m.scoreB == null ? '?' : m.scoreB)
-      : '';
-    const clsA = classGroupHtml(eff, 'a');
-    const clsB = classGroupHtml(eff, 'b');
-    const sep = (clsA && clsB) ? '<span class="vs-sep">对</span>' : '';
-    const st = stateInfo(m);
-    return (
-      '<div class="list-row' + (m.played ? ' played' : '') + '">' +
-      '<span class="list-label">' + escapeHtml(m.label || m.id) + '</span>' +
-      '<span class="list-vs">' + escapeHtml(a) + ' vs ' + escapeHtml(b) + '</span>' +
-      '<span class="list-status' + st.cls + '">' + escapeHtml(st.text) + '</span>' +
-      '<div class="deck-class-row">' + clsA + sep + clsB + '</div>' +
-      '<span class="list-score">' + escapeHtml(score) + '</span>' +
-      '</div>'
-    );
-  }
-
   function playerNameMap() {
     return new Map((window.TournamentApp.players || []).map((p) => [p.id, p.name || p.id]));
   }
@@ -66,34 +47,75 @@
     return names.get(id) || '?';
   }
 
+  /* 对阵列:比分并入(已结束/平局嵌在两名之间),胜者加粗、败者降透明(与画布口径同源) */
+  function vsHtml(m) {
+    const a = escapeHtml(m.a ? playerName(m.a) : '待定');
+    const b = escapeHtml(m.b ? playerName(m.b) : '待定');
+    const clsA = m.played ? (m.winner === m.a ? ' won' : m.loser === m.a ? ' lost' : '') : '';
+    const clsB = m.played ? (m.winner === m.b ? ' won' : m.loser === m.b ? ' lost' : '') : '';
+    if (m.played || m.draw) {
+      const sa = m.scoreA == null ? '?' : m.scoreA;
+      const sb = m.scoreB == null ? '?' : m.scoreB;
+      return '<span class="vs-name' + clsA + '">' + a + '</span>' +
+        '<span class="vs-score">' + escapeHtml(sa + ':' + sb) + '</span>' +
+        '<span class="vs-name' + clsB + '">' + b + '</span>';
+    }
+    return '<span class="vs-name' + clsA + '">' + a + '<span class="vs-vs"> vs </span></span>' +
+      '<span class="vs-name' + clsB + '">' + b + '</span>';
+  }
+
+  function rowHtml(m, eff, card, editing) {
+    const st = stateInfo(m);
+    const clsA = classGroupHtml(eff, 'a');
+    const clsB = classGroupHtml(eff, 'b');
+    const sep = (clsA && clsB) ? '<span class="vs-sep">对</span>' : '';
+    const tint = card && card.color
+      ? ' data-tint style="--list-tint:' + escapeHtml(card.color) + '"'
+      : '';
+    const handle = editing
+      ? '<span class="list-handle" data-drag-handle title="拖拽排序" aria-hidden="true">' +
+        '<img class="icon" src="icons/drag_indicator.svg" alt=""></span>'
+      : '';
+    return (
+      '<div class="list-row' + (m.played ? ' played' : '') + '" data-match="' + escapeHtml(m.id) + '"' + tint + '>' +
+      handle +
+      '<span class="list-format">' + escapeHtml(m.format || 'BO3') + '</span>' +
+      '<span class="list-title">' + escapeHtml(m.label || m.id) + '</span>' +
+      '<span class="list-vs">' + vsHtml(m) + '</span>' +
+      '<span class="list-status' + st.cls + '">' + escapeHtml(st.text) + '</span>' +
+      '<div class="deck-class-row">' + clsA + sep + clsB + '</div>' +
+      '</div>'
+    );
+  }
+
   function render() {
     const app = window.TournamentApp;
     const record = app && app.current;
-    const body = document.getElementById('list-body');
-    if (!body || !record || !record.canvas) return;
+    const el = document.getElementById('list-body');
+    if (!el || !record || !record.canvas) return;
     names = playerNameMap();
+    const editing = document.body.classList.contains('list-editing');
     const resolved = CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {});
     const eff = CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {});
-
-    /* 按 phase 分组,保持画布卡片顺序 */
-    const groups = [];
-    const groupIndex = new Map();
-    for (const m of resolved.cards) {
-      const key = m.phase || '其他';
-      if (!groupIndex.has(key)) {
-        groupIndex.set(key, []);
-        groups.push({ key, items: groupIndex.get(key) });
-      }
-      groupIndex.get(key).push(m);
-    }
-    body.innerHTML = groups.map((g) => (
-      '<section class="list-group">' +
-      '<h2>' + escapeHtml(g.key) + '</h2>' +
-      g.items.map((m) => rowHtml(m, eff.get(m.id))).join('') +
+    const resolvedById = new Map(resolved.cards.map((c) => [c.id, c]));
+    const groups = CanvasModel.listGroups(record.canvas.cards);
+    el.innerHTML = groups.map((g) => (
+      '<section class="list-group" data-key="' + escapeHtml(g.key) + '">' +
+      '<h2' + (editing ? ' data-group-handle title="拖动可调整整个阶段的顺序"' : '') + '>' +
+      (editing ? '<span class="list-handle" data-drag-handle aria-hidden="true">' +
+        '<img class="icon" src="icons/drag_indicator.svg" alt=""></span>' : '') +
+      escapeHtml(g.key === '__other__' ? '其他' : g.phase) +
+      '</h2>' +
+      g.cards.map((card) => {
+        const m = resolvedById.get(card.id);
+        return m ? rowHtml(m, eff.get(card.id), card, editing) : '';
+      }).join('') +
       '</section>'
     )).join('');
+    document.dispatchEvent(new CustomEvent('ts:list-render'));
   }
 
+  window.ListView = { render };
   document.addEventListener('ts:ready', render);
   document.addEventListener('ts:changed', render);
 })();

@@ -3100,12 +3100,17 @@ body[data-view='canvas'] .list-view {
 
 .list-row {
   display: grid;
-  grid-template-columns: minmax(2.5rem, auto) 1fr auto auto minmax(2.75rem, auto);
-  grid-template-areas: "label vs status decks score";
+  grid-template-columns: auto minmax(7rem, 1fr) minmax(10rem, 1.6fr) auto auto;
+  grid-template-areas: "format title vs status decks";
   align-items: center;
   gap: 0.15rem 0.6rem;
   padding: 0.35rem 0.5rem;
   border-radius: var(--radius-sm);
+}
+
+body.list-editing .list-row {
+  grid-template-columns: 1.6rem auto minmax(6rem, 1fr) minmax(9rem, 1.6fr) auto auto;
+  grid-template-areas: "handle format title vs status decks";
 }
 
 .list-row + .list-row {
@@ -3116,20 +3121,60 @@ body[data-view='canvas'] .list-view {
   background: var(--surface-2);
 }
 
-.list-label {
-  grid-area: label;
-  font-size: 0.78rem;
+.list-format {
+  grid-area: format;
+  font-size: 0.74rem;
   font-weight: 700;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.list-title {
+  grid-area: title;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .list-vs {
   grid-area: vs;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
   font-size: 0.88rem;
   font-weight: 600;
   min-inline-size: 0;
   overflow-wrap: anywhere;
+}
+
+.vs-name.lost {
+  opacity: 0.6;
+}
+
+.vs-name.won {
+  font-weight: 800;
+}
+
+.vs-score {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.list-row.played .vs-score {
+  color: var(--text-muted);
+}
+
+.vs-vs {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 400;
 }
 
 .list-status {
@@ -3158,20 +3203,6 @@ body[data-view='canvas'] .list-view {
   display: none;
 }
 
-.list-score {
-  grid-area: score;
-  font-size: 1rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent);
-  text-align: end;
-  white-space: nowrap;
-}
-
-.list-row.played .list-score {
-  color: var(--text-muted);
-}
-
 .list-class {
   display: inline-flex;
   padding: 0.15rem;
@@ -3183,14 +3214,75 @@ body[data-view='canvas'] .list-view {
   block-size: 1.42rem;
 }
 
-/* 窄屏:首行 = 场次 + 对阵 + 比分,次行 = 卡组 + 状态;场次纵跨两行锚定 */
+/* 染色(与画布 card.color 同源):行首色条 + 标题文字着色 */
+.list-row[data-tint] {
+  position: relative;
+}
+
+.list-row[data-tint]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  block-size: calc(100% - 0.5rem);
+  inline-size: 3px;
+  border-radius: 2px;
+  background: var(--list-tint, var(--accent));
+}
+
+body.list-editing .list-row[data-tint]::before {
+  left: 1.7rem; /* 让位手柄列 */
+}
+
+.list-row[data-tint] .list-title {
+  color: var(--list-tint, var(--accent));
+}
+
+/* 编辑态行/手柄基础(list-editor.js 置 body.list-editing) */
+body.list-editing .list-row {
+  cursor: grab;
+}
+
+body.list-editing .list-group h2 {
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.list-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: 0.55;
+  touch-action: none; /* 触屏拖拽主通道:手柄不与页面滚动打架 */
+}
+
+.list-handle .icon {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+body.list-editing .list-row:hover .list-handle,
+body.list-editing .list-group h2:hover .list-handle {
+  opacity: 1;
+}
+
+/* 窄屏:首行元信息(赛制+标题+状态),次行对阵纵跨 + 卡组靠右 */
 @media (max-width: 40rem) {
   .list-row {
     grid-template-columns: auto 1fr auto;
     grid-template-areas:
-      "label vs score"
-      "label decks status";
+      "format title status"
+      "vs vs decks";
     row-gap: 0.2rem;
+  }
+
+  body.list-editing .list-row {
+    grid-template-columns: 1.6rem auto 1fr auto;
+    grid-template-areas:
+      "handle format title status"
+      "handle vs vs decks";
   }
 
   .list-row .deck-class-row {
