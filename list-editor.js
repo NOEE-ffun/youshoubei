@@ -346,6 +346,9 @@
       if (d.ghostEl) d.ghostEl.remove();
       if (d.gapEl) d.gapEl.remove();
       clearGapDom();
+      /* 原位放下(no-op)也必须还原:漏摘 dragging-origin 会让整组/整行
+       * 保持 display:none"消失",且无落盘重渲染,直到退出编辑才恢复 */
+      d.originEl.classList.remove('dragging-origin');
     }
     if (!d) return;
     const record = window.TournamentApp.current;
@@ -369,10 +372,11 @@
       }
     } else {
       const from = groups.findIndex((g) => g.key === d.sourceKey);
-      if (from >= 0 && d.targetIndex >= 0 && d.targetIndex !== from && d.targetIndex !== from + 1) {
+      /* targetIndex 按"剔除拖拽组后"的组序计数(computeBlockTarget 已滤 origin),
+       * splice 移除后直接按它插入;无操作仅当恰好等于原位 from——
+       * 勿加 from+1 判断(那是全量索引口径,会把拖到中间位置的合法移动误判成 no-op) */
+      if (from >= 0 && d.targetIndex >= 0 && d.targetIndex !== from) {
         const [group] = groups.splice(from, 1);
-        /* targetIndex 按"剔除拖拽组后"的组序计数(computeBlockTarget 已滤 origin),
-         * splice 移除后直接按它插入,无需再换算 */
         groups.splice(d.targetIndex, 0, group);
         applied = true;
       }

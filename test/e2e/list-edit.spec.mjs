@@ -180,6 +180,65 @@ test('列表染色与画布双向同步,编辑中切视图保留编辑态', asyn
   await page.request.post('/api/dev/reset');
 });
 
+test('阶段整块拖到中间位置生效(非仅首尾)', async ({ page }) => {
+  await enterListEdit(page);
+  /* 胜者组拖到 败者组 与 总决赛 之间:中间落点曾因 no-op 误判不生效;
+   * 落点须拖起后实时取(原组隐藏会使下方组整体上移,拖前坐标全部过期) */
+  const h = await page.locator('.list-group h2').first().boundingBox();
+  const p0 = { x: h.x + 40, y: h.y + h.height / 2 };
+  await page.mouse.move(p0.x, p0.y);
+  await page.mouse.down();
+  await page.mouse.move(p0.x, p0.y + 120, { steps: 6 });
+  const live = await page.evaluate(() => {
+    const r = document.querySelector('.list-group[data-key="总决赛"] h2').getBoundingClientRect();
+    return { x: Math.round(r.left + 60), y: Math.round(r.top + 4) };
+  });
+  await page.mouse.move(live.x, live.y, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  const after = (await groups(page)).map((g) => g.key);
+  expect(after).toEqual(['败者组', '胜者组', '总决赛']);
+  await page.request.post('/api/dev/reset');
+});
+
+test('原位放下不消失:块/行拖起又放回,行数组序不变', async ({ page }) => {
+  await enterListEdit(page);
+  const beforeRows = await rows(page);
+  const beforeGroups = (await groups(page)).map((g) => g.key);
+  /* 消失是视觉性的(原组/原行 display:none 还在 DOM):断言可见行数与残留类 */
+  const visState = () => page.evaluate(() => ({
+    visible: [...document.querySelectorAll('.list-row')].filter((r) => r.getBoundingClientRect().height > 0).length,
+    leftover: document.querySelectorAll('.dragging-origin').length
+  }));
+
+  /* 块:拖起组头越过阈值(拖拽真正开始,原组 display:none)再放回原位 */
+  const h = await page.locator('.list-group h2').first().boundingBox();
+  const p0 = { x: h.x + 40, y: h.y + h.height / 2 };
+  await page.mouse.move(p0.x, p0.y);
+  await page.mouse.down();
+  await page.mouse.move(p0.x + 10, p0.y + 60, { steps: 6 });
+  await page.mouse.move(p0.x, p0.y, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  expect(await visState()).toEqual({ visible: beforeRows.length, leftover: 0 });
+  expect(await rows(page)).toEqual(beforeRows);
+  expect((await groups(page)).map((g) => g.key)).toEqual(beforeGroups);
+
+  /* 行:拖起首行越阈值再放回 */
+  const a = await page.locator('.list-row').first().boundingBox();
+  const r0 = { x: a.x + a.width * 0.5, y: a.y + a.height / 2 };
+  await page.mouse.move(r0.x, r0.y);
+  await page.mouse.down();
+  await page.mouse.move(r0.x, r0.y + 80, { steps: 5 });
+  await page.mouse.move(r0.x, r0.y, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  expect(await visState()).toEqual({ visible: beforeRows.length, leftover: 0 });
+  expect(await rows(page)).toEqual(beforeRows);
+  expect((await groups(page)).map((g) => g.key)).toEqual(beforeGroups);
+  await page.request.post('/api/dev/reset');
+});
+
 test('新列布局:赛制列直出、未开始对阵是 vs、比分并入对阵', async ({ page }) => {
   await page.addInitScript(() => sessionStorage.setItem('ts:preferCanvas', '0'));
   await page.goto('/schedule.html');
