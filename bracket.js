@@ -39,14 +39,14 @@
       try { sessionStorage.setItem(VIEW_KEY, view === 'canvas' ? '1' : '0'); } catch (error) { /* 忽略 */ }
     }
     syncViewToggle();
-    /* 编辑中切视图:平滑互换编辑器(editMode/选择/撤销栈保留),面板不收回 */
+    /* 编辑中切视图:平滑互换编辑器(editMode/选择/撤销栈保留),面板不收回;
+     * 勿调 exit/exitList——那是退出编辑的语义,会清选择收面板 */
     if (editMode && prev !== view) {
       if (view === 'list') {
         CanvasEditor.enterList();
         if (window.ListEditor) window.ListEditor.enter();
       } else {
         if (window.ListEditor) window.ListEditor.exit();
-        CanvasEditor.exitList();
         CanvasEditor.enterCanvas();
       }
     }

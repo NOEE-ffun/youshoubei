@@ -129,6 +129,37 @@ test('阶段整块拖拽重排', async ({ page }) => {
   await page.request.post('/api/dev/reset');
 });
 
+test('列表染色与画布双向同步,编辑中切视图保留编辑态', async ({ page }) => {
+  await enterListEdit(page);
+  const row = page.locator('.list-row').first();
+  const id = await row.getAttribute('data-match');
+  await row.click();
+  await page.locator('[data-tool="style"]').click();
+  await page.locator('#card-tint-input').evaluate((el) => {
+    el.value = '#b91c1c';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await expect(page.locator('.list-row[data-match="' + id + '"]')).toHaveAttribute('data-tint', '');
+  /* 编辑中切画布:互换编辑器,染色同步到卡片 */
+  await page.locator('#view-toggle').click();
+  await page.waitForSelector('.canvas-card');
+  await expect(page.locator('.canvas-card[data-match="' + id + '"]')).toHaveAttribute('data-tint', '');
+  await expect(page.locator('#canvas-board')).toHaveClass(/editing/);
+  /* 画布改色,切回列表仍编辑态且行染色跟随 */
+  await page.locator('#card-tint-input').evaluate((el) => {
+    el.value = '#047857';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.locator('#view-toggle').click();
+  await page.waitForSelector('body.list-editing');
+  const attr = await page.locator('.list-row[data-match="' + id + '"]').evaluate((el) =>
+    el.getAttribute('style') || '');
+  expect(attr).toContain('--list-tint:#047857');
+  await page.request.post('/api/dev/reset');
+});
+
 test('新列布局:赛制列直出、未开始对阵是 vs、比分并入对阵', async ({ page }) => {
   await page.addInitScript(() => sessionStorage.setItem('ts:preferCanvas', '0'));
   await page.goto('/schedule.html');
