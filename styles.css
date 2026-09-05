@@ -2032,6 +2032,12 @@ body.canvas-editing #bg-layer {
   display: none;
 }
 
+/* 列表编辑:画布专属工具(选择/批量删除模式)不适用,隐藏留撤销/重做/删除选中/样式 */
+.edit-toolbar.list-mode .tool-btn[data-tool='select'],
+.edit-toolbar.list-mode .tool-btn[data-tool='delete'] {
+  display: none;
+}
+
 .tool-group {
   display: flex;
   flex-direction: column;

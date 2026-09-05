@@ -4,7 +4,10 @@
   /* 画布/列表双视图:窄屏默认列表(双败画布自适应到 ~28% 后文字不可读,
    * 手机用户要的是"下一场打谁"),桌面默认画布;顶栏按钮可切,选择记入会话。
    * 判定用 CSS 同一断点 48rem;data-view 写在 body,defer 阶段同步执行无首帧闪烁 */
+  /* 判定用 CSS 同一断点 48rem;data-view 写在 body,defer 阶段同步执行无首帧闪烁 */
   const VIEW_KEY = 'ts:preferCanvas';
+  /* 声明须在 setView 之前:模块作用域的 setView(initialView()) 调用早于下方状态区 */
+  let editMode = false;
 
   function initialView() {
     try {
@@ -30,11 +33,25 @@
   }
 
   function setView(view, remember) {
+    const prev = currentView();
     document.body.dataset.view = view;
     if (remember) {
       try { sessionStorage.setItem(VIEW_KEY, view === 'canvas' ? '1' : '0'); } catch (error) { /* 忽略 */ }
     }
     syncViewToggle();
+    /* 编辑中切视图:平滑互换编辑器(editMode/选择/撤销栈保留),面板不收回 */
+    if (editMode && prev !== view) {
+      if (view === 'list') {
+        CanvasEditor.enterList();
+        if (window.ListEditor) window.ListEditor.enter();
+      } else {
+        if (window.ListEditor) window.ListEditor.exit();
+        CanvasEditor.exitList();
+        CanvasEditor.enterCanvas();
+      }
+    }
+    /* 切到列表必重绘:画布编辑落盘不派发 ts:changed,列表否则停在旧数据 */
+    if (view === 'list' && window.ListView) window.ListView.render();
   }
 
   function bindViewToggle() {
@@ -56,7 +73,6 @@
     DEFAULT_CANVAS_COLS, DEFAULT_CANVAS_ROWS, canvasOrigin
   } = window.CanvasModel;
 
-  let editMode = false;
   let scoreDialog = null;
   let currentScoreCardId = null;
 
@@ -77,10 +93,14 @@
 
   function enterEditMode() {
     if (editMode) return;
-    setView('canvas', false); /* 编辑只在画布上进行 */
     editMode = true;
+    if (currentView() === 'list') {
+      CanvasEditor.enterList();
+      if (window.ListEditor) window.ListEditor.enter();
+    } else {
+      CanvasEditor.enter();
+    }
     renderAll();
-    CanvasEditor.enter();
     syncEditUI();
   }
 
@@ -88,6 +108,8 @@
     if (!editMode) return;
     editMode = false;
     CanvasEditor.exit();
+    CanvasEditor.exitList();
+    if (window.ListEditor) window.ListEditor.exit();
     renderAll();
     syncEditUI();
   }
@@ -106,6 +128,8 @@
     if (editMode && !canEdit()) {
       editMode = false;
       CanvasEditor.exit();
+      CanvasEditor.exitList();
+      if (window.ListEditor) window.ListEditor.exit();
     }
     const layout = document.getElementById('canvas-layout');
     const toolbar = document.getElementById('edit-toolbar');
@@ -128,6 +152,7 @@
     renderChampion();
     renderScheduleMeta();
     renderCanvas();
+    if (window.ListView) window.ListView.render();
     renderEditToolbar();
     /* 重绘会清掉查找高亮,搜索激活时重挂(不重新聚焦,避免滚动跳动) */
     if (searchQuery.trim()) applySearch();
@@ -502,6 +527,12 @@
     }
   }
 
+  /* 编辑器请求的重绘:双视图同刷(画布 + 列表),列表编辑的撤销/删除/排序落盘都走这里 */
+  function renderViews() {
+    renderCanvas();
+    if (window.ListView) window.ListView.render();
+  }
+
   /* ---------- 编辑工具栏 ---------- */
 
   function renderEditToolbar() {
@@ -589,6 +620,7 @@
     }
     const idSet = new Set(ids);
     const board = document.getElementById('canvas-board');
+    const listBody = document.getElementById('list-body');
     for (const card of record.canvas.cards || []) {
       if (!idSet.has(card.id)) continue;
       card.color = commit ? color : (color || card.color);
@@ -601,6 +633,17 @@
         } else {
           el.removeAttribute('data-tint');
           el.style.removeProperty('--card-tint');
+        }
+      }
+      /* 列表行与画布卡同源染色:行首色条 + 标题着色(CSS 消费 --list-tint) */
+      const rowEl = listBody && listBody.querySelector('.list-row[data-match="' + card.id + '"]');
+      if (rowEl) {
+        if (color) {
+          rowEl.setAttribute('data-tint', '');
+          rowEl.style.setProperty('--list-tint', color);
+        } else {
+          rowEl.removeAttribute('data-tint');
+          rowEl.style.removeProperty('--list-tint');
         }
       }
     }
@@ -627,6 +670,8 @@
   function updateToolbarState() {
     const toolbar = document.getElementById('edit-toolbar');
     if (!toolbar) return;
+    const listMode = typeof CanvasEditor.isListActive === 'function' && CanvasEditor.isListActive();
+    toolbar.classList.toggle('list-mode', listMode);
     const tool = CanvasEditor.getTool();
     toolbar.querySelectorAll('.tool-btn[data-tool]').forEach((btn) => {
       btn.classList.toggle('is-active', btn.dataset.tool === tool);
@@ -1013,7 +1058,7 @@
 
   document.addEventListener('ts:ready', () => {
     /* 依赖单向化:把重绘/工具栏刷新/连线轻量重算注入编辑器,编辑器经回调请求 */
-    CanvasEditor.connect({ renderCanvas, updateToolbar: updateToolbarState, rerenderEdges });
+    CanvasEditor.connect({ renderCanvas: renderViews, updateToolbar: updateToolbarState, rerenderEdges });
     renderAll();
     autoFitCanvas();
     maybeAutoOpenRoster();
