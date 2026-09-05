@@ -3327,6 +3327,79 @@ body.list-editing .list-group h2:hover .list-handle {
   }
 }
 
+/* ---------- 列表编辑:拖拽排序(FLIP 让位 + 幽灵跟随) ---------- */
+
+.list-row.dragging-origin,
+.list-group.dragging-origin {
+  display: none; /* 原位让空,由落点间隙条占位 */
+}
+
+.list-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 80;
+  pointer-events: none;
+  scale: 1.02;
+  opacity: 0.96;
+  background: var(--surface-float);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  will-change: translate;
+}
+
+.list-ghost .list-row {
+  background: transparent;
+}
+
+.list-ghost-chip {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.list-drop-gap {
+  margin-block: 0.15rem;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.list-drop-gap.row {
+  block-size: 2.3rem;
+}
+
+.list-drop-gap.block {
+  block-size: 2rem;
+}
+
+/* 让位/归位的位移过渡:拖拽中与落定 settle 两态都开着 */
+body.list-dragging .list-row,
+body.list-dragging .list-group,
+body.list-settling .list-row,
+body.list-settling .list-group {
+  transition: transform 170ms var(--ease-out);
+}
+
+/* 单场跨阶段:目标组头高亮示意可入 */
+body.list-dragging .list-group.drop-target > h2 {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.list-dragging .list-row,
+  body.list-dragging .list-group,
+  body.list-settling .list-row,
+  body.list-settling .list-group {
+    transition: none;
+  }
+
+  .list-ghost {
+    scale: none;
+  }
+}
+
 /* ---------- 选手中心 ---------- */
 
 .me-tabs {

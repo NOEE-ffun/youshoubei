@@ -78,6 +78,57 @@ test('删除选中行(确认弹窗)', async ({ page }) => {
   await page.request.post('/api/dev/reset');
 });
 
+test('行拖拽同阶段重排,撤销可回', async ({ page }) => {
+  await enterListEdit(page);
+  const before = await rows(page);
+  const a = await page.locator('.list-row').nth(0).boundingBox();
+  const t = await page.locator('.list-row').nth(3).boundingBox();
+  /* 目标 = 第 4 行底缘再 +4px:中点命中语义下明确落在其后(间隙条与行高不等,
+   * 贴中点仅几 px 的落点会被让位动画的亚像素漂移翻转) */
+  await dragMouse(page,
+    { x: a.x + a.width * 0.5, y: a.y + a.height / 2 },
+    { x: t.x + t.width * 0.5, y: t.y + t.height + 4 });
+  const after = await rows(page);
+  expect(after[3]).toBe(before[0]);
+  await page.locator('[data-tool="undo"]').click();
+  await page.waitForFunction((expectFirst) =>
+    document.querySelector('#list-body .list-row')?.dataset.match === expectFirst, before[0]);
+  expect(await rows(page)).toEqual(before);
+  await page.request.post('/api/dev/reset');
+});
+
+test('单场跨阶段拖拽:归属与卡片设置阶段字段同步', async ({ page }) => {
+  await enterListEdit(page);
+  const before = await groups(page);
+  const moved = before.find((g) => g.key === '胜者组').rows[0];
+  const s = await page.locator('.list-row[data-match="' + moved + '"]').boundingBox();
+  const d = await page.locator('.list-group[data-key="败者组"] h2').boundingBox();
+  await dragMouse(page,
+    { x: s.x + s.width * 0.5, y: s.y + s.height / 2 },
+    { x: d.x + 60, y: d.y + d.height + 8 });
+  const after = await groups(page);
+  expect(after.find((g) => g.key === '败者组').rows).toContain(moved);
+  expect(after.find((g) => g.key === '胜者组').rows).not.toContain(moved);
+  await page.locator('.list-row[data-match="' + moved + '"]').click();
+  await expect(page.locator('#card-panel')).toBeVisible();
+  await expect(page.locator('#card-panel .cf-phase')).toHaveValue('败者组');
+  await page.request.post('/api/dev/reset');
+});
+
+test('阶段整块拖拽重排', async ({ page }) => {
+  await enterListEdit(page);
+  const before = (await groups(page)).map((g) => g.key);
+  const a = await page.locator('.list-group h2').first().boundingBox();
+  const b = await page.locator('.list-group').last().boundingBox();
+  /* 目标 = 末组底缘再 +4px:明确落在末组之后 */
+  await dragMouse(page,
+    { x: a.x + 40, y: a.y + a.height / 2 },
+    { x: b.x + 80, y: b.y + b.height + 4 });
+  const after = (await groups(page)).map((g) => g.key);
+  expect(after[after.length - 1]).toBe(before[0]);
+  await page.request.post('/api/dev/reset');
+});
+
 test('新列布局:赛制列直出、未开始对阵是 vs、比分并入对阵', async ({ page }) => {
   await page.addInitScript(() => sessionStorage.setItem('ts:preferCanvas', '0'));
   await page.goto('/schedule.html');
