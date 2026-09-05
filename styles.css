@@ -1781,7 +1781,7 @@ body.canvas-editing #bg-layer {
 .canvas-edge {
   fill: none;
   stroke: var(--border, #99a1b3);
-  stroke-width: 4;
+  stroke-width: 5;
   stroke-linecap: round;
   opacity: 1;
   pointer-events: none;
@@ -1794,18 +1794,18 @@ body.canvas-editing #bg-layer {
 }
 
 .canvas-edge.winner {
-  stroke: #3b7e3e;
+  stroke: #16a34a;
 }
 
 .canvas-edge.loser {
-  stroke: #cc3a2b;
+  stroke: #dc2626;
 }
 
 [data-theme='dark'] .canvas-edge.winner { stroke: #6bc26e; }
 [data-theme='dark'] .canvas-edge.loser { stroke: #f26d5f; }
 
-.canvas-edge.temp.winner { stroke: #3b7e3e; }
-.canvas-edge.temp.loser { stroke: #cc3a2b; }
+.canvas-edge.temp.winner { stroke: #16a34a; }
+.canvas-edge.temp.loser { stroke: #dc2626; }
 
 .canvas-edges {
   position: absolute;
@@ -1813,7 +1813,10 @@ body.canvas-editing #bg-layer {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  z-index: 1;
+  scale: 1.25;
+  /* 深色双段投影(紧贴核+柔散):花背景图上制造亮度分离,不用白描边也显眼;
+   * 对整组一次合成,代价可忽略 */
+  filter: drop-shadow(0 1.5px 2.5px rgb(0 0 0 / 0.5)) drop-shadow(0 0 6px rgb(0 0 0 / 0.35));
 }
 
 .canvas-temp-line {
@@ -1821,6 +1824,7 @@ body.canvas-editing #bg-layer {
   inset: 0;
   pointer-events: none;
   z-index: 9999;
+  filter: drop-shadow(0 1.5px 2.5px rgb(0 0 0 / 0.5)) drop-shadow(0 0 6px rgb(0 0 0 / 0.35));
 }
 
 .marquee-rect {
@@ -1896,8 +1900,8 @@ body.canvas-editing #bg-layer {
 }
 
 /* 连线箭头 marker:与 winner/loser 线色一致 */
-.edge-arrow.winner path { fill: #3b7e3e; }
-.edge-arrow.loser path { fill: #cc3a2b; }
+.edge-arrow.winner path { fill: #16a34a; }
+.edge-arrow.loser path { fill: #dc2626; }
 [data-theme='dark'] .edge-arrow.winner path { fill: #6bc26e; }
 [data-theme='dark'] .edge-arrow.loser path { fill: #f26d5f; }
 
