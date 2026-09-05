@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
+import { ADMIN_PHONE, smsLogin, resetStore, seedWorkspace } from './helpers.mjs';
 
 /* 画布边界回归:双指抬起发生在画布外(指针泄漏)、弹窗打开时的键盘撤销、
  * 恢复缩放后数据变更的重定中。均为 2026-08 批次新交互的边界。 */
@@ -125,4 +125,65 @@ test('恢复缩放后数据变更重新居中(不卡在旧平移位置)', async 
   expect(Math.abs(refocused - panned)).toBeGreaterThan(50);
   // 缩放级别仍保留(不被 fit 打回 28%)
   expect(Number.parseInt(await page.locator('#zoom-level').textContent(), 10)).toBe(zoomed);
+});
+
+/* 视口级锚点断言:连线端点换算到视口后必须落在卡片端口上。
+ * 既有「path d − offsetLeft」断言在布局坐标系,SVG 的 CSS scale/filter 等
+ * 视觉层变换会同源相消(scale:1.25 曾致整组连线恒定漂移而测试全绿);
+ * 本用例走 getScreenCTM 到视口,任何视觉层错位都逃不掉。 */
+test('连线端点视口级对齐:SVG 视觉层变换(scale/filter)不产生漂移', async ({ page }) => {
+  const context = page.context();
+  await resetStore(context);
+  await smsLogin(context, ADMIN_PHONE);
+  await seedWorkspace(context, {
+    activeId: 't1',
+    players: [{ id: 'pz1', name: '选手甲' }, { id: 'pz2', name: '选手乙' }],
+    tournaments: [{
+      id: 't1', name: '视口对齐届', roster: ['pz1', 'pz2'],
+      canvas: { grid: 'dot', cards: [
+        { id: 'ca', label: '源卡', format: 'BO3', x: 0, y: 0,
+          slots: [{ type: 'player', playerId: 'pz1' }, { type: 'player', playerId: 'pz2' }] },
+        { id: 'cb', label: '目标卡', format: 'BO3', x: 6, y: 3,
+          slots: [{ type: 'flow', cardId: 'ca', outcome: 'winner' }, { type: 'empty' }] }
+      ] },
+      scores: {}, updatedAt: 1
+    }]
+  });
+  await page.addInitScript(() =>
+    localStorage.setItem('ts:canvasZoom', JSON.stringify({ scale: 1, user: true })));
+  await page.goto('/schedule.html');
+  await page.waitForSelector('.canvas-card');
+  await page.locator('#header-edit-btn').click();
+  await page.waitForSelector('.canvas-board.editing');
+
+  const delta = () => page.evaluate(() => {
+    const board = document.getElementById('canvas-board');
+    const ca = board.querySelector('.canvas-card[data-match="ca"]');
+    const path = board.querySelector('.canvas-edges path.canvas-edge');
+    /* path 起点(源卡胜者出口)视口位置:pickPort 按方位自动换端口,不写死哪一颗,
+     * 断言 = 到 8 颗端口节点视口中心的最小距离 */
+    const pt = path.getPointAtLength(0).matrixTransform(path.getScreenCTM());
+    let best = Infinity;
+    ca.querySelectorAll('.port-node').forEach((p) => {
+      const r = p.getBoundingClientRect();
+      const d = Math.hypot(pt.x - (r.left + r.width / 2), pt.y - (r.top + r.height / 2));
+      if (d < best) best = d;
+    });
+    return Math.round(best);
+  });
+  expect(await delta()).toBeLessThanOrEqual(2);
+
+  /* 拖拽源卡后再核:移动中与落定后都不得漂移 */
+  const head = await page.locator('.canvas-card[data-match="ca"] .match-head').boundingBox();
+  await page.mouse.move(head.x + head.width * 0.3, head.y + 8);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i += 1) await page.mouse.move(head.x + head.width * 0.3 + i * 7, head.y + 8 + i * 7);
+  await page.waitForTimeout(120); /* 等 rAF 重绘连线(与既有锚点测试同款) */
+  const dMid = await delta();
+  await page.mouse.up();
+  await page.waitForTimeout(1100);
+  const dEnd = await delta();
+  expect(dMid).toBeLessThanOrEqual(2);
+  expect(dEnd).toBeLessThanOrEqual(2);
+  await page.request.post('/api/dev/reset');
 });
