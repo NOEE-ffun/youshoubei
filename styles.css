@@ -3275,6 +3275,17 @@ body.list-editing .list-row {
   cursor: grab;
 }
 
+/* 拖拽交互防干扰:禁划选、禁 img 原生拖拽(否则按手柄图标拖动触发浏览器
+ * 原生图片拖拽,pointercancel 掐断指针流,拖拽完全失效) */
+body.list-editing #list-body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.list-editing #list-body img {
+  -webkit-user-drag: none;
+}
+
 body.list-editing .list-group h2 {
   cursor: grab;
   display: flex;

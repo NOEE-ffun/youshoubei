@@ -74,6 +74,9 @@
       /* 按下 = 静默选中(拖拽意图),纯点击松手才开抽屉——画布同语义 */
       window.CanvasEditor.setSelection([row.dataset.match], { silent: true });
     }
+    /* 阻断默认行为(与画布编辑器同模式):否则行内/组头 img 触发浏览器原生
+     * 图片拖拽(pointercancel 掐断指针流,拖拽必死)、文本划选污染拖拽画面 */
+    event.preventDefault();
     /* 注意:此处不做 setPointerCapture——捕获会把后续 click 的 target 重定向到容器,
      * 误触发"点空白清空选择";指针捕获改为拖拽真正开始时(beginDrag)再抓 */
   }
@@ -169,6 +172,8 @@
       ghost.className = 'list-ghost list-ghost-chip';
       ghost.textContent = (key === '__other__' ? '其他' : key) + ' · ' + count + ' 场';
       document.body.appendChild(ghost);
+      /* 锚 = 指针抓取点:芯片中心贴指针。勿测自身 rect 当锚(新元素未定位,
+       * rect 在视口左上角,会把幽灵钉死在角落完全脱离光标) */
       const rect = ghost.getBoundingClientRect();
       drag = {
         kind: 'block',
@@ -176,11 +181,12 @@
         originEl: info.groupEl,
         sourceKey: key,
         targetIndex: -1,
-        grabDx: event.clientX - rect.left,
-        grabDy: event.clientY - rect.top
+        grabDx: rect.width / 2,
+        grabDy: rect.height / 2
       };
     }
     drag.originEl.classList.add('dragging-origin');
+    moveGhost(event);
     updateDrop(event);
   }
 
@@ -416,6 +422,8 @@
     el.addEventListener('pointerup', onPointerUp);
     el.addEventListener('pointercancel', onPointerCancel);
     el.addEventListener('click', onClick);
+    /* 原生拖拽兜底:个别浏览器路径(Firefox 的 img 默认可拖)不认 pointerdown 预防 */
+    el.addEventListener('dragstart', (event) => event.preventDefault());
   }
 
   document.addEventListener('ts:ready', () => bind());

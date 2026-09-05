@@ -115,17 +115,37 @@ test('单场跨阶段拖拽:归属与卡片设置阶段字段同步', async ({ p
   await page.request.post('/api/dev/reset');
 });
 
-test('阶段整块拖拽重排', async ({ page }) => {
+test('阶段整块拖拽重排,幽灵芯片跟随指针', async ({ page }) => {
   await enterListEdit(page);
   const before = (await groups(page)).map((g) => g.key);
   const a = await page.locator('.list-group h2').first().boundingBox();
   const b = await page.locator('.list-group').last().boundingBox();
   /* 目标 = 末组底缘再 +4px:明确落在末组之后 */
-  await dragMouse(page,
-    { x: a.x + 40, y: a.y + a.height / 2 },
-    { x: b.x + 80, y: b.y + b.height + 4 });
+  const from = { x: a.x + 40, y: a.y + a.height / 2 };
+  const to = { x: b.x + 80, y: b.y + b.height + 4 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 6 });
+  /* 中途:幽灵芯片必须跟在指针附近(锚定bug时会钉在视口左上角) */
+  const ghost = await page.evaluate(({ px, py }) => {
+    const g = document.querySelector('.list-ghost');
+    if (!g) return null;
+    const r = g.getBoundingClientRect();
+    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, px, py };
+  }, { px: (from.x + to.x) / 2, py: (from.y + to.y) / 2 });
+  expect(ghost).not.toBeNull();
+  expect(Math.abs(ghost.cx - ghost.px)).toBeLessThan(80);
+  expect(Math.abs(ghost.cy - ghost.py)).toBeLessThan(80);
+  await page.mouse.move(to.x, to.y, { steps: 4 });
+  await page.mouse.up();
   const after = (await groups(page)).map((g) => g.key);
   expect(after[after.length - 1]).toBe(before[0]);
+  /* 原生干扰源已封:h2/行内 img 不可拖,编辑态无划选 */
+  const guards = await page.evaluate(() => ({
+    drag: getComputedStyle(document.querySelector('.list-group h2 img')).webkitUserDrag,
+    select: getComputedStyle(document.querySelector('.list-group h2')).userSelect
+  }));
+  expect(guards.select).toBe('none');
   await page.request.post('/api/dev/reset');
 });
 
