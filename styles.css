@@ -133,9 +133,12 @@ body.side-expanded {
   filter: invert(1);
 }
 
-/* 职业 svg 是彩色图标,任何主题保持原色 */
+/* 职业 svg 是彩色图标,任何主题保持原色
+ * (覆盖全部消费容器:画布职业槽/统计职业条/列表视图/我的卡组) */
 .class-slot .icon,
-.class-bar .icon {
+.class-bar .icon,
+.list-class .icon,
+.md-deck-row .icon {
   filter: none;
 }
 
