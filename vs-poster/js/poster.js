@@ -804,15 +804,25 @@
     parts.push('<image href="' + escapeXml(leftImg) + '" x="270" y="320" width="320" height="320" preserveAspectRatio="xMidYMid slice" clip-path="url(#or-clip-l)"/>');
     parts.push('<image href="' + escapeXml(rightImg) + '" x="1330" y="320" width="320" height="320" preserveAspectRatio="xMidYMid slice" clip-path="url(#or-clip-r)"/>');
 
-    /* 队标/ID:头像下方,纹章徽带 */
+    /* 队标/ID:头像下方,纹章徽带(队标图优先替代文字,2026090053 补齐) */
     var leftTag = String(data.left.tag || "").trim();
     var rightTag = String(data.right.tag || "").trim();
-    if (leftTag) {
+    if (data.left.tagImg && isAllowedImgURL(data.left.tagImg)) {
+      var ltH = Math.max(20, Math.min(80, Number(data.left.tagImgSize) || 40));
+      var ltW = ltH * (Number(data.left.tagImgRatio) || 1);
+      if (ltW > 240) { ltW = 240; ltH = ltW / (Number(data.left.tagImgRatio) || 1); }
+      parts.push('<image href="' + escapeXml(data.left.tagImg) + '" x="' + (430 - ltW / 2) + '" y="' + (750 - ltH / 2) + '" width="' + ltW + '" height="' + ltH + '" preserveAspectRatio="xMidYMid meet"/>');
+    } else if (leftTag) {
       var ltW = Math.max(120, leftTag.length * 16 + 40);
       parts.push('<rect x="' + (430 - ltW / 2) + '" y="730" width="' + ltW + '" height="40" rx="20" fill="' + leftCol.dark + '" stroke="' + GOLD + '" stroke-width="1.5"/>');
       parts.push('<text x="430" y="758" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="20" letter-spacing="3" fill="' + GOLD + '">' + escapeXml(leftTag) + '</text>');
     }
-    if (rightTag) {
+    if (data.right.tagImg && isAllowedImgURL(data.right.tagImg)) {
+      var rtH = Math.max(20, Math.min(80, Number(data.right.tagImgSize) || 40));
+      var rtW = rtH * (Number(data.right.tagImgRatio) || 1);
+      if (rtW > 240) { rtW = 240; rtH = rtW / (Number(data.right.tagImgRatio) || 1); }
+      parts.push('<image href="' + escapeXml(data.right.tagImg) + '" x="' + (1490 - rtW / 2) + '" y="' + (750 - rtH / 2) + '" width="' + rtW + '" height="' + rtH + '" preserveAspectRatio="xMidYMid meet"/>');
+    } else if (rightTag) {
       var rtW = Math.max(120, rightTag.length * 16 + 40);
       parts.push('<rect x="' + (1490 - rtW / 2) + '" y="730" width="' + rtW + '" height="40" rx="20" fill="' + rightCol.dark + '" stroke="' + GOLD + '" stroke-width="1.5"/>');
       parts.push('<text x="1490" y="758" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="20" letter-spacing="3" fill="' + GOLD + '">' + escapeXml(rightTag) + '</text>');
@@ -950,7 +960,7 @@
     }
 
     /* ===== 选手区:方形霓虹框头像 ===== */
-    function cyberSide(cx, col, img, playerName, title, tag, clipId) {
+    function cyberSide(side, cx, col, img, playerName, title, tag, clipId) {
       var sp = [];
       var AV = 380;
       var ax = cx - AV / 2, ay = 220;
@@ -969,8 +979,14 @@
       sp.push('<rect x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" fill="' + theme.bg.to + '"/>');
       sp.push('<image href="' + escapeXml(img) + '" x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + clipId + ')" style="image-rendering:auto"/>');
 
-      /* 队标/ID */
-      if (tag) {
+      /* 队标/ID(队标图优先替代文字标,2026090053 补齐) */
+      var dside = data[side] || {};
+      if (dside.tagImg && isAllowedImgURL(dside.tagImg)) {
+        var tH = Math.max(20, Math.min(80, Number(dside.tagImgSize) || 40));
+        var tW = tH * (Number(dside.tagImgRatio) || 1);
+        if (tW > 340) { tW = 340; tH = tW / (Number(dside.tagImgRatio) || 1); }
+        sp.push('<image href="' + escapeXml(dside.tagImg) + '" x="' + (cx - tW / 2) + '" y="' + (ay + AV + 40 - tH / 2) + '" width="' + tW + '" height="' + tH + '" preserveAspectRatio="xMidYMid meet"/>');
+      } else if (tag) {
         var tagW = Math.max(100, tag.length * 14 + 24);
         sp.push('<rect x="' + (cx - tagW / 2) + '" y="' + (ay + AV + 24) + '" width="' + tagW + '" height="32" fill="' + col.dark + '" stroke="' + col.main + '" stroke-width="1.5"/>');
         sp.push('<text x="' + cx + '" y="' + (ay + AV + 46) + '" text-anchor="middle" font-family=' + JSON.stringify(CYBER_MONO) + ' font-size="18" letter-spacing="2" fill="' + NEON + '">' + escapeXml(tag.toUpperCase()) + '</text>');
@@ -989,8 +1005,8 @@
       }
       return sp.join("");
     }
-    parts.push(cyberSide(430, leftCol, leftImg, leftName, leftTitle, leftTag, "cy-clip-l"));
-    parts.push(cyberSide(1490, rightCol, rightImg, rightName, rightTitle, rightTag, "cy-clip-r"));
+    parts.push(cyberSide("left", 430, leftCol, leftImg, leftName, leftTitle, leftTag, "cy-clip-l"));
+    parts.push(cyberSide("right", 1490, rightCol, rightImg, rightName, rightTitle, rightTag, "cy-clip-r"));
 
     /* ===== 中央 VS:大字霓虹 + 故障偏移 ===== */
     var vsX = 960, vsY = 470;

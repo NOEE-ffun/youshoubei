@@ -64,7 +64,7 @@
   function handleURL(raw) {
     var url = String(raw || "").trim();
     if (!isAllowedURL(url)) return Promise.reject(new Error("仅支持 http(s) 或图片 data: 链接"));
-    var preferPng = /\.png$/i.test(url);
+    var preferPng = /\.png(\?|#|$)/i.test(url); /* 末尾可能带 _ts 穿透参数,裸 \.png$ 会漏判→透明 PNG 被压 JPEG 黑底 */
     return loadImage(url, true)
       .then(function (img) { return downscale(img, MAX_EDGE, preferPng); })
       .catch(function () {

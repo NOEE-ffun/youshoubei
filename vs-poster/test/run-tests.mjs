@@ -236,6 +236,26 @@ test("大小/比例缺省回退与越界钳制,无队标时输出与旧版一致
   assert.ok(legacy.includes(">DK.FIRE<") && legacy.includes(">ICE.BLIZZ<"), "无队标数据时保持文字胶囊");
 });
 
+test("全部主题版式都渲染队标图(2026090053 版式补齐回归)", () => {
+  /* 魔纹/赛博两版式 20260821 新增时漏了队标分支:用户 tag 为空时 ID 区整体空白。
+   * minimal 为图与文字并存设计(图在头像下方),其余版式图优先替代 ID 文字 */
+  for (const t of S.VSThemes) {
+    const d = JSON.parse(JSON.stringify(BASE_DATA));
+    d.left.tagImg = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
+    d.left.tagImgRatio = 2;
+    d.right.tagImg = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
+    d.right.tagImgRatio = 2;
+    const svg = S.VSPoster.build(d, t);
+    const imgs = (svg.match(/href="data:image\/png;base64,iVBORw0KGgoAAAANSUhEUg=="/g) || []).length;
+    assert.ok(imgs >= 2, t.id + "(" + t.layout + ") 两侧队标图均应渲染,实际 " + imgs);
+    assert.ok(svg.includes('preserveAspectRatio="xMidYMid meet"'), t.id + " 队标图应等比缩放");
+    if (t.layout !== "minimal") {
+      assert.ok(!svg.includes(">DK.FIRE<"), t.id + "(" + t.layout + ") 有图侧 ID 文本应被替代");
+      assert.ok(!svg.includes(">ICE.BLIZZ<"), t.id + "(" + t.layout + ") 有图侧(右)ID 文本应被替代");
+    }
+  }
+});
+
 console.log("\n[poster.js] 赛前垃圾话 title(纯文本)");
 test("title 文字渲染在名字下方并转义", () => {
   const t = JSON.parse(JSON.stringify(BASE_DATA));
