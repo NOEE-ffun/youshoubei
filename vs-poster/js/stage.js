@@ -1,14 +1,17 @@
 /**
- * OBS 舞台页:按 id 登录会话读 /api/poster-stage 并渲染海报。
- * 无站点 chrome;失败展示错误并在 5s 后重试。
- * 401(未登录/会话过期):清空舞台换全屏登录提示并停重试,替代报错横幅;
- * 本页不引 common.js,登录遮罩内联实现;returnTo 带 ?id 保证登录后回到同一舞台。
+ * OBS 舞台页:免登录按 id 读 /api/poster-stage(链接即凭证)渲染海报。
+ * 5 秒轮询跟随海报页编辑(防抖 PUT);内容不变绝不重建 DOM——innerHTML
+ * 重建会重置 CSS 动画,故先比对 payload 字符串(304 在 HTTP 缓存层透明
+ * 省流量,JS 恒收 200 重建体,动画保护全靠本地比对)。
+ * 404=舞台不存在/7 天无推送过期:展示提示但保持轮询,操作员复活即自动恢复;
+ * 瞬时网络/服务错误:已有画面时静默重试不打断投屏,空舞台才显错。
  */
 (function () {
   "use strict";
 
   var slot = document.getElementById("poster-slot");
   var errorEl = document.getElementById("stage-error");
+  var POLL_MS = 5000;
 
   var id = null;
   try {
@@ -17,18 +20,12 @@
     id = "";
   }
 
-  var loginRequired = false;
-
-  /* 401 登录墙:全屏居中提示 + 跳登录按钮;hash 不带(无 hash 状态),query 保留舞台 id */
-  function requireLogin() {
-    loginRequired = true;
-    document.body.innerHTML = '<div class="stage-login-required"><p>大屏需要登录后使用。</p>' +
-      '<a class="btn btn-primary" href="login.html?returnTo=' +
-      encodeURIComponent(location.pathname + location.search) + '">去登录</a></div>';
-  }
+  var inFlight = false;
+  var lastPayloadStr = "";
 
   function showError(msg) {
     slot.innerHTML = "";
+    lastPayloadStr = "";
     errorEl.textContent = msg || "舞台加载失败";
     errorEl.hidden = false;
   }
@@ -49,8 +46,16 @@
     }
   }
 
+  /* 内容比对防抖:同 payload 跳过,动画不重置 */
+  function applyPayload(json) {
+    var str = JSON.stringify(json);
+    if (str === lastPayloadStr) return;
+    lastPayloadStr = str;
+    render(json);
+  }
+
   function load() {
-    if (loginRequired) return;
+    if (inFlight) return;
     if (!id) {
       showError("缺少 id 参数");
       /* 误入/分享丢参时给条出路,别让投屏停在黑屏一行字 */
@@ -62,24 +67,36 @@
       errorEl.appendChild(back);
       return;
     }
+    inFlight = true;
     fetch("/api/poster-stage?id=" + encodeURIComponent(id))
       .then(function (resp) {
         return resp.json().catch(function () { return {}; }).then(function (json) {
-          if (resp.status === 401) {
-            requireLogin();
-            return;
+          if (resp.status === 404) {
+            /* 404 是权威状态(不存在/过期),无条件亮提示;保轮询等复活 */
+            showError(json.error === "舞台已过期"
+              ? "舞台已过期(7 天无推送自动失效);到海报页编辑一次即可复活本链接"
+              : "舞台不存在;请到海报页点「OBS 源」重新生成链接");
+            return null;
           }
-          if (!resp.ok) throw new Error(json.error || ("请求失败 " + resp.status));
-          render(json);
+          if (!resp.ok) {
+            /* 5xx/瞬时错误:已有画面时静默等下一轮,不打断投屏 */
+            if (lastPayloadStr) return null;
+            throw new Error(json.error || ("请求失败 " + resp.status));
+          }
+          return json;
         });
       })
+      .then(function (json) {
+        if (json) applyPayload(json);
+      })
       .catch(function (e) {
-        /* 401 已分流为登录遮罩,不再走错误横幅与 5s 重试 */
-        if (loginRequired) return;
-        showError((e && e.message) || "舞台加载失败");
-        setTimeout(load, 5000);
+        if (!lastPayloadStr) showError((e && e.message) || "舞台加载失败");
+      })
+      .then(function () {
+        inFlight = false;
       });
   }
 
   load();
+  setInterval(load, POLL_MS);
 })();
