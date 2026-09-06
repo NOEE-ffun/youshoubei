@@ -72,11 +72,15 @@ async function main() {
     const missing = await request(server, '/not-exists.html');
     assert.strictEqual(missing.status, 404);
 
-    /* 7. 舞台接口已注册且登录墙前置：匿名 GET 被 401 拦截(id 校验在其后)，
+    /* 7. 舞台接口已注册且匿名放行(链接即凭证,2026-09-07):缺 id 400,
+     * 格式合法但未知的 id 404(证明匿名请求已到存储层,无登录墙前置);
+     * 写接口墙(POST/PUT 401)由 login-wall/poster-stage-api 单测覆盖;
      * 源码不可当静态文件下发 */
     const stageNoId = await request(server, '/api/poster-stage');
-    assert.strictEqual(stageNoId.status, 401, '/api/poster-stage 匿名应被登录墙拦(401)');
-    assert.strictEqual(JSON.parse(stageNoId.body).error, '未登录或账号已被停用');
+    assert.strictEqual(stageNoId.status, 400, '/api/poster-stage 匿名缺 id 应 400');
+    assert.strictEqual(JSON.parse(stageNoId.body).error, 'id 必须是 32 位十六进制字符串');
+    const stageUnknown = await request(server, '/api/poster-stage?id=' + 'e'.repeat(32));
+    assert.strictEqual(stageUnknown.status, 404, '/api/poster-stage 匿名未知 id 应 404');
     const stageSource = await request(server, '/api/poster-stage.js');
     assert.strictEqual(stageSource.status, 404, 'api/poster-stage.js 源码不可当静态文件下发');
 
