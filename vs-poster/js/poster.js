@@ -567,14 +567,16 @@
         var unit = [];
         for (var ln = 0; ln < 44; ln++) {
           var s = "";
-          for (var k = 0; k < 3; k++) s += CHARS.charAt(Math.floor(rng() * CHARS.length));
+          for (var k = 0; k < 5; k++) s += CHARS.charAt(Math.floor(rng() * CHARS.length));
           unit.push(s);
         }
         var lines = unit.concat(unit);
-        var hero = c % 5 === 2;
-        var fill = hero ? theme.accent : (x < 960 ? leftCol.main : rightCol.main);
+        /* 2026090056 提亮:普通列 main→glow(向白混的亮变体)+0.12→0.34+加粗+每行 3→5 字加密度,
+         * 高亮列 0.3→0.62 且每 4 列一提(原每 5);暗底上明显可感又不抢前景 */
+        var hero = c % 4 === 2;
+        var fill = hero ? theme.accent : (x < 960 ? leftCol.glow : rightCol.glow);
         var rain = '<text class="pxa-rain" x="' + x + '" y="26" font-family=' + MONO_Q +
-          ' font-size="22" fill="' + fill + '" opacity="' + (hero ? "0.3" : "0.12") + '"' +
+          ' font-size="22" font-weight="700" fill="' + fill + '" opacity="' + (hero ? "0.62" : "0.34") + '"' +
           ' style="animation-duration:' + (7 + rng() * 8).toFixed(2) + 's;animation-delay:' + (-rng() * 16).toFixed(2) + 's">';
         for (var li = 0; li < lines.length; li++) {
           rain += '<tspan x="' + x + '" dy="' + (li === 0 ? 0 : 26) + '">' + escapeXml(lines[li]) + "</tspan>";
