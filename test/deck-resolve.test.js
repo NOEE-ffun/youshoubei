@@ -71,6 +71,15 @@ async function main() {
   assert.equal(parseDeckHash('1.2.cEZs'), null, '裸码无卡牌段拒判');
   assert.equal(parseDeckHash(''), null, '空串拒判');
   assert.equal(parseDeckHash(null), null, '非字符串拒判');
+  /* 国服《影之诗:超凡世界》牌组码(带 # 注释整段文本,hash 段与官网链接同码,2026-09-06 实证) */
+  {
+    const blob = '#梦魇#\n#指定系列#\n#梦魇#\n' + HASH + '\n#在游戏中点击【卡牌】-【新牌组】-【使用牌组码】进行粘贴';
+    assert.deepEqual(parseDeckHash(blob), { hash: HASH, classByte: 2 }, '国服牌组码(带换行)识别');
+    assert.equal(parseDeckHash(blob.replace(/\n/g, '')).hash, HASH, '国服牌组码(单行 input 剥换行)识别');
+    assert.equal(parseDeckHash('#快攻#\n' + HASH).hash, HASH, '仅前导注释行识别');
+  }
+  assert.equal(parseDeckHash('https://other.example.com/?x=' + HASH), null, '非 WB 链接内嵌 hash 不提取');
+  assert.equal(parseDeckHash('#只有注释没有码#'), null, '无卡牌码文本拒判');
 
   /* ---------- mapResponse ---------- */
 

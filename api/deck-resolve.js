@@ -11,6 +11,8 @@
 
 const fsPromises = require('node:fs/promises');
 const path = require('node:path');
+/* 国服牌组码提取(带 # 注释整段文本 → hash 段):规则源在 canvas-model(前端共用),此处复用 */
+const { extractDeckCode } = require('../canvas-model');
 
 const WB_API_BASE = 'https://shadowverse-wb.com/web/DeckBuilder/deckHashDetail?hash=';
 const FETCH_TIMEOUT_MS = 8000;
@@ -25,6 +27,9 @@ const DECK_URL_HOST_RE = /shadowverse-wb\.com\/(?:(?:[a-z]{2,3}\/)?deck\/detail\
 const HASH_PARAM_RE = /[?&]hash=([^&#\s]+)/i;
 /* 裸卡组码:版本.职业(1-7).卡牌码…(至少一张) */
 const BARE_HASH_RE = /^1\.[1-7]\.[0-9A-Za-z._\-]+(?:\.[0-9A-Za-z._\-]+)+$/;
+/* 国服《影之诗:超凡世界》牌组码:带 # 注释行的整段文本(hash 段与官网链接同码,
+ * 2026-09-06 实证);带协议头的其他链接不进提取分支,防内嵌 hash 被误转 */
+const URL_SCHEME_RE = /^[a-z][a-z0-9+.\-]*:/i;
 
 function parseDeckHash(input) {
   if (typeof input !== 'string') return null;
@@ -36,6 +41,8 @@ function parseDeckHash(input) {
     if (m) hash = m[1];
   } else if (BARE_HASH_RE.test(text)) {
     hash = text;
+  } else if (!URL_SCHEME_RE.test(text)) {
+    hash = extractDeckCode(text);
   }
   if (!hash || !HASH_CHARS.test(hash)) return null;
   const parts = hash.split('.');

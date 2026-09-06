@@ -92,7 +92,7 @@
     return '<div class="md-deck-row" data-slot="' + idx + '">' +
       '<select class="md-cls" aria-label="第 ' + (idx + 1) + ' 套职业">' + clsOptions + '</select>' +
       '<input type="text" class="md-text" maxlength="60" placeholder="卡组名称" value="' + escape(entry ? entry.text || '' : '') + '">' +
-      '<input type="url" class="md-url" maxlength="500" placeholder="卡组外链 https://…" value="' + escape(entry ? entry.url || '' : '') + '">' +
+      '<input type="url" class="md-url" maxlength="500" placeholder="卡组链接或国服牌组码(粘贴自动转链接)" value="' + escape(entry ? entry.url || '' : '') + '">' +
       '</div>';
   }
 
@@ -174,15 +174,15 @@
         others.map(([card, side, effEntries]) => cardBlockHtml(record, card, side, names, false, effEntries)).join('') : '');
   }
 
-  /* 读取一个表单块 → links 数组(空行跳过,与归一化规则一致) */
+  /* 读取一个表单块 → links 数组(空行跳过,与归一化规则一致;国服牌组码读值时转链接兜底) */
   function readForm(form) {
     const links = [];
     form.querySelectorAll('.md-deck-row').forEach((row) => {
       const cls = row.querySelector('.md-cls').value;
       const text = row.querySelector('.md-text').value.trim();
-      const url = row.querySelector('.md-url').value.trim();
+      const url = CM.normalizeDeckUrl(row.querySelector('.md-url').value);
       if (!cls || (!text && !url)) return;
-      links.push({ cls, text: text.slice(0, 60), url: url.slice(0, 500) });
+      links.push({ cls, text: text.slice(0, 60), url });
     });
     return links;
   }
@@ -229,6 +229,14 @@
       btn.disabled = false;
     }
   }
+
+  /* 国服牌组码/裸 hash 失焦即转官网链接(canvas-model 同一规则源;提交时服务端还会再归一) */
+  $('my-decks-list').addEventListener('focusout', (event) => {
+    const input = event.target.closest('.md-url');
+    if (!input) return;
+    const normalized = CM.normalizeDeckUrl(input.value);
+    if (normalized !== input.value) input.value = normalized;
+  });
 
   $('my-decks-tournament').addEventListener('change', (event) => {
     state.tournamentId = event.target.value;

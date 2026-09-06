@@ -10,6 +10,76 @@ import { ADMIN_PHONE, smsLogin, seedWorkspace, makePlayer, resetStore } from './
 
 test.setTimeout(90_000);
 
+/* 国服《影之诗:超凡世界》牌组码(hash 段与官网链接同码,2026-09-06 实证):
+ * 粘贴带 # 注释的整段文本 → 失焦就地转官网链接 → 入库即规范链接 + fixture 快照解析/cls 纠错。
+ * hash 用 fixture 现有文件(class 2=皇家),选手故意选错精灵验证快照纠错。 */
+const CN_HASH = '1.2.cEZs.cEZs.cEZs.cEaA.dmyk.dmyk.dmyk.e9NO.eXnk.eXnu.eXnu.eXnu.evTW.evTW.evTW.evi-.evi-.evi-.evj8.evj8.evj8.evm6.evm6.evm6.evyc.evyc.evyc.ewCE.ewCE.ewCE.ewCO.ewCO.ewCO.fIAc.fIck.fIck.fIck.fIcu.fIcu.fh1O';
+const CN_BLOB = '#皇家#\n#指定系列#\n#皇家#\n' + CN_HASH + '\n#在游戏中点击【卡牌】-【新牌组】-【使用牌组码】进行粘贴';
+const CANONICAL = 'https://shadowverse-wb.com/chs/deck/detail/?hash=' + CN_HASH;
+
+test('国服牌组码提交:粘贴自动转官网链接入库', async ({ browser, request }) => {
+  await request.post('/api/dev/reset');
+  const adminCtx = await browser.newContext();
+  const playerCtx = await browser.newContext();
+  const admin = await adminCtx.newPage();
+  const player = await playerCtx.newPage();
+
+  await smsLogin(adminCtx, ADMIN_PHONE);
+  await seedWorkspace(adminCtx, {
+    tournaments: [], activeId: null,
+    players: [
+      { id: 'pz1', name: '国服提交者', createdAt: 1, updatedAt: 1 },
+      { id: 'pz2', name: '国服对位', createdAt: 1, updatedAt: 1 }
+    ]
+  });
+  await makePlayer(playerCtx, '13800004444', 'pz1');
+
+  await admin.goto('/schedule.html');
+  await admin.waitForTimeout(800);
+  await admin.locator('#manage-btn').click();
+  await admin.fill('#new-tournament-name', 'E2E国服码届');
+  await admin.selectOption('#new-tournament-template', 'double');
+  await admin.locator('#create-tournament-form button[type="submit"]').click();
+  await admin.waitForTimeout(1200);
+  await admin.locator('#manage-dialog [data-dialog-close]').click();
+  await admin.waitForTimeout(300);
+
+  await admin.locator('#header-edit-btn').click();
+  await admin.waitForSelector('.canvas-board.editing');
+  const card0 = admin.locator('.canvas-card').first();
+  await card0.locator('.class-slot').first().click();
+  await admin.waitForSelector('#card-panel');
+  await admin.locator('#card-panel .cf-slot-a').selectOption({ label: '国服提交者' });
+  await admin.waitForTimeout(800);
+
+  await admin.locator('#settings-btn').click();
+  await admin.waitForSelector('#settings-form');
+  await admin.locator('#deck-window-manual').selectOption('open');
+  await admin.locator('#settings-form button[type="submit"]').click();
+  await admin.waitForTimeout(800);
+
+  /* 选手粘贴国服牌组码(单行 input 剥换行为真实路径,fill 后点名称框触发失焦) */
+  await player.goto('/me.html#decks');
+  await player.reload();
+  await player.waitForSelector('#my-decks-body', { state: 'visible' });
+  const form = player.locator('.md-form').first();
+  const urlInput = form.locator('.md-url').first();
+  await urlInput.fill(CN_BLOB);
+  await form.locator('.md-text').first().click();
+  await expect(urlInput).toHaveValue(CANONICAL); /* 失焦就地转换 */
+  await form.locator('.md-cls').first().selectOption('精灵'); /* 故意选错 */
+  await form.locator('.md-text').first().fill('国服码卡组');
+  await form.locator('[data-md-save]').click();
+  await player.waitForTimeout(1200);
+
+  /* 重绘回显:入库即规范链接 + 快照按真实职业纠错(皇家) */
+  await expect(form.locator('.md-url').first()).toHaveValue(CANONICAL);
+  await expect(form.locator('.md-cls').first()).toHaveValue('皇家');
+
+  await adminCtx.close();
+  await playerCtx.close();
+});
+
 test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ browser, request }) => {
   await request.post('/api/dev/reset');
   const adminCtx = await browser.newContext();

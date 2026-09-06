@@ -5,7 +5,7 @@ const { DATA_PATH, backupData, appendAudit } = require('./oss');
 const account = require('./account');
 const { withWorkspaceLock } = require('./workspace-lock');
 const { parseDeckHash, resolveDeck: defaultResolveDeck } = require('./deck-resolve');
-const { CLASS_LIST, resolveCanvas, getResult, isWindowOpen } = require('../canvas-model');
+const { CLASS_LIST, resolveCanvas, getResult, isWindowOpen, normalizeDeckUrl } = require('../canvas-model');
 
 /* 卡组提交窗口(二期):
  *   PUT /api/me/classlinks  选手在开关开启期间,为自己参与且未录比分的卡提交卡组
@@ -14,14 +14,15 @@ const { CLASS_LIST, resolveCanvas, getResult, isWindowOpen } = require('../canva
 const MAX_BODY = 64 * 1024;
 const MAX_LINKS = 12;
 
-/* links 白名单归一化:与 canvas-model.normalizeClassLink 同规则,空数组=恢复继承 */
+/* links 白名单归一化:与 canvas-model.normalizeClassLink 同规则(国服牌组码/裸 hash
+ * 在此统一转为规范官网链接再入库),空数组=恢复继承 */
 function normalizeLinks(links) {
   if (!Array.isArray(links)) return null;
   const out = [];
   for (const entry of links.slice(0, MAX_LINKS)) {
     if (!entry || typeof entry !== 'object') continue;
     if (!CLASS_LIST.includes(entry.cls)) continue;
-    const url = typeof entry.url === 'string' ? entry.url.trim().slice(0, 500) : '';
+    const url = typeof entry.url === 'string' ? normalizeDeckUrl(entry.url) : '';
     const text = typeof entry.text === 'string' ? entry.text.trim().slice(0, 60) : '';
     if (!url && !text) continue;
     out.push({ cls: entry.cls, url, text });

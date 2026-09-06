@@ -64,7 +64,7 @@
     return (
       '<div class="cl-row">' +
       '<select class="cl-cls" aria-label="职业">' + classOptions(e.cls) + '</select>' +
-      '<input type="url" class="cl-url" placeholder="卡组链接 https://" value="' + escapeHtml(e.url || '') + '">' +
+      '<input type="url" class="cl-url" placeholder="卡组链接或国服牌组码(粘贴自动转链接)" value="' + escapeHtml(e.url || '') + '">' +
       '<input type="text" class="cl-text" placeholder="悬停文字" value="' + escapeHtml(e.text || '') + '">' +
       '<button type="button" class="btn btn-ghost btn-sm cl-del" data-cl-del title="删除此行" aria-label="删除此行"><img class="icon" src="icons/close.svg" alt="" aria-hidden="true"></button>' +
       '</div>'
@@ -141,7 +141,8 @@
     let invalid = 0;
     list.querySelectorAll('.cl-row').forEach((row) => {
       const cls = row.querySelector('.cl-cls').value;
-      const url = row.querySelector('.cl-url').value.trim().slice(0, 500);
+      /* 国服牌组码/裸 hash 读值时也归一(未失焦直接保存的兜底,且继承签名比对双方须同规则) */
+      const url = window.CanvasModel.normalizeDeckUrl(row.querySelector('.cl-url').value);
       const text = row.querySelector('.cl-text').value.trim().slice(0, 60);
       if (cls && (url || text)) {
         out.push({ cls, url, text });
@@ -244,8 +245,8 @@
     }
   }
 
-  /* 行删除走事件委托:renderClassLinkRows/ensureTrailingRow 重建行不需要重复绑定;
-   * 弹窗与抽屉两容器各自挂一次 */
+  /* 行级事件委托:renderClassLinkRows/ensureTrailingRow 重建行不需要重复绑定;
+   * 弹窗与抽屉两容器各自挂一次。删除行 + 国服牌组码失焦转官网链接(canvas-model 同一规则源) */
   function bindRowDeletion(container) {
     for (const listCls of ['.cf-cl-a', '.cf-cl-b']) {
       const list = container.querySelector(listCls);
@@ -253,6 +254,12 @@
       list.addEventListener('click', (event) => {
         const del = event.target.closest('[data-cl-del]');
         if (del) del.closest('.cl-row').remove();
+      });
+      list.addEventListener('focusout', (event) => {
+        const input = event.target.closest('.cl-url');
+        if (!input) return;
+        const normalized = window.CanvasModel.normalizeDeckUrl(input.value);
+        if (normalized !== input.value) input.value = normalized;
       });
     }
   }

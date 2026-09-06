@@ -146,6 +146,40 @@ function edgePath(p1, n1, p2, n2) {
   /* 职业 svg 名单(icons/classes/<名>.svg),卡片职业槽引用 */
   const CLASS_LIST = ['精灵', '皇家', '法师', '龙族', '梦魇', '主教', '复仇者'];
 
+  /* ========== WB 卡组码提取与规范链接(国服牌组码 → 官网卡组链接) ==========
+   * 国服《影之诗:超凡世界》客户端导出的牌组码是带 # 注释行的整段文本:
+   *   #梦魇#\n#指定系列#\n#梦魇#\n1.5.cM8E.fPCm…(40 token)\n#在游戏中点击…
+   * 其 hash 段与官网链接 shadowverse-wb.com/…/?hash=… 完全同码。
+   * 单行 <input> 粘贴会剥掉换行,故按卡牌码字符集切段提取、不依赖换行;
+   * 多段命中取最长(40 token 的 hash 远长于注释里的偶然数字)。
+   * api/deck-resolve.js parseDeckHash 的国服码分支与本处同规则源。 */
+  const DECK_CODE_SPLIT_RE = /[^0-9A-Za-z._\-]+/;
+  /* 与 api/deck-resolve.js BARE_HASH_RE 同语言:版本.职业(1-7).卡牌码…(至少一段,单 token 拒判) */
+  const DECK_CODE_RE = /^1\.[1-7]\.[0-9A-Za-z._\-]+(?:\.[0-9A-Za-z._\-]+)+$/;
+  const CANONICAL_DECK_URL_PREFIX = 'https://shadowverse-wb.com/chs/deck/detail/?hash=';
+  /* 带协议头的已是链接(含其他站点),不是卡组码,原样保留 */
+  const URL_SCHEME_RE = /^[a-z][a-z0-9+.\-]*:/i;
+
+  function extractDeckCode(text) {
+    if (typeof text !== 'string') return null;
+    let best = null;
+    for (const chunk of text.split(DECK_CODE_SPLIT_RE)) {
+      if (DECK_CODE_RE.test(chunk) && (!best || chunk.length > best.length)) best = chunk;
+    }
+    return best;
+  }
+
+  /* 卡组链接栏统一归一化:官网链接原样;国服牌组码/裸 hash → 规范官网链接;
+   * 其他链接与非卡组文本原样返回,去留由上层协议白名单决定 */
+  function normalizeDeckUrl(url) {
+    if (typeof url !== 'string') return '';
+    const t = url.trim();
+    if (!t) return '';
+    if (URL_SCHEME_RE.test(t)) return t.slice(0, 500);
+    const code = extractDeckCode(t);
+    return (code ? CANONICAL_DECK_URL_PREFIX + code : t).slice(0, 500);
+  }
+
   /* 单条职业卡组链接:cls 在名单内、url/text 截断字符串;无效项返回 null */
   /* 卡组构成分析快照:紧凑结构做边界校验,非法整体丢弃(降级为无快照,不阻塞链接本身) */
   function normalizeDeckSnapshot(deck) {
@@ -181,7 +215,7 @@ function edgePath(p1, n1, p2, n2) {
     if (!entry && entry !== null) entry = null;
     if (!entry || typeof entry !== 'object') return null;
     if (!CLASS_LIST.includes(entry.cls)) return null;
-    const url = typeof entry.url === 'string' ? entry.url.trim().slice(0, 500) : '';
+    const url = typeof entry.url === 'string' ? normalizeDeckUrl(entry.url) : '';
     const text = typeof entry.text === 'string' ? entry.text.trim().slice(0, 60) : '';
     if (!url && !text) return null;
     const out = { cls: entry.cls, url, text };
@@ -798,6 +832,8 @@ function arrowDefs(prefix) {
     AVATAR_COLORS,
     CLASS_LIST,
     resolveEffectiveClassLinks,
+    extractDeckCode,
+    normalizeDeckUrl,
     avatarColor,
     uid,
     DEFAULT_CANVAS_COLS,

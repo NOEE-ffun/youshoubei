@@ -295,6 +295,30 @@ async function main() {
     console.log('✓ submit:WB 解析成功/cls 纠错/非 WB 跳过/审计 resolved');
   }
 
+  /* 国服《影之诗:超凡世界》牌组码提交:入库/响应统一为规范官网链接,解析走同一 hash */
+  {
+    const CN_HASH = '1.5.cM8E.fPCm.fPCm.fPCm.f0oG.f0oG.f0oG.fndG.fndG.fndG.dtoY.dtoY.dtoY.eGCk.eGCk.f1KU.f1KU.f1KU.ef6e.ef6e.f11k.f11k.f11k.f1W-.f1W-.f1W-.fnsk.fnsk.fnsk.foL-.foL-.foL-.fPxU.fPxU.foM8.foM8.foM8.f1X8.f1X8.f1X8';
+    const CN_BLOB = '#梦魇#\n#指定系列#\n#梦魇#\n' + CN_HASH + '\n#在游戏中点击【卡牌】-【新牌组】-【使用牌组码】进行粘贴';
+    const storage = memoryStorage(seedWorld({ manual: 'open' }));
+    const calls = [];
+    const h = createHandler(storage, {
+      appendAudit: () => {},
+      currentUser: makeFindUser(storage),
+      resolveDeck: async (hash) => { calls.push(hash); return { ok: true, deck: SNAPSHOT }; }
+    });
+    const r = await call(h.submit, mockReq('PUT', {
+      headers: auth,
+      body: json({ tournamentId: 't1', cardId: 'c1', side: 'a', links: [{ cls: '皇家', url: CN_BLOB, text: '梦魇快攻' }] })
+    }));
+    assert.strictEqual(r.status, 200, '国服码提交 200');
+    const CANON = 'https://shadowverse-wb.com/chs/deck/detail/?hash=' + CN_HASH;
+    assert.strictEqual(r.body.links[0].url, CANON, '响应 url 为规范官网链接');
+    const saved = storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks.a;
+    assert.strictEqual(saved[0].url, CANON, '入库 url 为规范官网链接');
+    assert.deepStrictEqual(calls, [CN_HASH], '解析器收到提取出的 hash');
+    console.log('✓ submit:国服牌组码→规范链接入库/解析');
+  }
+
   {
     const storage = memoryStorage(seedWorld({ manual: 'open' }));
     const h = createHandler(storage, {

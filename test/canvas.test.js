@@ -295,4 +295,35 @@ const model = require('../canvas-model.js');
   assert.deepEqual(model.canvasOrigin(null), { x: 0, y: 0 }, '空对象安全');
 }
 
-console.log('canvas-model 全部 15 组测试通过 ✓');
+// 16. WB 卡组码归一化:国服牌组码/裸 hash → 规范官网链接;链接与普通文本原样
+{
+  const HASH = '1.5.cM8E.fPCm.fPCm.fPCm.f0oG.f0oG.f0oG.fndG.fndG.fndG.dtoY.dtoY.dtoY.eGCk.eGCk.f1KU.f1KU.f1KU.ef6e.ef6e.f11k.f11k.f11k.f1W-.f1W-.f1W-.fnsk.fnsk.fnsk.foL-.foL-.foL-.fPxU.fPxU.foM8.foM8.foM8.f1X8.f1X8.f1X8';
+  const CANON = 'https://shadowverse-wb.com/chs/deck/detail/?hash=' + HASH;
+  const blob = '#梦魇#\n#指定系列#\n#梦魇#\n' + HASH + '\n#在游戏中点击【卡牌】-【新牌组】-【使用牌组码】进行粘贴';
+
+  assert.equal(model.extractDeckCode(blob), HASH, '国服牌组码提取 hash 段');
+  assert.equal(model.extractDeckCode(blob.replace(/\n/g, '')), HASH, '单行 input 剥换行后仍可提取');
+  assert.equal(model.extractDeckCode('#纯注释#'), null, '无码文本提取为 null');
+  assert.equal(model.extractDeckCode('1.2.cEZs'), null, '单 token 无卡牌段不提取(与裸码拒判同边界)');
+  assert.equal(model.normalizeDeckUrl('1.2.cEZs'), '1.2.cEZs', '无卡牌段裸码原样不转');
+  assert.equal(model.normalizeDeckUrl(blob), CANON, '国服牌组码 → 规范链接');
+  assert.equal(model.normalizeDeckUrl(HASH), CANON, '裸 hash → 规范链接');
+  assert.equal(model.normalizeDeckUrl(CANON), CANON, '规范链接原样');
+  assert.equal(
+    model.normalizeDeckUrl('https://shadowverse-wb.com/web/Deck/share?hash=' + HASH + '&lang=cht'),
+    'https://shadowverse-wb.com/web/Deck/share?hash=' + HASH + '&lang=cht',
+    '官网分享页链接原样(不重写用户链接)');
+  assert.equal(model.normalizeDeckUrl('https://other.example.com/?x=' + HASH),
+    'https://other.example.com/?x=' + HASH, '其他站点链接原样(内嵌 hash 不误转)');
+  assert.equal(model.normalizeDeckUrl('  https://sp ace  '), 'https://sp ace', '普通文本仅去首尾空白');
+  assert.equal(model.normalizeDeckUrl(''), '', '空串安全');
+  assert.equal(model.normalizeDeckUrl(null), '', '非字符串安全');
+
+  /* normalizeClassLink 接入:存储/派生链路上的国服码统一转链接 */
+  const norm = model.normalizeCanvas({ cards: [
+    { id: 'd1', slots: [{ type: 'empty' }, { type: 'empty' }], classLinks: { a: [{ cls: '梦魇', url: blob, text: 'd' }], b: [] } }
+  ] });
+  assert.equal(norm.cards[0].classLinks.a[0].url, CANON, 'normalizeCanvas 后 classLinks 存规范链接');
+}
+
+console.log('canvas-model 全部 16 组测试通过 ✓');
