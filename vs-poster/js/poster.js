@@ -524,7 +524,7 @@
 
       /* 队标或像素徽章 */
       if (tagImg && isAllowedImgURL(tagImg)) {
-        var tagH = Math.max(24, Math.min(120, Number(data[side].tagImgSize) || 56));
+        var tagH = Math.max(24, Math.min(200, Number(data[side].tagImgSize) || 56));
         var tagW = tagH * (Number(data[side].tagImgRatio) || 1);
         if (tagW > 300) { tagW = 300; tagH = tagW / (Number(data[side].tagImgRatio) || 1); }
         sp.push('<rect x="' + (cx - tagW / 2 - 12) + '" y="' + (ay + AV + 40 - tagH / 2) + '" width="' + (tagW + 24) + '" height="' + (tagH + 16) + '" fill="#000" opacity="0.7"/>');
@@ -665,15 +665,15 @@
     if (rightTag) {
       parts.push('<text x="1090" y="' + (520 - nameFs - 60) + '" text-anchor="start" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="4" fill="' + MUTED + '">' + escapeXml(rightTag.toUpperCase()) + '</text>');
     }
-    /* 队标图片:替代文字,名字上方居中于头像区 */
+    /* 队标图片:替代文字,名字上方居中于头像区(高随 tagImgSize 24-200,与其他版式统一带) */
     if (data.left.tagImg && isAllowedImgURL(data.left.tagImg)) {
-      var ltH = Math.max(20, Math.min(80, Number(data.left.tagImgSize) || 40));
+      var ltH = Math.max(24, Math.min(200, Number(data.left.tagImgSize) || 40));
       var ltW = ltH * (Number(data.left.tagImgRatio) || 1);
       if (ltW > 200) { ltW = 200; ltH = ltW / (Number(data.left.tagImgRatio) || 1); }
       parts.push('<image href="' + escapeXml(data.left.tagImg) + '" x="' + (830 - AV + (AV - ltW) / 2) + '" y="' + (520 - nameFs - 40 + AV + 20) + '" width="' + ltW + '" height="' + ltH + '" preserveAspectRatio="xMidYMid meet"/>');
     }
     if (data.right.tagImg && isAllowedImgURL(data.right.tagImg)) {
-      var rtH = Math.max(20, Math.min(80, Number(data.right.tagImgSize) || 40));
+      var rtH = Math.max(24, Math.min(200, Number(data.right.tagImgSize) || 40));
       var rtW = rtH * (Number(data.right.tagImgRatio) || 1);
       if (rtW > 200) { rtW = 200; rtH = rtW / (Number(data.right.tagImgRatio) || 1); }
       parts.push('<image href="' + escapeXml(data.right.tagImg) + '" x="' + (1090 + (AV - rtW) / 2) + '" y="' + (520 - nameFs - 40 + AV + 20) + '" width="' + rtW + '" height="' + rtH + '" preserveAspectRatio="xMidYMid meet"/>');
@@ -804,11 +804,11 @@
     parts.push('<image href="' + escapeXml(leftImg) + '" x="270" y="320" width="320" height="320" preserveAspectRatio="xMidYMid slice" clip-path="url(#or-clip-l)"/>');
     parts.push('<image href="' + escapeXml(rightImg) + '" x="1330" y="320" width="320" height="320" preserveAspectRatio="xMidYMid slice" clip-path="url(#or-clip-r)"/>');
 
-    /* 队标/ID:头像下方,纹章徽带(队标图优先替代文字,2026090053 补齐) */
+    /* 队标/ID:头像下方,纹章徽带(队标图优先替代文字,高随 tagImgSize 24-200 统一带) */
     var leftTag = String(data.left.tag || "").trim();
     var rightTag = String(data.right.tag || "").trim();
     if (data.left.tagImg && isAllowedImgURL(data.left.tagImg)) {
-      var ltH = Math.max(20, Math.min(80, Number(data.left.tagImgSize) || 40));
+      var ltH = Math.max(24, Math.min(200, Number(data.left.tagImgSize) || 40));
       var ltW = ltH * (Number(data.left.tagImgRatio) || 1);
       if (ltW > 240) { ltW = 240; ltH = ltW / (Number(data.left.tagImgRatio) || 1); }
       parts.push('<image href="' + escapeXml(data.left.tagImg) + '" x="' + (430 - ltW / 2) + '" y="' + (750 - ltH / 2) + '" width="' + ltW + '" height="' + ltH + '" preserveAspectRatio="xMidYMid meet"/>');
@@ -818,7 +818,7 @@
       parts.push('<text x="430" y="758" text-anchor="middle" font-family=' + JSON.stringify(SERIF) + ' font-size="20" letter-spacing="3" fill="' + GOLD + '">' + escapeXml(leftTag) + '</text>');
     }
     if (data.right.tagImg && isAllowedImgURL(data.right.tagImg)) {
-      var rtH = Math.max(20, Math.min(80, Number(data.right.tagImgSize) || 40));
+      var rtH = Math.max(24, Math.min(200, Number(data.right.tagImgSize) || 40));
       var rtW = rtH * (Number(data.right.tagImgRatio) || 1);
       if (rtW > 240) { rtW = 240; rtH = rtW / (Number(data.right.tagImgRatio) || 1); }
       parts.push('<image href="' + escapeXml(data.right.tagImg) + '" x="' + (1490 - rtW / 2) + '" y="' + (750 - rtH / 2) + '" width="' + rtW + '" height="' + rtH + '" preserveAspectRatio="xMidYMid meet"/>');
@@ -979,10 +979,10 @@
       sp.push('<rect x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" fill="' + theme.bg.to + '"/>');
       sp.push('<image href="' + escapeXml(img) + '" x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" preserveAspectRatio="xMidYMid slice" clip-path="url(#' + clipId + ')" style="image-rendering:auto"/>');
 
-      /* 队标/ID(队标图优先替代文字标,2026090053 补齐) */
+      /* 队标/ID(队标图优先替代文字标,高随 tagImgSize 24-200 统一带) */
       var dside = data[side] || {};
       if (dside.tagImg && isAllowedImgURL(dside.tagImg)) {
-        var tH = Math.max(20, Math.min(80, Number(dside.tagImgSize) || 40));
+        var tH = Math.max(24, Math.min(200, Number(dside.tagImgSize) || 40));
         var tW = tH * (Number(dside.tagImgRatio) || 1);
         if (tW > 340) { tW = 340; tH = tW / (Number(dside.tagImgRatio) || 1); }
         sp.push('<image href="' + escapeXml(dside.tagImg) + '" x="' + (cx - tW / 2) + '" y="' + (ay + AV + 40 - tH / 2) + '" width="' + tW + '" height="' + tH + '" preserveAspectRatio="xMidYMid meet"/>');

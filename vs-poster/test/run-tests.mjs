@@ -256,6 +256,24 @@ test("全部主题版式都渲染队标图(2026090053 版式补齐回归)", () =
   }
 });
 
+test("队标大小滑杆(32-160,默认96)在全部版式字面生效(2026090054 统一钳制带回归)", () => {
+  /* 各版式曾各自为政:pixel 封 120、minimal/ornate/cyber 封 80,默认 96 即被暗砍,
+   * 调大滑杆无感。统一为 rift 原始带 [24,200](资料页滑杆按它设计)。
+   * ratio=1 避开各版式横向宽度帽,纯验证高度字面映射。 */
+  for (const t of S.VSThemes) {
+    for (const sz of [32, 96, 160]) {
+      const d = JSON.parse(JSON.stringify(BASE_DATA));
+      d.left.tagImg = "data:image/png;base64,MARK";
+      d.left.tagImgRatio = 1;
+      d.left.tagImgSize = sz;
+      const svg = S.VSPoster.build(d, t);
+      const hs = [...svg.matchAll(/<image href="data:image\/png;base64,MARK"[^>]*height="([0-9.]+)"/g)].map((m) => Number(m[1]));
+      assert.equal(hs.length, 1, t.id + " 应渲染队标图");
+      assert.equal(hs[0], sz, t.id + "(" + t.layout + ") tagImgSize=" + sz + " 应字面生效,实际 " + hs[0]);
+    }
+  }
+});
+
 console.log("\n[poster.js] 赛前垃圾话 title(纯文本)");
 test("title 文字渲染在名字下方并转义", () => {
   const t = JSON.parse(JSON.stringify(BASE_DATA));
