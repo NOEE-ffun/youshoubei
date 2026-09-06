@@ -174,6 +174,7 @@
     state.themeId = VSThemes.byId(state.themeId).id;
     state.resolution = els.resolution.value;
     VSState.save(state);
+    scheduleStagePush();
   }
 
   /* ---------- 提示条 ---------- */
@@ -412,6 +413,89 @@
     });
   }
 
+  /* ---------- OBS 舞台实时同步(2026-09-07) ----------
+   * 点「OBS 源」创建/复用固定舞台(id 存 localStorage),此后每次状态变化
+   * 防抖 1.5s 自动 PUT;舞台页 5s 轮询跟随。未点过按钮不自动建舞台(防空写)。 */
+  var STAGE_ID_KEY = "vs-poster-stage-id";
+  var PUSH_DEBOUNCE_MS = 1500;
+  var stagePushTimer = null;
+  var stageWarned401 = false;
+
+  function stagePayload() {
+    return { data: currentData(), themeId: state.themeId };
+  }
+
+  function stageId() {
+    try { return localStorage.getItem(STAGE_ID_KEY) || null; } catch (e) { return null; }
+  }
+
+  function saveStageId(id) {
+    try { localStorage.setItem(STAGE_ID_KEY, id); } catch (e) { /* 私密模式等,静默 */ }
+  }
+
+  function stageFetch(method, body, id) {
+    return fetch("/api/poster-stage" + (id ? "?id=" + encodeURIComponent(id) : ""), {
+      method: method,
+      headers: { "Content-Type": "application/json" },
+      body: body
+    }).then(function (resp) {
+      return resp.json().catch(function () { return {}; }).then(function (json) {
+        return { status: resp.status, json: json };
+      });
+    });
+  }
+
+  function createStage() {
+    return stageFetch("POST", JSON.stringify(stagePayload())).then(function (r) {
+      if (r.status !== 200) throw new Error(r.json.error || ("请求失败 " + r.status));
+      return r.json;
+    });
+  }
+
+  /* 状态变化 → 防抖推送固定舞台 */
+  function scheduleStagePush() {
+    if (!stageId()) return;
+    clearTimeout(stagePushTimer);
+    stagePushTimer = setTimeout(pushStageAuto, PUSH_DEBOUNCE_MS);
+  }
+
+  function pushStageAuto() {
+    stagePushTimer = null;
+    var id = stageId();
+    if (!id) return;
+    stageFetch("PUT", JSON.stringify(stagePayload()), id).then(function (r) {
+      if (r.status === 200) {
+        stageWarned401 = false;
+        return;
+      }
+      if (r.status === 404) {
+        /* 舞台对象被清(过期由服务端复活,不会走这):重建换新链接 */
+        return createStage().then(function (json) {
+          saveStageId(json.id);
+          toast("OBS 舞台已重建,请点「OBS 源」复制新链接到 OBS", true);
+        });
+      }
+      if ((r.status === 401 || r.status === 403) && !stageWarned401) {
+        stageWarned401 = true;
+        toast("登录已过期,OBS 实时同步暂停;重新登录后继续编辑即恢复", true);
+        return;
+      }
+      if (window.console && console.warn) {
+        console.warn("[poster] OBS 舞台推送失败:", r.status, r.json && r.json.error);
+      }
+    }).catch(function (e) {
+      /* 网络抖动静默:下次编辑自然重试 */
+      if (window.console && console.warn) console.warn("[poster] OBS 舞台推送失败:", e && e.message);
+    });
+  }
+
+  /* 关页/切走前冲刷挂起的防抖,防最后一次编辑丢失 */
+  window.addEventListener("pagehide", function () {
+    if (!stagePushTimer) return;
+    clearTimeout(stagePushTimer);
+    pushStageAuto();
+  });
+
   /* ---------- 主题选择器(页头) ---------- */
 
   var menuOpen = false;
@@ -503,19 +587,20 @@
     });
 
     els.obsBtn.addEventListener("click", function () {
-      /* 鉴权走同源会话 cookie,无需 Authorization 头(口令体系已拆) */
-      fetch("/api/poster-stage", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data: currentData(), themeId: state.themeId })
-      }).then(function (resp) {
-        return resp.json().catch(function () { return {}; }).then(function (json) {
-          if (!resp.ok) throw new Error(json.error || ("请求失败 " + resp.status));
-          return json;
-        });
-      }).then(function (json) {
+      /* 鉴权走同源会话 cookie(口令体系已拆);固定舞台优先复用,
+       * 舞台被清才重建换新链接——OBS 端粘一次 URL 长期可用 */
+      var existing = stageId();
+      var ready = existing
+        ? stageFetch("PUT", JSON.stringify(stagePayload()), existing).then(function (r) {
+            if (r.status === 200) return { id: existing, url: "/poster-stage.html?id=" + existing };
+            if (r.status === 404) return createStage();
+            throw new Error(r.json.error || ("请求失败 " + r.status));
+          })
+        : createStage();
+      ready.then(function (json) {
+        saveStageId(json.id);
         return copyText(location.origin + json.url).then(function () {
-          toast("OBS 源链接已复制，粘贴到 OBS「浏览器」来源即可");
+          toast("OBS 源已复制;粘贴到 OBS 浏览器源,此后编辑实时同步(约 5 秒内)");
         });
       }).catch(function (e) {
         toast((e && e.message) || "OBS 源生成失败", true);
