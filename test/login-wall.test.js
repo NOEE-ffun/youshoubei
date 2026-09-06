@@ -112,9 +112,17 @@ async function call(handler, req) {
   assert.notStrictEqual((await call(apiUpload, upReq(ck('u2')))).status, 401);
   assert.notStrictEqual((await call(apiUpload, upReq(ck('u3')))).status, 401);
 
-  /* poster-stage:GET 匿名 401/登录 200;POST 匿名 401、player 403、admin 200 */
-  assert.strictEqual((await call(stage, stageGet(null))).status, 401);
+  /* poster-stage:GET 匿名 200(链接即凭证,2026-09-07 OBS 实时化);
+   * POST/PUT 匿名 401、player 403(写门不变) */
+  assert.strictEqual((await call(stage, stageGet(null))).status, 200);
   assert.strictEqual((await call(stage, stageGet(ck('u1')))).status, 200);
+  const stagePut = (cookie) => mockReq('PUT', {
+    url: '/api/poster-stage?id=' + stageId,
+    body: stageBody,
+    headers: cookie ? { cookie } : {}
+  });
+  assert.strictEqual((await call(stage, stagePut(null))).status, 401);
+  assert.strictEqual((await call(stage, stagePut(ck('u2')))).status, 403);
   assert.strictEqual((await call(stage, mockReq('POST', { body: stageBody }))).status, 401);
   assert.strictEqual((await call(stage, mockReq('POST', { body: stageBody, headers: { cookie: ck('u2') } }))).status, 403);
   assert.strictEqual((await call(stage, mockReq('POST', { body: stageBody, headers: { cookie: ck('u3') } }))).status, 200);
