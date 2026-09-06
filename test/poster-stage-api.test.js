@@ -48,13 +48,14 @@ function mockReq(method, opts) {
   };
 }
 
-/* 模拟 res（server.js apiResponse 的最小适配：status().cacheControl().json()） */
+/* 模拟 res（server.js apiResponse 的最小适配：status().cacheControl().etag().json()） */
 function mockRes() {
-  const captured = { status: 0, cacheControl: null, body: null };
+  const captured = { status: 0, cacheControl: null, body: null, etag: false, headers: {} };
   return {
     status(code) { captured.status = code; return this; },
     cacheControl(value) { captured.cacheControl = value; return this; },
-    setHeader() { return this; },
+    etag() { captured.etag = true; return this; },
+    setHeader(name, value) { captured.headers[name] = value; return this; },
     json(payload) { captured.body = payload; return captured; },
     _captured: captured
   };
@@ -117,7 +118,16 @@ async function main() {
   const storage = memoryStorage();
   const handler = createHandler(storage);
   const stageBody = JSON.stringify(VALID);
+  const UPD = JSON.stringify({
+    data: { left: { name: '新左' }, right: { name: '新右' } },
+    themeId: 'halo-gold'
+  });
   const postReq = (headers) => mockReq('POST', { body: stageBody, headers: headers || {} });
+  const putReq = (id, headers, body) => mockReq('PUT', {
+    url: '/api/poster-stage?id=' + id,
+    body: body || stageBody,
+    headers: headers || {}
+  });
   const getReq = (id, headers) => mockReq('GET', {
     url: '/api/poster-stage' + (id ? '?id=' + id : ''),
     headers: headers || {}
@@ -133,9 +143,9 @@ async function main() {
   out = await call(handler, postReq({ cookie: ck('u2') }));
   assert.strictEqual(out.status, 403, 'player 角色应 403');
 
-  /* GET:匿名 401(登录墙前置,id 校验在其后) */
+  /* GET 匿名放行(链接即凭证,2026-09-07):id 校验/存储层不再有登录墙前置 */
   out = await call(handler, getReq(ID_32));
-  assert.strictEqual(out.status, 401, '匿名 GET 应被登录墙拦(401)');
+  assert.strictEqual(out.status, 404, '匿名 GET 放行,未建舞台应 404');
 
   /* ---- 创建-读取往返:admin/super 200 ---- */
   out = await call(handler, postReq({ cookie: ck('u3') }));
@@ -153,19 +163,46 @@ async function main() {
   out = await call(handler, postReq({ cookie: ck('u5') }));
   assert.strictEqual(out.status, 200, 'super POST 应 200');
 
-  /* 读取走 requireUser:任意登录角色可读(user 亦然) */
+  /* 读取匿名即达(能力 URL):登录与否同权同体 */
   out = await call(handler, getReq(id, { cookie: ck('u1') }));
   assert.strictEqual(out.status, 200);
   assert.deepStrictEqual(out.body, { data: VALID.data, themeId: 'ice-fire' });
-  assert.strictEqual(out.cacheControl, 'private, max-age=300', '登录墙内私有读,GET 应 private 缓存 300s');
+  assert.strictEqual(out.cacheControl, 'private, no-cache', '能力 URL 轮询读:禁 TTL 缓存,private 防共享缓存');
+  assert.strictEqual(out.etag, true, 'GET 应启用 etag()(304 由 server.js 包装器判定)');
+  out = await call(handler, getReq(id));
+  assert.strictEqual(out.status, 200, '匿名 GET 应 200');
+  assert.deepStrictEqual(out.body, { data: VALID.data, themeId: 'ice-fire' });
 
-  /* ---- GET 参数校验(登录后) ---- */
+  /* ---- GET 参数校验(匿名亦可达) ---- */
   out = await call(handler, getReq(null, { cookie: ck('u1') }));
   assert.strictEqual(out.status, 400, '缺 id 应 400');
   out = await call(handler, getReq('xyz', { cookie: ck('u1') }));
   assert.strictEqual(out.status, 400, '非 32hex id 应 400');
   out = await call(handler, getReq('b'.repeat(32), { cookie: ck('u1') }));
   assert.strictEqual(out.status, 404, '格式合法但不存在应 404');
+
+  /* ---- PUT:门=POST;404 仅不存在;全量覆写+updatedAt ---- */
+  out = await call(handler, putReq(id));
+  assert.strictEqual(out.status, 401, '匿名 PUT 应被登录墙拦(401)');
+  out = await call(handler, putReq(id, { cookie: ck('u1') }));
+  assert.strictEqual(out.status, 403, 'user PUT 应 403');
+  out = await call(handler, putReq(id, { cookie: ck('u2') }));
+  assert.strictEqual(out.status, 403, 'player PUT 应 403');
+  out = await call(handler, putReq('xyz', { cookie: ck('u3') }));
+  assert.strictEqual(out.status, 400, 'PUT 坏 id 应 400');
+  out = await call(handler, putReq('b'.repeat(32), { cookie: ck('u3') }));
+  assert.strictEqual(out.status, 404, 'PUT 不存在的舞台应 404');
+  out = await call(handler, putReq(id, { cookie: ck('u3') }, UPD));
+  assert.strictEqual(out.status, 200, 'admin PUT 应 200');
+  assert.strictEqual(out.body.ok, true);
+  const updated = storage._map.get(stageKey(id));
+  assert.strictEqual(updated.data.left.name, '新左', 'PUT 应全量覆写 data');
+  assert.strictEqual(updated.themeId, 'halo-gold', 'PUT 应覆写 themeId');
+  assert.ok(updated.updatedAt, 'PUT 应写 updatedAt 续命');
+  assert.ok(updated.createdAt, 'PUT 应保留 createdAt');
+  out = await call(handler, getReq(id));
+  assert.strictEqual(out.status, 200);
+  assert.strictEqual(out.body.data.left.name, '新左', 'PUT 后匿名 GET 即新(writeJson write-through)');
 
   /* ---- 过期逻辑（注入固定时钟与 TTL） ---- */
   const fixedNow = Date.UTC(2026, 7, 20, 12, 0, 0);
@@ -182,9 +219,13 @@ async function main() {
   out = await call(expHandler, getReq(expired, { cookie: ck('u1') }));
   assert.strictEqual(out.status, 404, '8 天前创建的舞台应 404');
 
-  /* ---- 未支持方法 405(GET/POST 分支都不进,直接落到方法兜底) ---- */
-  out = await call(handler, mockReq('PUT'));
-  assert.strictEqual(out.status, 405);
+  /* 过期舞台 PUT 复活同 id(URL 对操作员终身稳定) */
+  out = await call(expHandler, putReq(expired, { cookie: ck('u3') }, UPD));
+  assert.strictEqual(out.status, 200, 'PUT 过期舞台应复活(200)');
+  out = await call(expHandler, getReq(expired));
+  assert.strictEqual(out.status, 200, '复活后匿名 GET 应回 200');
+
+  /* ---- 未支持方法 405(GET/PUT/POST 分支都不进,直接落到方法兜底) ---- */
   out = await call(handler, mockReq('DELETE'));
   assert.strictEqual(out.status, 405);
 

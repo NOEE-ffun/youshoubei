@@ -1,15 +1,17 @@
 'use strict';
 
 const crypto = require('node:crypto');
-const { requireUser, requireRole } = require('./auth');
+const { requireRole } = require('./auth');
 const { sendJson, readBody } = require('./helpers');
 const { readJsonCached, writeJson, appendAudit } = require('./oss');
 
-/* OBS 舞台(浏览器源)一次性生成接口：
- *   POST → 管理员(admin/super)创建新舞台，返回自包含 URL(/poster-stage.html?id=…)
- *   GET  → 登录会话按 id 读取舞台数据（OBS 轮询刷新），过期/缺失 404
- * 每次 POST 都生成新 id 与独立私有 OSS 对象 poster-stages/<id>.json，
- * 旧舞台到期后自然 404，无共享单例、无相互覆盖。 */
+/* OBS 舞台(浏览器源)实时接口(2026-09-07 实时化)：
+ *   POST → admin/super 创建新舞台,返回自包含 URL(/poster-stage.html?id=…)
+ *   PUT  → admin/super 按 id 全量覆写并续命(updatedAt;过期舞台复活同 id)
+ *   GET  → 匿名放行,链接即凭证(128 位随机 hex);过期/缺失 404;
+ *          private,no-cache + etag() 供舞台页 5s 轮询(304 省流量)
+ * 舞台存私有 OSS 对象 poster-stages/<id>.json;TTL=7 天无推送(可 env 覆盖),
+ * 仅拦公共读——属主 PUT 即复活,URL 对操作员终身稳定。 */
 const STAGE_KEY_PREFIX = 'poster-stages/';
 
 /* 舞台 payload 可能携带选手头像/队标 dataURL（≤512px 压缩），
@@ -66,8 +68,7 @@ function createHandler(storage, options) {
 
   return async function handler(req, res) {
     if (req.method === 'GET') {
-      if (!(await requireUser(req, res))) return;
-
+      /* 匿名放行:32hex id 即唯一凭证(能力 URL),写接口(POST/PUT)仍需 admin/super */
       let url;
       try {
         url = new URL(req.url, 'http://localhost');
@@ -87,18 +88,77 @@ function createHandler(storage, options) {
           sendJson(res, 404, { error: '舞台不存在' });
           return;
         }
-        if (isExpired(stage.createdAt, now(), ttlDays)) {
+        if (isExpired(stage.updatedAt || stage.createdAt, now(), ttlDays)) {
           sendJson(res, 404, { error: '舞台已过期' });
           return;
         }
-        /* 登录墙内的私有读(OBS 轮询):private 防共享缓存泄漏他人会话数据 */
-        res.cacheControl('private, max-age=300').status(200).json({
+        /* 能力 URL:private 防共享缓存存储,no-cache 每次回源校验;etag() 让
+         * 轮询 If-None-Match 命中时 304(由 server.js apiResponse 判定) */
+        res.cacheControl('private, no-cache').etag().status(200).json({
           data: stage.data,
           themeId: stage.themeId || null
         });
       } catch (error) {
         console.error('[poster-stage] GET 失败:', error.message);
         sendJson(res, 500, { error: '读取舞台失败' });
+      }
+      return;
+    }
+
+    if (req.method === 'PUT') {
+      if (!(await requireRole(req, res, ['admin', 'super']))) return;
+
+      let url;
+      try {
+        url = new URL(req.url, 'http://localhost');
+      } catch {
+        sendJson(res, 400, { error: '非法请求地址' });
+        return;
+      }
+      const id = url.searchParams.get('id') || '';
+      if (!ID_RE.test(id)) {
+        sendJson(res, 400, { error: 'id 必须是 32 位十六进制字符串' });
+        return;
+      }
+
+      const body = await readBody(req, MAX_BODY);
+      if (body === null) {
+        sendJson(res, 413, { error: '数据过大' });
+        return;
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(body.toString('utf8'));
+      } catch (error) {
+        sendJson(res, 400, { error: '请求体不是合法 JSON' });
+        return;
+      }
+
+      const invalid = validatePosterStagePayload(payload);
+      if (invalid) {
+        sendJson(res, 400, { error: invalid });
+        return;
+      }
+
+      try {
+        const existing = await read(stageKey(id));
+        if (!existing || !existing.data) {
+          sendJson(res, 404, { error: '舞台不存在' });
+          return;
+        }
+        /* 过期舞台复活:updatedAt 续命 TTL,URL 对操作员终身稳定;
+         * 不写审计——编辑期防抖高频 PUT 会刷爆审计日志,创建(POST)仍留痕 */
+        await write(stageKey(id), {
+          data: payload.data,
+          themeId: payload.themeId || null,
+          createdAt: existing.createdAt || new Date(now()).toISOString(),
+          updatedAt: new Date(now()).toISOString()
+        });
+        sendJson(res, 200, { ok: true });
+      } catch (error) {
+        console.error('[poster-stage] PUT 失败:', error.message);
+        sendJson(res, 500, { error: '保存舞台失败' });
       }
       return;
     }
