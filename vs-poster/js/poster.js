@@ -359,6 +359,11 @@
    * 结构感来自阶梯分隔/像素字/街机 HUD,对抗撕裂版的辉光+毛玻璃。 */
 
   var MONO = '"Courier New", Courier, ui-monospace, Menlo, monospace';
+  /* XML 安全的属性形态:MONO_Q 会把字体名内层双引号写进双引号属性,
+   * 产出不良构 XML——innerHTML 靠 HTML 解析器宽容恢复能渲染,但导出管线
+   * Blob→Image 走严格 XML 解析直接 onerror「SVG 渲染失败」(存量 bug,2026090055 顺修)。
+   * 单引号包双引号对 XML/HTML 解析器都合法。 */
+  var MONO_Q = "'" + MONO + "'";
 
   /* 3×5 像素字模(大写字母/数字/符号),用于手工拼字 */
   var PIXEL_FONT = {
@@ -400,6 +405,61 @@
     }
     return parts.join("");
   }
+
+  /* 像素街机动效(2026090055 改版):内嵌进 SVG 的 <style>,预览/大屏/任意嵌入处都能动
+   * (大屏页不加载 poster.css,p-* 类在那里是死的,故必须自包含)。
+   * 硬契约:
+   *   ① 全部关键帧 0% 态 = 完整静态画面——导出 PNG 经 <img> 解码冻结在 0% 帧,
+   *      任何元素不得依赖动画后半程才可见;
+   *   ② 只动 transform / opacity(能量虚线例外,stroke-dashoffset);
+   *   ③ 像素感来自离散关键帧 / steps(),不做平滑补间;
+   *   ④ 尊重 prefers-reduced-motion。
+   * __TICKW__(跑马灯位移距离)依词条长度在构建期替换。 */
+  var PXA_STYLE =
+    "<style>" +
+    ".pxa-ladder{animation:pxa-march 2.4s steps(4) infinite}" +
+    "@keyframes pxa-march{to{transform:translateY(96px)}}" +
+    ".pxa-dash{animation:pxa-dashcrawl 1s linear infinite}" +
+    "@keyframes pxa-dashcrawl{to{stroke-dashoffset:-40}}" +
+    ".pxa-vsbar-a{animation:pxa-marq-a 1s infinite}" +
+    ".pxa-vsbar-b{animation:pxa-marq-b 1s infinite}" +
+    "@keyframes pxa-marq-a{0%,49%{opacity:1}50%,100%{opacity:.25}}" +
+    "@keyframes pxa-marq-b{0%,49%{opacity:.25}50%,100%{opacity:1}}" +
+    ".pxa-vs{animation:pxa-hop 1.3s infinite}" +
+    "@keyframes pxa-hop{0%,24%{transform:translateY(0)}25%,49%{transform:translateY(-10px)}50%,100%{transform:translateY(0)}}" +
+    ".pxa-bo{animation:pxa-bo 1.6s infinite}" +
+    "@keyframes pxa-bo{0%,49%{opacity:1}50%,74%{opacity:.55}75%,100%{opacity:1}}" +
+    ".pxa-hud-a{animation:pxa-marq-a 1.2s infinite}" +
+    ".pxa-hud-b{animation:pxa-marq-b 1.2s infinite}" +
+    ".pxa-corner{animation:pxa-chase 1.4s infinite}" +
+    ".pxa-corner.c2{animation-delay:.35s}" +
+    ".pxa-corner.c3{animation-delay:.7s}" +
+    ".pxa-corner.c4{animation-delay:1.05s}" +
+    "@keyframes pxa-chase{0%,24%{opacity:1}25%,49%{opacity:.35}50%,100%{opacity:1}}" +
+    ".pxa-star-a{animation:pxa-twinkle 2.8s infinite}" +
+    ".pxa-star-b{animation:pxa-twinkle 3.6s infinite;animation-delay:-1.3s}" +
+    "@keyframes pxa-twinkle{0%,59%{opacity:1}60%,84%{opacity:.2}85%,100%{opacity:1}}" +
+    ".pxa-heart{transform-box:fill-box;transform-origin:center;animation:pxa-beat 1.6s infinite}" +
+    "@keyframes pxa-beat{0%,18%{transform:scale(1)}19%,30%{transform:scale(1.18)}31%,44%{transform:scale(1)}45%,56%{transform:scale(1.1)}57%,100%{transform:scale(1)}}" +
+    ".pxa-crt{animation:pxa-crawl 1.6s steps(4) infinite}" +
+    "@keyframes pxa-crawl{to{transform:translateY(4px)}}" +
+    ".pxa-tag{animation:pxa-bob 3.2s steps(2) infinite}" +
+    "@keyframes pxa-bob{0%,49%{transform:translateY(0)}50%,100%{transform:translateY(4px)}}" +
+    ".pxa-fight{animation:pxa-fight 1.1s infinite}" +
+    "@keyframes pxa-fight{0%,59%{opacity:1}60%,100%{opacity:0}}" +
+    ".pxa-glitch-l{animation:pxa-glitch 3.4s infinite}" +
+    ".pxa-glitch-r{animation:pxa-glitch 3.8s infinite;animation-delay:-1.9s}" +
+    "@keyframes pxa-glitch{0%,91%{transform:translateX(0)}92%,94%{transform:translateX(-3px)}95%,97%{transform:translateX(3px)}98%,100%{transform:translateX(0)}}" +
+    ".pxa-rain{animation-name:pxa-fall;animation-timing-function:linear;animation-iteration-count:infinite}" +
+    "@keyframes pxa-fall{from{transform:translateY(-1144px)}to{transform:translateY(0)}}" +
+    ".pxa-ticker{animation:pxa-run 18s linear infinite}" +
+    "@keyframes pxa-run{to{transform:translateX(-__TICKW__px)}}" +
+    '@media (prefers-reduced-motion:reduce){[class*="pxa-"]{animation:none!important}}' +
+    "</style>";
+
+  /* 街机跑马灯词条(Courier New 等宽 0.6em,20px 字号 → 12px/字,
+   * 词条重复两遍为一个无缝单元,再整体复制两份滚动) */
+  var PXA_TICKER_BASE = "+++ INSERT COIN +++ CREDIT 01 +++ HI-SCORE 1280700 +++ 1UP READY +++ PLAYER SELECT +++ CONTINUE? 9 +++ WINNER STAYS +++ ";
 
   /** 像素字串宽度(用于居中) */
   function pixelTextWidth(str, pixelSize) {
@@ -446,6 +506,39 @@
     var leftTitle = typeof data.left.title === "string" ? data.left.title : "";
     var rightTitle = typeof data.right.title === "string" ? data.right.title : "";
 
+    /* 种子随机(FNV-1a + mulberry32):同一份数据重渲字符雨纹路一致,
+     * 编辑器每次输入重渲预览时背景不闪变;换数据/换主题才换纹路 */
+    var seedStr = [theme.id, leftName, rightName, boText].join("|");
+    var seed = 2166136261;
+    for (var si = 0; si < seedStr.length; si++) { seed ^= seedStr.charCodeAt(si); seed = Math.imul(seed, 16777619); }
+    var rng = function () {
+      seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+      var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+
+    /* 队标有效尺寸(钳制带 [24,200] 与全站一致,宽帽 300 等比回缩)。
+     * 两侧取共享高度带:只有一侧有队标时另一侧头像也对齐,不出现左右错层 */
+    function tagSize(side) {
+      if (!(data[side].tagImg && isAllowedImgURL(data[side].tagImg))) return null;
+      var h = Math.max(24, Math.min(200, Number(data[side].tagImgSize) || 56));
+      var ratio = Number(data[side].tagImgRatio) || 1;
+      var w = h * ratio;
+      if (w > 300) { w = 300; h = w / ratio; }
+      return { w: w, h: h };
+    }
+    var leftTag = tagSize("left"), rightTag = tagSize("right");
+    var tagZoneTop = 196;
+    var maxTagH = Math.max(leftTag ? leftTag.h : 0, rightTag ? rightTag.h : 0);
+    /* 改版排序:PLAYER 标签(140)→ 队标带(196+)→ 头像 → 名字 → 垃圾话;
+     * 无队标时头像回落原位 232 */
+    var ay = maxTagH > 0 ? Math.max(296, tagZoneTop + maxTagH + 44) : 232;
+
+    /* 跑马灯:单元两遍 + 整体两份,位移一个单元宽 = 无缝环 */
+    var tickUnit = PXA_TICKER_BASE + PXA_TICKER_BASE;
+    var tickW = tickUnit.length * 12;
+
     var parts = [];
     parts.push('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" role="img" aria-label="' + escapeXml(leftName + " vs " + rightName) + '">');
 
@@ -457,114 +550,161 @@
       '<rect width="4" height="2" fill="#000" opacity="0.12"/><rect y="2" width="4" height="2" fill="none"/></pattern>');
     parts.push('</defs>');
 
-    /* 背景:平涂暗色 + 像素网格 + 上下色带 */
+    /* 内嵌动效(自包含;跑马灯位移依词条长度注入) */
+    parts.push(PXA_STYLE.replace("__TICKW__", String(tickW)));
+
     parts.push('<g shape-rendering="crispEdges">');
+
+    /* 背景:平涂暗色 + ASCII 字符雨 + 像素网格 + 上下色带 */
     parts.push('<rect width="1920" height="1080" fill="' + theme.bg.from + '"/>');
+
+    /* ASCII 字符雨:16 列,44 行/单元 ×2 份,位移一个单元高(1144px)无缝下落;
+     * 左半列染左侧色、右半列染右侧色,每第 5 列为高亮 accent 列 */
+    (function asciiRain() {
+      var CHARS = "01<>[]{}|=+*#%&@$?!:;~^/";
+      for (var c = 0; c < 16; c++) {
+        var x = Math.round(64 + c * 118 + (rng() * 56 - 28));
+        var unit = [];
+        for (var ln = 0; ln < 44; ln++) {
+          var s = "";
+          for (var k = 0; k < 3; k++) s += CHARS.charAt(Math.floor(rng() * CHARS.length));
+          unit.push(s);
+        }
+        var lines = unit.concat(unit);
+        var hero = c % 5 === 2;
+        var fill = hero ? theme.accent : (x < 960 ? leftCol.main : rightCol.main);
+        var rain = '<text class="pxa-rain" x="' + x + '" y="26" font-family=' + MONO_Q +
+          ' font-size="22" fill="' + fill + '" opacity="' + (hero ? "0.3" : "0.12") + '"' +
+          ' style="animation-duration:' + (7 + rng() * 8).toFixed(2) + 's;animation-delay:' + (-rng() * 16).toFixed(2) + 's">';
+        for (var li = 0; li < lines.length; li++) {
+          rain += '<tspan x="' + x + '" dy="' + (li === 0 ? 0 : 26) + '">' + escapeXml(lines[li]) + "</tspan>";
+        }
+        parts.push(rain + "</text>");
+      }
+    })();
+
     parts.push('<rect width="1920" height="1080" fill="url(#px-grid)"/>');
     parts.push('<rect x="0" y="0" width="1920" height="8" fill="' + leftCol.main + '"/>');
     parts.push('<rect x="0" y="1072" width="1920" height="8" fill="' + rightCol.main + '"/>');
     parts.push('<rect x="0" y="8" width="1920" height="4" fill="' + leftCol.dark + '"/>');
     parts.push('<rect x="0" y="1068" width="1920" height="4" fill="' + rightCol.dark + '"/>');
+    /* 能量虚线沿色带流动(dash 周期 40 = 24+16,位移 -40 无缝) */
+    parts.push('<rect x="0" y="2" width="1920" height="4" fill="none" stroke="' + leftCol.glow + '" stroke-width="4" stroke-dasharray="24 16" opacity="0.55" class="pxa-dash"/>');
+    parts.push('<rect x="0" y="1074" width="1920" height="4" fill="none" stroke="' + rightCol.glow + '" stroke-width="4" stroke-dasharray="24 16" opacity="0.55" class="pxa-dash"/>');
 
-    /* 中央阶梯分隔:方块台阶交替左右色 */
+    /* 中央阶梯分隔:上下各多铺两阶,steps(4) 位移 96px(两阶周期)无缝下行 */
+    parts.push('<g class="pxa-ladder">');
     var stepW = 48;
-    for (var sy = 120; sy < 960; sy += stepW) {
-      var stepIdx = Math.floor((sy - 120) / stepW);
+    for (var sy = 24; sy < 1008; sy += stepW) {
+      var stepIdx = Math.floor((sy - 24) / stepW);
       var isLeft = stepIdx % 2 === 0;
       var color = isLeft ? leftCol.main : rightCol.main;
       var offset = isLeft ? 0 : stepW;
       parts.push('<rect x="' + (912 + offset) + '" y="' + sy + '" width="' + stepW + '" height="' + stepW + '" fill="' + color + '"/>');
       parts.push('<rect x="' + (912 + offset) + '" y="' + sy + '" width="' + stepW + '" height="' + (stepW / 8) + '" fill="' + (isLeft ? leftCol.glow : rightCol.glow) + '" opacity="0.6"/>');
     }
+    parts.push('</g>');
 
-    /* 顶部 HUD:比赛名 + BO 像素字 */
+    /* 顶部 HUD:比赛名 + BO 像素字(边条交替明灭) */
     parts.push('<rect x="660" y="28" width="600" height="60" fill="#000" opacity="0.6"/>');
-    parts.push('<rect x="660" y="28" width="600" height="4" fill="' + theme.accent + '"/>');
-    parts.push('<rect x="660" y="84" width="600" height="4" fill="' + theme.accent + '"/>');
-    parts.push('<text x="960" y="70" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="34" font-weight="700" letter-spacing="4" fill="#fff">' + escapeXml(name) + '</text>');
+    parts.push('<rect x="660" y="28" width="600" height="4" fill="' + theme.accent + '" class="pxa-hud-a"/>');
+    parts.push('<rect x="660" y="84" width="600" height="4" fill="' + theme.accent + '" class="pxa-hud-b"/>');
+    parts.push('<text x="960" y="70" text-anchor="middle" font-family=' + MONO_Q + ' font-size="34" font-weight="700" letter-spacing="4" fill="#fff">' + escapeXml(name) + '</text>');
 
-    /* BO 像素数字(中央,BEST OF N) */
+    /* BO 像素数字(中央,BEST OF N;整组两帧脉冲) */
     var boPx = 12;
     var boW = pixelTextWidth(boText, boPx);
+    parts.push('<g class="pxa-bo">');
     pixelTextBestOf(parts, boText, 960 - boW / 2, 130, boPx, theme);
+    parts.push('</g>');
 
-    /* 像素 VS(中央大字,5×5 字模 × 30px) */
+    /* 像素 VS(中央大字,5×5 字模 × 30px;边条跑马灯互闪,字模两帧跳动) */
     var vsPx = 30;
     var vsW = pixelTextWidth("VS", vsPx);
     var vsX = 960 - vsW / 2;
     var vsY = 440;
     parts.push('<rect x="' + (vsX - 30) + '" y="' + (vsY - 20) + '" width="' + (vsW + 60) + '" height="' + (vsPx * 5 + 40) + '" fill="#000"/>');
-    parts.push('<rect x="' + (vsX - 30) + '" y="' + (vsY - 20) + '" width="' + (vsW + 60) + '" height="8" fill="' + theme.accent + '"/>');
-    parts.push('<rect x="' + (vsX - 30) + '" y="' + (vsY + vsPx * 5 + 12) + '" width="' + (vsW + 60) + '" height="8" fill="' + theme.accent + '"/>');
-    parts.push(pixelText("VS", vsX, vsY, vsPx, theme.vs.from, theme.vs.stroke));
+    parts.push('<rect x="' + (vsX - 30) + '" y="' + (vsY - 20) + '" width="' + (vsW + 60) + '" height="8" fill="' + theme.accent + '" class="pxa-vsbar-a"/>');
+    parts.push('<rect x="' + (vsX - 30) + '" y="' + (vsY + vsPx * 5 + 12) + '" width="' + (vsW + 60) + '" height="8" fill="' + theme.accent + '" class="pxa-vsbar-b"/>');
+    parts.push('<g class="pxa-vs">' + pixelText("VS", vsX, vsY, vsPx, theme.vs.from, theme.vs.stroke) + '</g>');
 
-    /* 左右选手区 */
+    /* 左右选手区(改版排序:PLAYER 标签→队标→头像→名字→垃圾话 48px;
+     * 整组偶发 1px 级水平毛刺抖动,复古信号干扰感) */
     function pixelSide(side, cx, col, img, playerName, title, tag, tagImg) {
       var sp = [];
       var AV = 320; /* 头像显示边长 */
+      sp.push('<g class="' + (side === "left" ? "pxa-glitch-l" : "pxa-glitch-r") + '">');
 
       /* PLAYER 标签 */
       var label = side === "left" ? "PLAYER 1" : "PLAYER 2";
       sp.push('<rect x="' + (cx - 120) + '" y="140" width="240" height="44" fill="' + col.main + '"/>');
       sp.push('<rect x="' + (cx - 120) + '" y="176" width="240" height="8" fill="' + col.dark + '"/>');
-      sp.push('<text x="' + cx + '" y="172" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="26" font-weight="700" letter-spacing="6" fill="#fff">' + label + '</text>');
+      sp.push('<text x="' + cx + '" y="172" text-anchor="middle" font-family=' + MONO_Q + ' font-size="26" font-weight="700" letter-spacing="6" fill="#fff">' + label + '</text>');
 
-      /* 方形头像 + 像素角饰 */
-      var ax = cx - AV / 2, ay = 230;
+      /* 队标图(共享带内垂直居中;两档像素上下浮动) */
+      var ts = side === "left" ? leftTag : rightTag;
+      if (ts) {
+        var tcy = tagZoneTop + maxTagH / 2;
+        sp.push('<g class="pxa-tag">');
+        sp.push('<rect x="' + (cx - ts.w / 2 - 12) + '" y="' + (tcy - ts.h / 2 - 8) + '" width="' + (ts.w + 24) + '" height="' + (ts.h + 16) + '" fill="#000" opacity="0.7"/>');
+        sp.push('<image href="' + escapeXml(tagImg) + '" x="' + (cx - ts.w / 2) + '" y="' + (tcy - ts.h / 2) + '" width="' + ts.w + '" height="' + ts.h + '" preserveAspectRatio="xMidYMid meet" style="image-rendering:pixelated"/>');
+        sp.push('</g>');
+      }
+
+      /* 方形头像 + 像素角饰(四角块轮流点亮,街机灯箱追逐) */
+      var ax = cx - AV / 2;
       sp.push('<rect x="' + (ax - 16) + '" y="' + (ay - 16) + '" width="' + (AV + 32) + '" height="' + (AV + 32) + '" fill="' + col.dark + '"/>');
       sp.push('<rect x="' + (ax - 8) + '" y="' + (ay - 8) + '" width="' + (AV + 16) + '" height="' + (AV + 16) + '" fill="' + col.main + '"/>');
       sp.push('<rect x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" fill="' + theme.bg.to + '"/>');
       sp.push('<image href="' + escapeXml(img) + '" x="' + ax + '" y="' + ay + '" width="' + AV + '" height="' + AV + '" preserveAspectRatio="xMidYMid slice" style="image-rendering:pixelated"/>');
-      /* 四角像素块 */
       var corner = 24;
-      sp.push('<rect x="' + (ax - 16) + '" y="' + (ay - 16) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
-      sp.push('<rect x="' + (ax + AV + 16 - corner) + '" y="' + (ay - 16) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
-      sp.push('<rect x="' + (ax - 16) + '" y="' + (ay + AV + 16 - corner) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
-      sp.push('<rect x="' + (ax + AV + 16 - corner) + '" y="' + (ay + AV + 16 - corner) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
-
-      /* 队标或像素徽章 */
-      if (tagImg && isAllowedImgURL(tagImg)) {
-        var tagH = Math.max(24, Math.min(200, Number(data[side].tagImgSize) || 56));
-        var tagW = tagH * (Number(data[side].tagImgRatio) || 1);
-        if (tagW > 300) { tagW = 300; tagH = tagW / (Number(data[side].tagImgRatio) || 1); }
-        sp.push('<rect x="' + (cx - tagW / 2 - 12) + '" y="' + (ay + AV + 40 - tagH / 2) + '" width="' + (tagW + 24) + '" height="' + (tagH + 16) + '" fill="#000" opacity="0.7"/>');
-        sp.push('<image href="' + escapeXml(tagImg) + '" x="' + (cx - tagW / 2) + '" y="' + (ay + AV + 48 - tagH / 2) + '" width="' + tagW + '" height="' + tagH + '" preserveAspectRatio="xMidYMid meet" style="image-rendering:pixelated"/>');
-      }
+      sp.push('<rect class="pxa-corner c1" x="' + (ax - 16) + '" y="' + (ay - 16) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
+      sp.push('<rect class="pxa-corner c2" x="' + (ax + AV + 16 - corner) + '" y="' + (ay - 16) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
+      sp.push('<rect class="pxa-corner c3" x="' + (ax - 16) + '" y="' + (ay + AV + 16 - corner) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
+      sp.push('<rect class="pxa-corner c4" x="' + (ax + AV + 16 - corner) + '" y="' + (ay + AV + 16 - corner) + '" width="' + corner + '" height="' + corner + '" fill="' + theme.accent + '"/>');
 
       /* 大名字(等宽大写) */
       var displayName = playerName || "";
       var fs = Math.min(72, Math.max(36, Math.floor(620 / Math.max(1, displayName.length))));
-      sp.push('<text x="' + cx + '" y="' + (ay + AV + 130) + '" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="' + fs + '" font-weight="700" letter-spacing="6" fill="#fff">' + escapeXml(displayName) + '</text>');
+      sp.push('<text x="' + cx + '" y="' + (ay + AV + 96) + '" text-anchor="middle" font-family=' + MONO_Q + ' font-size="' + fs + '" font-weight="700" letter-spacing="6" fill="#fff">' + escapeXml(displayName) + '</text>');
 
-      /* 垃圾话 */
+      /* 垃圾话(2026090055 字号翻倍 24→48,超宽按 640px 自适应收缩) */
       if (title) {
-        sp.push('<text x="' + cx + '" y="' + (ay + AV + 180) + '" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="24" letter-spacing="2" fill="' + col.glow + '">' + escapeXml(title) + '</text>');
+        var tfs = Math.min(48, Math.floor(640 / Math.max(textWidth(title, 1), 0.1)));
+        sp.push('<text x="' + cx + '" y="' + (ay + AV + 162) + '" text-anchor="middle" font-family=' + MONO_Q + ' font-size="' + tfs + '" font-weight="700" letter-spacing="2" fill="' + col.glow + '">' + escapeXml(title) + '</text>');
       }
+      sp.push('</g>');
       return sp.join("");
     }
     parts.push(pixelSide("left", 430, leftCol, leftImg, leftName, leftTitle, data.left.tag, data.left.tagImg));
     parts.push(pixelSide("right", 1490, rightCol, rightImg, rightName, rightTitle, data.right.tag, data.right.tagImg));
 
-    /* 像素装饰:星 + 心 */
-    parts.push(pixelStar(140, 200, 16, theme.accent));
-    parts.push(pixelStar(1780, 240, 12, theme.particles[0]));
-    parts.push(pixelStar(120, 880, 20, theme.particles[1]));
-    parts.push(pixelStar(1800, 860, 14, theme.accent));
-    parts.push(pixelHeart(180, 940, 14, leftCol.main));
-    parts.push(pixelHeart(1720, 940, 14, rightCol.main));
+    /* 像素装饰:星(十字,交替闪烁) + 心(街机生命,心跳) */
+    parts.push('<g class="pxa-star-a">' + pixelStar(140, 200, 16, theme.accent) + '</g>');
+    parts.push('<g class="pxa-star-b">' + pixelStar(1780, 240, 12, theme.particles[0]) + '</g>');
+    parts.push('<g class="pxa-star-b">' + pixelStar(120, 880, 20, theme.particles[1]) + '</g>');
+    parts.push('<g class="pxa-star-a">' + pixelStar(1800, 860, 14, theme.accent) + '</g>');
+    parts.push('<g class="pxa-heart">' + pixelHeart(180, 940, 14, leftCol.main) + '</g>');
+    parts.push('<g class="pxa-heart">' + pixelHeart(1720, 940, 14, rightCol.main) + '</g>');
+
+    /* ASCII 跑马灯(底部 HUD 上沿,街机 attract 屏词条,向左无缝滚动) */
+    parts.push('<g class="pxa-ticker"><text x="0" y="980" font-family=' + MONO_Q + ' font-size="20" fill="' + theme.accent + '" opacity="0.45">' + escapeXml(tickUnit + tickUnit) + '</text></g>');
 
     /* 底部 HUD:街机台词条 */
     parts.push('<rect x="0" y="1000" width="1920" height="80" fill="#000"/>');
-    parts.push('<rect x="0" y="1000" width="1920" height="4" fill="' + theme.accent + '"/>');
-    parts.push('<rect x="40" y="1020" width="8" height="40" fill="' + theme.accent + '"/>');
-    parts.push('<rect x="56" y="1020" width="8" height="40" fill="' + theme.accent + '" opacity="0.6"/>');
-    parts.push('<text x="90" y="1050" font-family=' + JSON.stringify(MONO) + ' font-size="24" letter-spacing="2" fill="#ccc">' + escapeXml(meta) + '</text>');
-    /* READY? FIGHT! 双色 */
-    parts.push('<text x="1880" y="1050" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="24" font-weight="700" letter-spacing="4" fill="' + theme.accent + '">READY? </text>');
-    parts.push('<text x="1880" y="1050" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="24" font-weight="700" letter-spacing="4" fill="' + leftCol.main + '" dx="110">FIGHT!</text>');
+    parts.push('<rect x="0" y="1000" width="1920" height="4" fill="' + theme.accent + '" class="pxa-hud-a"/>');
+    parts.push('<rect x="40" y="1020" width="8" height="40" fill="' + theme.accent + '" class="pxa-hud-a"/>');
+    parts.push('<rect x="56" y="1020" width="8" height="40" fill="' + theme.accent + '" class="pxa-hud-b"/>');
+    parts.push('<text x="90" y="1050" font-family=' + MONO_Q + ' font-size="24" letter-spacing="2" fill="#ccc">' + escapeXml(meta) + '</text>');
+    /* READY? FIGHT! 双色(FIGHT! 街机硬闪)。
+     * 旧实现两行 text 靠 dx=110 错位,FIGHT! 实际锚到 1990 出右界被裁掉大半
+     * (自版式诞生即带病,2026090055 顺修);单 text 双 tspan 整行右对齐到 1880 */
+    parts.push('<text x="1880" y="1050" text-anchor="end" font-family=' + MONO_Q + ' font-size="24" font-weight="700" letter-spacing="4">' +
+      '<tspan fill="' + theme.accent + '">READY? </tspan>' +
+      '<tspan fill="' + leftCol.main + '" class="pxa-fight">FIGHT!</tspan></text>');
 
-    /* CRT 扫描线覆盖 */
-    parts.push('<rect width="1920" height="1080" fill="url(#px-scan)"/>');
+    /* CRT 扫描线覆盖(整层 4px 爬行) */
+    parts.push('<rect width="1920" height="1080" fill="url(#px-scan)" class="pxa-crt"/>');
     parts.push('</g>');
     parts.push('</svg>');
     return parts.join("");
@@ -572,7 +712,7 @@
 
   /** BO 像素字 + "BEST OF" 标签 */
   function pixelTextBestOf(parts, boText, x, y, px, theme) {
-    parts.push('<text x="' + (x + pixelTextWidth(boText, px) / 2) + '" y="' + (y - 8) + '" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="18" letter-spacing="4" fill="#888">BEST OF</text>');
+    parts.push('<text x="' + (x + pixelTextWidth(boText, px) / 2) + '" y="' + (y - 8) + '" text-anchor="middle" font-family=' + MONO_Q + ' font-size="18" letter-spacing="4" fill="#888">BEST OF</text>');
     parts.push(pixelText(boText, x, y + 8, px, theme.accent, theme.vs.stroke));
   }
 
@@ -618,7 +758,7 @@
     /* 顶部细线 + 赛事名(左对齐,杂志刊头式) */
     parts.push('<rect x="120" y="90" width="1680" height="2" fill="' + INK + '"/>');
     parts.push('<text x="120" y="60" font-family="Impact, Arial Black, PingFang SC, sans-serif" font-size="28" letter-spacing="14" fill="' + INK + '">' + escapeXml(name.toUpperCase()) + '</text>');
-    parts.push('<text x="1800" y="60" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="22" letter-spacing="3" fill="' + MUTED + '">' + escapeXml(boText) + '</text>');
+    parts.push('<text x="1800" y="60" text-anchor="end" font-family=' + MONO_Q + ' font-size="22" letter-spacing="3" fill="' + MUTED + '">' + escapeXml(boText) + '</text>');
 
     /* 中央:两选手名超大对排 + VS 小号居中(字号已在上方声明) */
     /* 左名字右对齐中央偏左 */
@@ -627,7 +767,7 @@
     parts.push('<text x="1090" y="520" text-anchor="start" font-family="Impact, Arial Black, PingFang SC, Microsoft YaHei, sans-serif" font-size="' + nameFs + '" font-weight="900" fill="' + INK + '">' + escapeXml(rightName) + '</text>');
 
     /* VS:小号大写 + 强调色,中缝 */
-    parts.push('<text x="960" y="530" text-anchor="middle" font-family=' + JSON.stringify(MONO) + ' font-size="36" font-weight="700" letter-spacing="8" fill="' + theme.accent + '">VS</text>');
+    parts.push('<text x="960" y="530" text-anchor="middle" font-family=' + MONO_Q + ' font-size="36" font-weight="700" letter-spacing="8" fill="' + theme.accent + '">VS</text>');
 
     /* 名字下划线:选手自定义色(或强调色),极简版的唯一彩色 */
     var lineW = 180;
@@ -660,10 +800,10 @@
     var leftTag = String(data.left.tag || "").trim();
     var rightTag = String(data.right.tag || "").trim();
     if (leftTag) {
-      parts.push('<text x="830" y="' + (520 - nameFs - 60) + '" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="4" fill="' + MUTED + '">' + escapeXml(leftTag.toUpperCase()) + '</text>');
+      parts.push('<text x="830" y="' + (520 - nameFs - 60) + '" text-anchor="end" font-family=' + MONO_Q + ' font-size="20" letter-spacing="4" fill="' + MUTED + '">' + escapeXml(leftTag.toUpperCase()) + '</text>');
     }
     if (rightTag) {
-      parts.push('<text x="1090" y="' + (520 - nameFs - 60) + '" text-anchor="start" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="4" fill="' + MUTED + '">' + escapeXml(rightTag.toUpperCase()) + '</text>');
+      parts.push('<text x="1090" y="' + (520 - nameFs - 60) + '" text-anchor="start" font-family=' + MONO_Q + ' font-size="20" letter-spacing="4" fill="' + MUTED + '">' + escapeXml(rightTag.toUpperCase()) + '</text>');
     }
     /* 队标图片:替代文字,名字上方居中于头像区(高随 tagImgSize 24-200,与其他版式统一带) */
     if (data.left.tagImg && isAllowedImgURL(data.left.tagImg)) {
@@ -682,10 +822,10 @@
     /* 底部:细线 + meta(左) + stage(右) */
     parts.push('<rect x="120" y="990" width="1680" height="2" fill="' + INK + '"/>');
     if (meta) {
-      parts.push('<text x="120" y="1030" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="2" fill="' + MUTED + '">' + escapeXml(meta) + '</text>');
+      parts.push('<text x="120" y="1030" font-family=' + MONO_Q + ' font-size="20" letter-spacing="2" fill="' + MUTED + '">' + escapeXml(meta) + '</text>');
     }
     if (data.stage) {
-      parts.push('<text x="1800" y="1030" text-anchor="end" font-family=' + JSON.stringify(MONO) + ' font-size="20" letter-spacing="4" fill="' + theme.accent + '">' + escapeXml(String(data.stage)) + '</text>');
+      parts.push('<text x="1800" y="1030" text-anchor="end" font-family=' + MONO_Q + ' font-size="20" letter-spacing="4" fill="' + theme.accent + '">' + escapeXml(String(data.stage)) + '</text>');
     }
 
     parts.push('</svg>');

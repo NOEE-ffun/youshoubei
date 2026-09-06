@@ -337,6 +337,61 @@ console.log("\n[poster.js] 像素街机版式");
     const w = S.VSPoster.pixelTextWidth("VS", 30);
     assert.equal(w, 30 * 4 * 2 - 30, "两字符宽 = 7 格");
   });
+  /* ---- 2026090055 改版:排序 / 垃圾话字号 / 内嵌动效 / ASCII 背景 ---- */
+  test("改版排序:PLAYER 标签→队标图→头像→名字→垃圾话(自上而下)", () => {
+    const d = JSON.parse(JSON.stringify(BASE_DATA));
+    d.left.title = "今天你必输";
+    d.left.img = "https://example.com/l.png";
+    d.right.img = "https://example.com/r.png";
+    d.left.tagImg = "data:image/png;base64,TAGL";
+    d.left.tagImgRatio = 2; d.left.tagImgSize = 96;
+    d.right.tagImg = "data:image/png;base64,TAGR";
+    d.right.tagImgRatio = 2; d.right.tagImgSize = 96;
+    const svg = S.VSPoster.build(d, PIX_THEME);
+    const order = [
+      "PLAYER 1",
+      "data:image/png;base64,TAGL",
+      "https://example.com/l.png",
+      ">" + esc(BASE_DATA.left.name) + "<",
+      "今天你必输",
+    ].map((s) => svg.indexOf(s));
+    assert.ok(order.every((i) => i >= 0), "五个元素都应渲染:" + order.join(","));
+    assert.ok(order.every((v, i) => i === 0 || v > order[i - 1]), "自上而下排序应为 标签<队标<头像<名字<垃圾话,实际 " + order.join(","));
+    /* 右侧同样成立 */
+    const orderR = ["PLAYER 2", "data:image/png;base64,TAGR", "https://example.com/r.png"].map((s) => svg.indexOf(s));
+    assert.ok(orderR.every((v, i) => i === 0 || v > orderR[i - 1]), "右侧排序同样成立");
+  });
+  test("改版:垃圾话字号翻倍(24→48,短文案顶格 48)", () => {
+    const d = JSON.parse(JSON.stringify(BASE_DATA));
+    d.left.title = "今天你必输";
+    const svg = S.VSPoster.build(d, PIX_THEME);
+    assert.ok(new RegExp('font-size="48"[^>]*>' + esc("今天你必输") + "<").test(svg), "短垃圾话应渲染 48px");
+  });
+  test("改版:动效自包含——内嵌 style,大屏页不加载 poster.css 也能动", () => {
+    assert.ok(pixSvg.includes("<style>"), "SVG 内嵌 <style>");
+    assert.ok(pixSvg.includes("@keyframes pxa-"), "pxa- 关键帧");
+    assert.ok(pixSvg.includes('prefers-reduced-motion'), "尊重系统减少动效");
+    assert.ok(pixSvg.includes("pxa-ladder"), "阶梯行军");
+    assert.ok(pixSvg.includes("pxa-fight"), "FIGHT 闪烁");
+    assert.ok(pixSvg.includes("pxa-corner"), "头像角块跑马灯");
+  });
+  test("改版:动效 0% 帧 = 完整画面(导出 PNG 冻结在 0%,元素不丢)", () => {
+    const kf = pixSvg.match(/@keyframes pxa-fight\{([^}]*)\}/);
+    assert.ok(kf, "pxa-fight 关键帧存在");
+    assert.ok(/^0%[^}]*opacity:1/.test(kf[1]), "FIGHT 0% 态应为可见:" + kf[1]);
+    const hop = pixSvg.match(/@keyframes pxa-hop\{([^}]*)\}/);
+    assert.ok(hop && /^0%,24%\{transform:translateY\(0\)/.test(hop[1]), "VS 跳动 0% 态归零");
+  });
+  test("改版:ASCII 字符雨 + 街机跑马灯背景", () => {
+    assert.ok(pixSvg.includes("pxa-rain"), "字符雨列");
+    assert.ok((pixSvg.match(/<tspan/g) || []).length > 800, "雨列 tspan 体量,实际 " + (pixSvg.match(/<tspan/g) || []).length);
+    assert.ok(pixSvg.includes("INSERT COIN"), "INSERT COIN 跑马灯");
+    assert.ok(pixSvg.includes("pxa-ticker"), "跑马灯动画类");
+    /* 种子随机:同数据两次构建字符雨一致(编辑预览重渲不闪变) */
+    const again = S.VSPoster.build(BASE_DATA, PIX_THEME);
+    const grab = (s) => (s.match(/<tspan[^>]*>([^<]+)/g) || []).slice(0, 200).join("");
+    assert.equal(grab(pixSvg), grab(again), "同数据重渲雨纹一致");
+  });
 }
 
 console.log("\n[poster.js] 极简刊头版式");
