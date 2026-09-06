@@ -562,16 +562,19 @@
      * 左半列染左侧色、右半列染右侧色,每第 5 列为高亮 accent 列 */
     (function asciiRain() {
       var CHARS = "01<>[]{}|=+*#%&@$?!:;~^/";
-      for (var c = 0; c < 16; c++) {
-        var x = Math.round(64 + c * 118 + (rng() * 56 - 28));
+      /* 2026090057 无缝铺满:17 列 × 每行 9 字(22px Courier 0.6em → 列宽 118.8px)从 x=-10
+       * 确定性平铺(去位置抖动,速度/相位/字符仍随机),首尾出画裁掉,相邻雨带首尾相接
+       * 成整幅字符幕帘,横向零空带(含屏幕两缘) */
+      for (var c = 0; c < 17; c++) {
+        var x = Math.round(-10 + c * 118.8);
         var unit = [];
         for (var ln = 0; ln < 44; ln++) {
           var s = "";
-          for (var k = 0; k < 5; k++) s += CHARS.charAt(Math.floor(rng() * CHARS.length));
+          for (var k = 0; k < 9; k++) s += CHARS.charAt(Math.floor(rng() * CHARS.length));
           unit.push(s);
         }
         var lines = unit.concat(unit);
-        /* 2026090056 提亮:普通列 main→glow(向白混的亮变体)+0.12→0.34+加粗+每行 3→5 字加密度,
+        /* 2026090056 提亮:普通列 main→glow(向白混的亮变体)+0.12→0.34+加粗,
          * 高亮列 0.3→0.62 且每 4 列一提(原每 5);暗底上明显可感又不抢前景 */
         var hero = c % 4 === 2;
         var fill = hero ? theme.accent : (x < 960 ? leftCol.glow : rightCol.glow);
