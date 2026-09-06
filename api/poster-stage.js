@@ -2,8 +2,8 @@
 
 const crypto = require('node:crypto');
 const { requireRole } = require('./auth');
-const { sendJson, readBody } = require('./helpers');
-const { readJsonCached, writeJson, appendAudit } = require('./oss');
+const { sendJson, readBody, createStorage } = require('./helpers');
+const { appendAudit } = require('./oss');
 
 /* OBS 舞台(浏览器源)实时接口(2026-09-07 实时化)：
  *   POST → admin/super 创建新舞台,返回自包含 URL(/poster-stage.html?id=…)
@@ -58,11 +58,12 @@ function validatePosterStagePayload(body) {
   return null;
 }
 
-/* 存储层依赖注入：默认用 OSS；测试可传入内存实现。 */
+/* 存储层走 helpers.createStorage:注入(单测) → 无 OSS 时 dev-store(本地/e2e,
+ * 2026-09-07 补——此前直连 readJsonCached/writeJson,本地无 OSS 必 500,零 e2e 未暴露)
+ * → OSS(生产)。 */
 function createHandler(storage, options) {
   const o = options || {};
-  const read = (storage && storage.readJson) || readJsonCached;
-  const write = (storage && storage.writeJson) || writeJson;
+  const { read, write } = createStorage(storage);
   const ttlDays = typeof o.ttlDays === 'number' ? o.ttlDays : defaultTtlDays();
   const now = typeof o.now === 'function' ? o.now : Date.now;
 
