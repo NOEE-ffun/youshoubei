@@ -21,6 +21,17 @@
     pendingTagImgRatio: null
   };
 
+  /* dataURL→Blob 必须本地解码:全站 CSP connect-src 'self' 禁止 fetch(data:),
+   * fetch(url).blob() 这条路走不通(且 await fetch(x).blob() 有优先级坑) */
+  function dataUrlToBlob(dataUrl) {
+    const comma = dataUrl.indexOf(',');
+    const type = dataUrl.slice(5, comma).split(';')[0] || 'application/octet-stream';
+    const bin = atob(dataUrl.slice(comma + 1));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type });
+  }
+
   function measureRatio(dataUrl) {
     return new Promise((resolve) => {
       const img = new Image();
@@ -187,7 +198,7 @@
     if (state.pendingTagImgData !== null) {
       if (state.pendingTagImgData) {
         try {
-          const url = await app.uploadImage(await fetch(state.pendingTagImgData).blob());
+          const url = await app.uploadImage(dataUrlToBlob(state.pendingTagImgData));
           body.tagImg = url;
           body.tagImgRatio = state.pendingTagImgRatio;
         } catch (error) {
