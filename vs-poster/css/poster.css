@@ -4,50 +4,50 @@
  * 全部动效只走 transform / opacity,尊重 prefers-reduced-motion
  */
 /* 粒子漂浮 */
-#poster-app .p-particle {
+.poster-app .p-particle {
   animation: vs-float 7s ease-in-out infinite alternate;
 }
-#poster-app .p-particle:nth-child(3n) { animation-duration: 9s; animation-delay: -3s; }
-#poster-app .p-particle:nth-child(5n) { animation-duration: 5.5s; animation-delay: -1.4s; }
+.poster-app .p-particle:nth-child(3n) { animation-duration: 9s; animation-delay: -3s; }
+.poster-app .p-particle:nth-child(5n) { animation-duration: 5.5s; animation-delay: -1.4s; }
 /* 菱形闪点 */
-#poster-app .p-sparkle {
+.poster-app .p-sparkle {
   animation: vs-blink 3.4s ease-in-out infinite;
 }
 /* 光环 / 菱形环旋转 */
-#poster-app .p-ring,
-#poster-app .p-diamond {
+.poster-app .p-ring,
+.poster-app .p-diamond {
   transform-box: fill-box;
   transform-origin: center;
   animation: vs-spin 30s linear infinite;
 }
-#poster-app .p-diamond { animation-duration: 46s; animation-direction: reverse; }
+.poster-app .p-diamond { animation-duration: 46s; animation-direction: reverse; }
 /* VS 徽章呼吸 */
-#poster-app .p-vs {
+.poster-app .p-vs {
   transform-box: fill-box;
   transform-origin: center;
   animation: vs-breathe 3.6s ease-in-out infinite;
 }
 /* 中心能量射线 */
-#poster-app .p-ray {
+.poster-app .p-ray {
   animation: vs-ray 4.2s ease-in-out infinite;
 }
 /* 两侧闪电 */
-#poster-app .p-bolt {
+.poster-app .p-bolt {
   animation: vs-blink 2.4s ease-in-out infinite;
 }
-#poster-app .p-bolt:nth-child(2) { animation-delay: -1.2s; }
+.poster-app .p-bolt:nth-child(2) { animation-delay: -1.2s; }
 /* LIVE 红点 */
-#poster-app .p-live {
+.poster-app .p-live {
   transform-box: fill-box;
   transform-origin: center;
   animation: vs-live 1.15s ease-in-out infinite;
 }
 /* 底部扫描线 */
-#poster-app .p-scan {
+.poster-app .p-scan {
   animation: vs-scan 6s linear infinite;
 }
 /* 顶部标题微光 */
-#poster-app .p-title {
+.poster-app .p-title {
   animation: vs-title 4.6s ease-in-out infinite;
 }
 @keyframes vs-float{
@@ -82,15 +82,15 @@
   0%, 100% { opacity: 0.86; }
   50%      { opacity: 1; }
 }
-@media (prefers-reduced-motion: reduce){#poster-app .p-particle,
-#poster-app .p-sparkle,
-#poster-app .p-ring,
-#poster-app .p-diamond,
-#poster-app .p-vs,
-#poster-app .p-ray,
-#poster-app .p-bolt,
-#poster-app .p-live,
-#poster-app .p-scan,
-#poster-app .p-title {
+@media (prefers-reduced-motion: reduce){.poster-app .p-particle,
+.poster-app .p-sparkle,
+.poster-app .p-ring,
+.poster-app .p-diamond,
+.poster-app .p-vs,
+.poster-app .p-ray,
+.poster-app .p-bolt,
+.poster-app .p-live,
+.poster-app .p-scan,
+.poster-app .p-title {
     animation: none;
   }}
