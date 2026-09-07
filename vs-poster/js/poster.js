@@ -406,7 +406,7 @@
     return parts.join("");
   }
 
-  /* 像素街机动效(2026090055 改版):内嵌进 SVG 的 <style>,预览/大屏/任意嵌入处都能动
+  /* 像素街机动效(2026-09-07 调整):内嵌进 SVG 的 <style>,预览/大屏/任意嵌入处都能动
    * (大屏页不加载 poster.css,p-* 类在那里是死的,故必须自包含)。
    * 硬契约:
    *   ① 全部关键帧 0% 态 = 完整静态画面——导出 PNG 经 <img> 解码冻结在 0% 帧,
@@ -414,45 +414,40 @@
    *   ② 只动 transform / opacity(能量虚线例外,stroke-dashoffset);
    *   ③ 像素感来自离散关键帧 / steps(),不做平滑补间;
    *   ④ 尊重 prefers-reduced-motion。
+   * 2026090059 用户调整:全部动效时长 ×2;字符雨静态化(pxa-rain 类保留为
+   * 静态标记,无 pxa-fall 下落);HUD/VS 边条明灭撤除(pxa-hud-a/b、
+   * pxa-vsbar-a/b 类保留为常亮标记,无 pxa-marq)。
    * __TICKW__(跑马灯位移距离)依词条长度在构建期替换。 */
   var PXA_STYLE =
     "<style>" +
-    ".pxa-ladder{animation:pxa-march 2.4s steps(4) infinite}" +
+    ".pxa-ladder{animation:pxa-march 4.8s steps(4) infinite}" +
     "@keyframes pxa-march{to{transform:translateY(96px)}}" +
-    ".pxa-dash{animation:pxa-dashcrawl 1s linear infinite}" +
+    ".pxa-dash{animation:pxa-dashcrawl 2s linear infinite}" +
     "@keyframes pxa-dashcrawl{to{stroke-dashoffset:-40}}" +
-    ".pxa-vsbar-a{animation:pxa-marq-a 1s infinite}" +
-    ".pxa-vsbar-b{animation:pxa-marq-b 1s infinite}" +
-    "@keyframes pxa-marq-a{0%,49%{opacity:1}50%,100%{opacity:.25}}" +
-    "@keyframes pxa-marq-b{0%,49%{opacity:.25}50%,100%{opacity:1}}" +
-    ".pxa-vs{animation:pxa-hop 1.3s infinite}" +
+    ".pxa-vs{animation:pxa-hop 2.6s infinite}" +
     "@keyframes pxa-hop{0%,24%{transform:translateY(0)}25%,49%{transform:translateY(-10px)}50%,100%{transform:translateY(0)}}" +
-    ".pxa-bo{animation:pxa-bo 1.6s infinite}" +
+    ".pxa-bo{animation:pxa-bo 3.2s infinite}" +
     "@keyframes pxa-bo{0%,49%{opacity:1}50%,74%{opacity:.55}75%,100%{opacity:1}}" +
-    ".pxa-hud-a{animation:pxa-marq-a 1.2s infinite}" +
-    ".pxa-hud-b{animation:pxa-marq-b 1.2s infinite}" +
-    ".pxa-corner{animation:pxa-chase 1.4s infinite}" +
-    ".pxa-corner.c2{animation-delay:.35s}" +
-    ".pxa-corner.c3{animation-delay:.7s}" +
-    ".pxa-corner.c4{animation-delay:1.05s}" +
+    ".pxa-corner{animation:pxa-chase 2.8s infinite}" +
+    ".pxa-corner.c2{animation-delay:.7s}" +
+    ".pxa-corner.c3{animation-delay:1.4s}" +
+    ".pxa-corner.c4{animation-delay:2.1s}" +
     "@keyframes pxa-chase{0%,24%{opacity:1}25%,49%{opacity:.35}50%,100%{opacity:1}}" +
-    ".pxa-star-a{animation:pxa-twinkle 2.8s infinite}" +
-    ".pxa-star-b{animation:pxa-twinkle 3.6s infinite;animation-delay:-1.3s}" +
+    ".pxa-star-a{animation:pxa-twinkle 5.6s infinite}" +
+    ".pxa-star-b{animation:pxa-twinkle 7.2s infinite;animation-delay:-2.6s}" +
     "@keyframes pxa-twinkle{0%,59%{opacity:1}60%,84%{opacity:.2}85%,100%{opacity:1}}" +
-    ".pxa-heart{transform-box:fill-box;transform-origin:center;animation:pxa-beat 1.6s infinite}" +
+    ".pxa-heart{transform-box:fill-box;transform-origin:center;animation:pxa-beat 3.2s infinite}" +
     "@keyframes pxa-beat{0%,18%{transform:scale(1)}19%,30%{transform:scale(1.18)}31%,44%{transform:scale(1)}45%,56%{transform:scale(1.1)}57%,100%{transform:scale(1)}}" +
-    ".pxa-crt{animation:pxa-crawl 1.6s steps(4) infinite}" +
+    ".pxa-crt{animation:pxa-crawl 3.2s steps(4) infinite}" +
     "@keyframes pxa-crawl{to{transform:translateY(4px)}}" +
-    ".pxa-tag{animation:pxa-bob 3.2s steps(2) infinite}" +
+    ".pxa-tag{animation:pxa-bob 6.4s steps(2) infinite}" +
     "@keyframes pxa-bob{0%,49%{transform:translateY(0)}50%,100%{transform:translateY(4px)}}" +
-    ".pxa-fight{animation:pxa-fight 1.1s infinite}" +
+    ".pxa-fight{animation:pxa-fight 2.2s infinite}" +
     "@keyframes pxa-fight{0%,59%{opacity:1}60%,100%{opacity:0}}" +
-    ".pxa-glitch-l{animation:pxa-glitch 3.4s infinite}" +
-    ".pxa-glitch-r{animation:pxa-glitch 3.8s infinite;animation-delay:-1.9s}" +
+    ".pxa-glitch-l{animation:pxa-glitch 6.8s infinite}" +
+    ".pxa-glitch-r{animation:pxa-glitch 7.6s infinite;animation-delay:-3.8s}" +
     "@keyframes pxa-glitch{0%,91%{transform:translateX(0)}92%,94%{transform:translateX(-3px)}95%,97%{transform:translateX(3px)}98%,100%{transform:translateX(0)}}" +
-    ".pxa-rain{animation-name:pxa-fall;animation-timing-function:linear;animation-iteration-count:infinite}" +
-    "@keyframes pxa-fall{from{transform:translateY(-1144px)}to{transform:translateY(0)}}" +
-    ".pxa-ticker{animation:pxa-run 18s linear infinite}" +
+    ".pxa-ticker{animation:pxa-run 36s linear infinite}" +
     "@keyframes pxa-run{to{transform:translateX(-__TICKW__px)}}" +
     '@media (prefers-reduced-motion:reduce){[class*="pxa-"]{animation:none!important}}' +
     "</style>";
@@ -558,31 +553,27 @@
     /* 背景:平涂暗色 + ASCII 字符雨 + 像素网格 + 上下色带 */
     parts.push('<rect width="1920" height="1080" fill="' + theme.bg.from + '"/>');
 
-    /* ASCII 字符雨:16 列,44 行/单元 ×2 份,位移一个单元高(1144px)无缝下落;
-     * 左半列染左侧色、右半列染右侧色,每第 5 列为高亮 accent 列 */
+    /* ASCII 字符雨(2026090059 静态化):整幅字符幕帘作静态纹理,不再下落。
+     * 16 列 × 每行 9 字(22px Courier 0.6em → 字串宽 118.8px),列距 120 从 x=0
+     * 平铺——恰在中线 960 处左右 8/8 均分(旧 17 列从 x=-10 铺左 9 右 8 不均),
+     * 右缘覆盖至 1918.8;44 行 × 26px = 1144 ≥ 1080 纵向满铺,首行出画裁顶。
+     * 无 accent 高亮列(黄色带已撤),左半染左侧 glow、右半染右侧 glow;
+     * class="pxa-rain" 保留为静态标记;种子随机保证重渲纹路一致 */
     (function asciiRain() {
       var CHARS = "01<>[]{}|=+*#%&@$?!:;~^/";
-      /* 2026090057 无缝铺满:17 列 × 每行 9 字(22px Courier 0.6em → 列宽 118.8px)从 x=-10
-       * 确定性平铺(去位置抖动,速度/相位/字符仍随机),首尾出画裁掉,相邻雨带首尾相接
-       * 成整幅字符幕帘,横向零空带(含屏幕两缘) */
-      for (var c = 0; c < 17; c++) {
-        var x = Math.round(-10 + c * 118.8);
+      for (var c = 0; c < 16; c++) {
+        var x = Math.round(c * 120);
         var unit = [];
         for (var ln = 0; ln < 44; ln++) {
           var s = "";
           for (var k = 0; k < 9; k++) s += CHARS.charAt(Math.floor(rng() * CHARS.length));
           unit.push(s);
         }
-        var lines = unit.concat(unit);
-        /* 2026090056 提亮:普通列 main→glow(向白混的亮变体)+0.12→0.34+加粗,
-         * 高亮列 0.3→0.62 且每 4 列一提(原每 5);暗底上明显可感又不抢前景 */
-        var hero = c % 4 === 2;
-        var fill = hero ? theme.accent : (x < 960 ? leftCol.glow : rightCol.glow);
+        var fill = c < 8 ? leftCol.glow : rightCol.glow;
         var rain = '<text class="pxa-rain" x="' + x + '" y="26" font-family=' + MONO_Q +
-          ' font-size="22" font-weight="700" fill="' + fill + '" opacity="' + (hero ? "0.62" : "0.34") + '"' +
-          ' style="animation-duration:' + (7 + rng() * 8).toFixed(2) + 's;animation-delay:' + (-rng() * 16).toFixed(2) + 's">';
-        for (var li = 0; li < lines.length; li++) {
-          rain += '<tspan x="' + x + '" dy="' + (li === 0 ? 0 : 26) + '">' + escapeXml(lines[li]) + "</tspan>";
+          ' font-size="22" font-weight="700" fill="' + fill + '" opacity="0.34">';
+        for (var li = 0; li < unit.length; li++) {
+          rain += '<tspan x="' + x + '" dy="' + (li === 0 ? 0 : 26) + '">' + escapeXml(unit[li]) + "</tspan>";
         }
         parts.push(rain + "</text>");
       }
@@ -610,7 +601,7 @@
     }
     parts.push('</g>');
 
-    /* 顶部 HUD:比赛名 + BO 像素字(边条交替明灭) */
+    /* 顶部 HUD:比赛名 + BO 像素字(2026090059 边条明灭撤除,常亮) */
     parts.push('<rect x="660" y="28" width="600" height="60" fill="#000" opacity="0.6"/>');
     parts.push('<rect x="660" y="28" width="600" height="4" fill="' + theme.accent + '" class="pxa-hud-a"/>');
     parts.push('<rect x="660" y="84" width="600" height="4" fill="' + theme.accent + '" class="pxa-hud-b"/>');
@@ -623,7 +614,7 @@
     pixelTextBestOf(parts, boText, 960 - boW / 2, 130, boPx, theme);
     parts.push('</g>');
 
-    /* 像素 VS(中央大字,5×5 字模 × 30px;边条跑马灯互闪,字模两帧跳动) */
+    /* 像素 VS(中央大字,5×5 字模 × 30px;2026090059 边条互闪撤除常亮,字模两帧跳动) */
     var vsPx = 30;
     var vsW = pixelTextWidth("VS", vsPx);
     var vsX = 960 - vsW / 2;

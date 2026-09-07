@@ -383,14 +383,32 @@ console.log("\n[poster.js] 像素街机版式");
     assert.ok(hop && /^0%,24%\{transform:translateY\(0\)/.test(hop[1]), "VS 跳动 0% 态归零");
   });
   test("改版:ASCII 字符雨 + 街机跑马灯背景", () => {
-    assert.ok(pixSvg.includes("pxa-rain"), "字符雨列");
-    assert.ok((pixSvg.match(/<tspan/g) || []).length > 800, "雨列 tspan 体量,实际 " + (pixSvg.match(/<tspan/g) || []).length);
+    assert.ok(pixSvg.includes("pxa-rain"), "字符雨列(静态标记类)");
+    assert.ok((pixSvg.match(/<tspan/g) || []).length > 600, "雨列 tspan 体量,实际 " + (pixSvg.match(/<tspan/g) || []).length);
     assert.ok(pixSvg.includes("INSERT COIN"), "INSERT COIN 跑马灯");
     assert.ok(pixSvg.includes("pxa-ticker"), "跑马灯动画类");
     /* 种子随机:同数据两次构建字符雨一致(编辑预览重渲不闪变) */
     const again = S.VSPoster.build(BASE_DATA, PIX_THEME);
     const grab = (s) => (s.match(/<tspan[^>]*>([^<]+)/g) || []).slice(0, 200).join("");
     assert.equal(grab(pixSvg), grab(again), "同数据重渲雨纹一致");
+  });
+  test("2026090059 调整:雨带静态化 + 无黄列 + 左右 8/8 均分", () => {
+    assert.ok(!pixSvg.includes("pxa-fall"), "无下落关键帧(静态)");
+    assert.ok(!/"pxa-rain"[^>]*style="/.test(pixSvg), "雨列无内联动画样式");
+    const cols = [...pixSvg.matchAll(/<text class="pxa-rain" x="(\d+)"[^>]*fill="([^"]+)"/g)];
+    assert.equal(cols.length, 16, "雨列应 16 列,实际 " + cols.length);
+    assert.equal(cols.filter((m) => Number(m[1]) < 960).length, 8, "中线 960 左侧应恰 8 列");
+    assert.ok(cols.every((m) => m[2] !== PIX_THEME.accent), "无 accent(黄)高亮列");
+    assert.ok(cols.slice(0, 8).every((m) => m[2] === PIX_THEME.left.glow), "左半染左侧 glow");
+    assert.ok(cols.slice(8).every((m) => m[2] === PIX_THEME.right.glow), "右半染右侧 glow");
+  });
+  test("2026090059 调整:边条明灭撤除 + 其余动效时长 ×2", () => {
+    assert.ok(!pixSvg.includes("pxa-marq"), "HUD/VS 边条明灭关键帧撤除(常亮)");
+    assert.ok(pixSvg.includes("pxa-march 4.8s"), "阶梯 2.4→4.8s");
+    assert.ok(pixSvg.includes("pxa-dashcrawl 2s"), "能量虚线 1→2s");
+    assert.ok(pixSvg.includes("pxa-fight 2.2s"), "FIGHT 1.1→2.2s");
+    assert.ok(pixSvg.includes("pxa-run 36s"), "跑马灯 18→36s");
+    assert.ok(pixSvg.includes("pxa-hop 2.6s"), "VS 跳动 1.3→2.6s");
   });
 }
 
