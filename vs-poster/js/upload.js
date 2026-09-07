@@ -30,8 +30,11 @@
     });
   }
 
-  /** 等比缩放并转 dataURL(透明图走 PNG,其余 JPEG) */
-  function downscale(img, maxEdge, preferPng) {
+  /** 等比缩放并转 dataURL:实测画布 alpha 通道决定格式——含任何非不透明
+   * 像素即走 PNG,否则 JPEG(体积小)。JPEG 无 alpha,透明会被烘成黑底
+   * 遮住背景;此前按扩展名/MIME 猜格式会漏(透明 webp/avif、无扩展名键),
+   * 2026090060 改为逐像素判定,彻底关死这一类(队标黑底即此病)。 */
+  function downscale(img, maxEdge) {
     var scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
     var w = Math.max(1, Math.round(img.naturalWidth * scale));
     var h = Math.max(1, Math.round(img.naturalHeight * scale));
@@ -40,8 +43,14 @@
     canvas.height = h;
     var ctx = canvas.getContext("2d");
     ctx.drawImage(img, 0, 0, w, h);
-    if (preferPng) return canvas.toDataURL("image/png");
-    return canvas.toDataURL("image/jpeg", 0.92);
+    /* 画布被污染时 getImageData 与 toDataURL 同源同抛,交由调用方的
+     * 跨域错误分支处理,此处不吞 */
+    var data = ctx.getImageData(0, 0, w, h).data;
+    var hasAlpha = false;
+    for (var i = 3; i < data.length; i += 4) {
+      if (data[i] < 255) { hasAlpha = true; break; }
+    }
+    return hasAlpha ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.92);
   }
 
   /** 文件上传:校验 + 压缩 */
@@ -54,7 +63,7 @@
       loadImage(url, false)
         .then(function (img) {
           URL.revokeObjectURL(url);
-          resolve(downscale(img, MAX_EDGE, /png|svg|gif/i.test(file.type)));
+          resolve(downscale(img, MAX_EDGE));
         })
         .catch(function (e) { URL.revokeObjectURL(url); reject(e); });
     });
@@ -64,14 +73,13 @@
   function handleURL(raw) {
     var url = String(raw || "").trim();
     if (!isAllowedURL(url)) return Promise.reject(new Error("仅支持 http(s) 或图片 data: 链接"));
-    var preferPng = /\.png(\?|#|$)/i.test(url); /* 末尾可能带 _ts 穿透参数,裸 \.png$ 会漏判→透明 PNG 被压 JPEG 黑底 */
     return loadImage(url, true)
-      .then(function (img) { return downscale(img, MAX_EDGE, preferPng); })
+      .then(function (img) { return downscale(img, MAX_EDGE); })
       .catch(function () {
         // CORS 直读失败:降级不带 crossOrigin 再试(canvas 会被污染则报错)
         return loadImage(url, false)
           .then(function (img) {
-            try { return downscale(img, MAX_EDGE, preferPng); }
+            try { return downscale(img, MAX_EDGE); }
             catch (e) { throw new Error("远程图片有跨域限制,请下载后上传本地文件"); }
           });
       });
