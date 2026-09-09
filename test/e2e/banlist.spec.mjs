@@ -169,7 +169,8 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await expect(limitOf('限卡乙')).toHaveValue('2');
   /* 搜索-单卡:候选池来自种子快照 6 元组(无 class→null→中立);加卡不自动切 tab(停在精灵,可见行不变) */
   await page.locator('.bl-search').fill('终焉');
-  await expect(page.locator('.bl-hit .banlist-name')).toHaveText(['终焉之炎']);
+  /* 快照池(终焉之炎,首见优先)+全卡库资产(终焉的白骨圣堂之主)双来源 */
+  await expect(page.locator('.bl-hit .banlist-name')).toHaveText(['终焉之炎', '终焉的白骨圣堂之主']);
   await page.locator('.bl-hit').first().click();
   await expect(rows).toHaveCount(14);
   await expect(block1.locator('.bl-cls-tab.active')).toHaveAttribute('data-cls', '1');

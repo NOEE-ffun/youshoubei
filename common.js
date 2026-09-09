@@ -1195,23 +1195,37 @@
   /* 历届全量记录缓存(候选池数据源):appInstance.list 是无 canvas 的摘要投影,
    * 弹窗打开时经 storageGetAll 异步刷新(云端=内存工作区,本地=IndexedDB 全量) */
   let banlistPoolRecords = [];
+  /* 全卡库静态资产(scripts/gen-card-library.js 生成):搜索候选池的补全来源,
+   * 历史快照没出现过的卡也能搜到;no-store 防陈版,快照数据优先(同 id 首见即定) */
+  let banlistLibraryCards = [];
 
   function refreshBanlistPoolRecords() {
     Promise.resolve(appInstance && appInstance.storageGetAll ? appInstance.storageGetAll() : [])
       .then((all) => {
         banlistPoolRecords = Array.isArray(all) ? all : [];
-        /* 池晚到时已渲染的搜索结果按现有关键词重算(输入框不动,只补结果区) */
-        const wrap = settingsDialog && settingsDialog.querySelector('#settings-banlists');
-        if (!wrap || !settingsDialog.open) return;
-        wrap.querySelectorAll('.bl-block').forEach((block) => {
-          const bl = banlistDraft.find((x) => x.id === block.dataset.bl);
-          const input = block.querySelector('.bl-search');
-          if (bl && input && input.value) {
-            block.querySelector('.bl-results').innerHTML = blSearchResults(bl, input.value);
-          }
-        });
+        rerenderBanlistSearches();
       })
-      .catch(() => { /* 池刷新失败=搜索无结果,不阻塞弹窗 */ });
+      .catch(() => { /* 池刷新失败=搜索只剩全卡库,不阻塞弹窗 */ });
+    fetch('/cards.json', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => {
+        banlistLibraryCards = Array.isArray(rows) ? rows : [];
+        rerenderBanlistSearches();
+      })
+      .catch(() => { /* 资产缺失(旧部署)=退化为纯快照池 */ });
+  }
+
+  /* 池晚到时已渲染的搜索结果按现有关键词重算(输入框不动,只补结果区) */
+  function rerenderBanlistSearches() {
+    const wrap = settingsDialog && settingsDialog.querySelector('#settings-banlists');
+    if (!wrap || !settingsDialog.open) return;
+    wrap.querySelectorAll('.bl-block').forEach((block) => {
+      const bl = banlistDraft.find((x) => x.id === block.dataset.bl);
+      const input = block.querySelector('.bl-search');
+      if (bl && input && input.value) {
+        block.querySelector('.bl-results').innerHTML = blSearchResults(bl, input.value);
+      }
+    });
   }
 
   /* 候选池 = 历届快照聚合 distinct 卡(搜索-单卡加禁的来源) */
@@ -1237,6 +1251,8 @@
         }
       }
     }
+    /* 全卡库补全:行 [id,name,cost,rarity,class] → 补齐 add 所读的下标(class 放第 7 位) */
+    for (const r of banlistLibraryCards) add([r[0], r[1], r[2], r[3], 0, 0, r[4]]);
     return pool;
   }
 
