@@ -6,6 +6,7 @@
   const STORE = 'tournaments';
   const META_STORE = 'meta';
   const META_PLAYERS = 'globalPlayers';
+  const META_SERIES = 'globalSeries';
   const LS_ACTIVE = 'ts:activeTournamentId';
   /* 跨文件事件协议:数据变更 / 应用就绪。common.js 派发,各页面监听 */
   const EVT_CHANGED = 'ts:changed';
@@ -483,6 +484,20 @@
     await idbPutMeta(META_PLAYERS, players || []);
   }
 
+  async function storageGetSeries() {
+    if (mode === 'cloud') return (cloudWorkspace && cloudWorkspace.series) || [];
+    return (await idbGetMeta(META_SERIES)) || [];
+  }
+
+  async function storagePutSeries(series) {
+    if (mode === 'cloud') {
+      cloudWorkspace.series = series || [];
+      await cloudPutWorkspace(cloudWorkspace, { noMerge: true });
+      return;
+    }
+    await idbPutMeta(META_SERIES, series || []);
+  }
+
   async function storageDeletePlayer(id) {
     if (!id) return;
     if (mode === 'cloud') {
@@ -526,6 +541,7 @@
   async function migrateLocalToCloud() {
     const local = await idbGetAll();
     const localPlayers = (await idbGetMeta(META_PLAYERS)) || [];
+    const localSeries = (await idbGetMeta(META_SERIES)) || [];
     const playerMap = new Map(localPlayers.map((p) => [p.id, p]));
     const tournaments = [];
     /* 头像与赛事无关,只上传一轮;放在赛事循环外,避免每条记录重复扫描全部选手 */
@@ -568,7 +584,7 @@
     }
 
     const workspace = {
-      series: [],
+      series: localSeries,
       players,
       tournaments,
       activeId: localStorage.getItem(LS_ACTIVE) || (tournaments[0] || {}).id || null
@@ -584,6 +600,7 @@
   async function migrateCloudToLocal() {
     const workspace = await cloudGetWorkspace();
     await idbPutMeta(META_PLAYERS, workspace.players || []);
+    await idbPutMeta(META_SERIES, workspace.series || []);
     for (const record of workspace.tournaments) {
       await idbPut(record);
     }
@@ -825,8 +842,6 @@
 
   let manageDialog = null;
   let settingsDialog = null;
-  let seriesDialog = null;
-  let seriesEditing = null; /* 系列弹窗当前编辑对象;null=新建模式 */
   let pendingBackground = null;
 
   /* ---------- 管理弹窗 ---------- */
@@ -851,13 +866,6 @@
       '    <select id="new-tournament-series" aria-label="所属系列" hidden></select>' +
       '    <button type="submit" class="btn btn-primary btn-sm">' + iconMarkup('add', '新建比赛') + '新建比赛</button>' +
       '  </form>' +
-      '  <div class="manage-subsection" id="series-subsection" hidden>' +
-      '    <h3>系列</h3>' +
-      '    <div class="dialog-actions">' +
-      '      <span class="hint">系列用于主页与切换下拉的分组;创建后可在主页小节标题旁编辑名称与简介。</span>' +
-      '      <button type="button" id="manage-new-series-btn" class="btn btn-secondary btn-sm">' + iconMarkup('create_new_folder', '新建系列') + '新建系列</button>' +
-      '    </div>' +
-      '  </div>' +
       '  <div class="manage-subsection">' +
       '    <h3>比赛列表</h3>' +
       '    <div id="manage-list" class="manage-list" aria-label="已有比赛列表"></div>' +
@@ -892,25 +900,19 @@
       renderManageList();
       document.dispatchEvent(new CustomEvent(EVT_CHANGED));
     });
-
-    manageDialog.querySelector('#manage-new-series-btn').addEventListener('click', () => {
-      openSeriesDialog(null);
-    });
   }
 
-  /* 管理弹窗系列控件:新建届的所属系列下拉(全部系列+未分组)与「新建系列」入口,
-   * 仅云端管理员可见——series 只存在于云端 workspace,本地模式恒隐藏 */
+  /* 管理弹窗系列下拉(建届选所属系列):admin/super 可见,云/本地同权
+   * (本地系列 2026-09-09 起存 META_SERIES);「新建系列」入口已收敛到主页编辑态 */
   function renderSeriesControls() {
     if (!manageDialog) return;
-    const subsection = manageDialog.querySelector('#series-subsection');
     const select = manageDialog.querySelector('#new-tournament-series');
-    const adminCloud = mode === 'cloud' && isAdmin();
-    const list = adminCloud
+    if (!select) return;
+    const show = isAdmin();
+    const list = show
       ? ((appInstance && appInstance.series) || []).filter((s) => s && s.id != null && s.name)
       : [];
-    if (subsection) subsection.hidden = !adminCloud;
-    if (!select) return;
-    select.hidden = !adminCloud || !list.length;
+    select.hidden = !show || !list.length;
     const sig = list.map((s) => s.id + ':' + s.name).join('|');
     if (select.dataset.sig !== sig) {
       select.dataset.sig = sig;
@@ -921,87 +923,19 @@
     }
   }
 
-  /* ---------- 系列弹窗(新建/编辑共用) ----------
-   * 系列建/改一律走 noMerge 精确流:GET 服务端原始 JSON → 就地改 series →
-   * PUT {noMerge:true} → 回读拿服务端盖章的 createdBy。
-   * 绝不能改 cloudWorkspace.series 后走默认 merge:mergeWorkspace 对 series
-   * 是"云端权威+并集",本地改名会被静默抹掉(与 storageDelete 同理)。
-   * 删除系列本期不做(YAGNI,届的迁移去向需产品决策)。 */
-  function buildSeriesDialog() {
-    seriesDialog = document.createElement('dialog');
-    seriesDialog.id = 'series-dialog';
-    seriesDialog.setAttribute('aria-labelledby', 'series-dialog-title');
-    seriesDialog.innerHTML =
-      '<div class="dialog-head">' +
-      '  <h2 id="series-dialog-title">系列</h2>' +
-      '  <button type="button" class="btn btn-ghost btn-sm" data-dialog-close>关闭</button>' +
-      '</div>' +
-      '<form id="series-form">' +
-      '  <div class="dialog-body">' +
-      '    <div class="form-field">' +
-      '      <label for="series-name-input">系列名称</label>' +
-      '      <input type="text" id="series-name-input" required maxlength="32" autocomplete="off">' +
-      '    </div>' +
-      '    <div class="form-field">' +
-      '      <label for="series-desc-input">简介(可选)</label>' +
-      '      <textarea id="series-desc-input" placeholder="一句话介绍该系列,留空亦可"></textarea>' +
-      '    </div>' +
-      '    <div class="dialog-actions">' +
-      '      <button type="button" class="btn btn-secondary" data-dialog-close>取消</button>' +
-      '      <button type="submit" class="btn btn-primary" id="series-save-btn">' + iconMarkup('save', '保存') + '保存</button>' +
-      '    </div>' +
-      '  </div>' +
-      '</form>';
-    document.body.appendChild(seriesDialog);
-    seriesDialog.querySelector('#series-form').addEventListener('submit', saveSeriesFromDialog);
-  }
-
-  /* series 传系列对象=编辑模式;null/undefined=新建模式 */
-  function openSeriesDialog(series) {
-    buildDialogs();
-    const target = series && series.id != null
-      ? (((appInstance && appInstance.series) || []).find((s) => s && s.id === series.id) || series)
-      : null;
-    seriesEditing = target;
-    seriesDialog.querySelector('#series-dialog-title').textContent = target ? '编辑系列' : '新建系列';
-    seriesDialog.querySelector('#series-name-input').value = target ? (target.name || '') : '';
-    seriesDialog.querySelector('#series-desc-input').value = target ? (target.desc || '') : '';
-    seriesDialog.showModal();
-    const nameInput = seriesDialog.querySelector('#series-name-input');
-    nameInput.focus();
-    nameInput.select();
-  }
-
-  async function saveSeriesFromDialog(event) {
-    event.preventDefault();
-    if (mode !== 'cloud' || !isAdmin()) {
-      notify('系列管理需要管理员账号(云端模式)', 'danger');
-      return;
-    }
-    const nameInput = seriesDialog.querySelector('#series-name-input');
-    const descInput = seriesDialog.querySelector('#series-desc-input');
-    const name = nameInput.value.trim();
-    if (!name) {
-      notify('请填写系列名称', 'danger');
-      return;
-    }
-    const desc = descInput.value.trim();
-    const editing = Boolean(seriesEditing);
-    const saveBtn = seriesDialog.querySelector('#series-save-btn');
-    saveBtn.disabled = true;
-    try {
-      const latest = await cloudGetWorkspace(); /* 服务端原始 JSON */
+  /* ---------- 系列编辑事务(主页系列编辑模式,2026-09-09) ----------
+   * mutator 收到 {series, tournaments} 就地改;云端走 noMerge 精确流
+   * (GET 服务端原始 JSON → 就地改 → PUT {noMerge:true} → 回读盖章 createdBy,
+   * 与退役系列弹窗同契约——merge 对 series 是云端按 id 权威,精确流是铁律);
+   * 本地改 META_SERIES + 受影响届(仅 seriesId 变化者)逐条 idbPut。
+   * 完成后 refreshApp + ts:changed,主页/页头下拉等派生视图统一重建。 */
+  async function applySeriesEdit(mutator) {
+    if (mode === 'cloud') {
+      if (!isAdmin()) throw new Error('系列管理需要管理员账号');
+      const latest = await cloudGetWorkspace();
       latest.series = Array.isArray(latest.series) ? latest.series : [];
-      if (editing) {
-        const target = latest.series.find((s) => s && s.id === seriesEditing.id);
-        if (!target) throw new Error('该系列已不存在，请刷新后重试');
-        /* 前端预判归属,服务端整库守卫仍是权威兜底 */
-        if (!canManage(target)) throw new Error('无权修改该系列');
-        target.name = name;
-        target.desc = desc;
-      } else {
-        latest.series.push({ id: uid('s'), name: name, desc: desc, createdAt: Date.now() });
-      }
+      latest.tournaments = Array.isArray(latest.tournaments) ? latest.tournaments : [];
+      await mutator(latest);
       await cloudPutWorkspace(latest, { noMerge: true });
       /* 回读服务端盖章的 createdBy(新建必经;编辑统一同口径) */
       try {
@@ -1009,16 +943,45 @@
       } catch (error) {
         notify('已保存，但回读最新数据失败：' + errMsg(error), 'danger');
       }
-      await refreshApp();
-      renderSeriesControls();
-      seriesDialog.close();
-      document.dispatchEvent(new CustomEvent(EVT_CHANGED));
-      notify(editing ? '系列已更新' : '系列已创建');
-    } catch (error) {
-      notify((editing ? '保存系列失败：' : '新建系列失败：') + errMsg(error), 'danger');
-    } finally {
-      saveBtn.disabled = false;
+    } else {
+      const series = (await idbGetMeta(META_SERIES)) || [];
+      const tournaments = await idbGetAll();
+      const before = new Map(tournaments.map((t) => [t.id, t.seriesId == null ? null : t.seriesId]));
+      const ws = { series, tournaments };
+      await mutator(ws);
+      await idbPutMeta(META_SERIES, ws.series || []);
+      for (const t of ws.tournaments || []) {
+        const cur = t.seriesId == null ? null : t.seriesId;
+        if (before.get(t.id) !== cur) await idbPut(t);
+      }
     }
+    await refreshApp();
+    if (manageDialog) renderSeriesControls();
+    document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+  }
+
+  /* 届改挂系列(主页拖拽落点):云端走常规 merge 流(updatedAt 打戳取新者胜,
+   * seriesId 变化属届内容变更,与改名同路径,并发安全);归属前端预判,
+   * 服务端整库守卫仍是权威兜底。本地无归属概念(合成本地超管恒可)。 */
+  async function setTournamentSeries(id, seriesId) {
+    const target = seriesId || null;
+    if (mode === 'cloud') {
+      const record = ((cloudWorkspace && cloudWorkspace.tournaments) || []).find((t) => t && t.id === id);
+      if (!record) throw new Error('该届已不存在，请刷新后重试');
+      if (!canManage(record)) throw new Error('无权移动该届（仅创建者或超管）');
+      if ((record.seriesId || null) === target) return;
+      record.seriesId = target;
+      await storagePut(record);
+    } else {
+      const all = await idbGetAll();
+      const record = all.find((t) => t && t.id === id);
+      if (!record) throw new Error('该届已不存在，请刷新后重试');
+      if ((record.seriesId || null) === target) return;
+      record.seriesId = target;
+      await idbPut(record);
+    }
+    await refreshApp();
+    document.dispatchEvent(new CustomEvent(EVT_CHANGED));
   }
 
   /* ---------- 设置弹窗 ---------- */
@@ -1309,8 +1272,7 @@
     if (manageDialog) return;
     buildManageDialog();
     buildSettingsDialog();
-    buildSeriesDialog();
-    for (const dialog of [manageDialog, settingsDialog, seriesDialog]) {
+    for (const dialog of [manageDialog, settingsDialog]) {
       dialog.querySelectorAll('[data-dialog-close]').forEach((btn) => {
         btn.addEventListener('click', () => dialog.close());
       });
@@ -2426,10 +2388,10 @@
     /* seriesId 供主页总览/页头下拉按系列分组;series 数组序即分组顺序(云端为权威)。
      * status/startTime 供主页总览行渲染状态徽章与开赛时间——摘要曾漏这两个字段,
      * 致总览恒显「未开始」且无开赛时间(2026-09-03 修复) */
-    appInstance.list = all.map((t) => ({ id: t.id, name: t.name, updatedAt: t.updatedAt, seriesId: t.seriesId || null, status: t.status || 'upcoming', startTime: t.startTime || null }));
-    appInstance.series = (mode === 'cloud' && cloudWorkspace && Array.isArray(cloudWorkspace.series))
-      ? cloudWorkspace.series
-      : [];
+    appInstance.list = all.map((t) => ({ id: t.id, name: t.name, updatedAt: t.updatedAt, seriesId: t.seriesId || null, status: t.status || 'upcoming', startTime: t.startTime || null, createdBy: t.createdBy == null ? null : t.createdBy }));
+    appInstance.series = mode === 'cloud'
+      ? ((cloudWorkspace && Array.isArray(cloudWorkspace.series)) ? cloudWorkspace.series : [])
+      : ((await idbGetMeta(META_SERIES)) || []);
     appInstance.players = players;
     applyBackground(record);
     renderHeader();
@@ -2476,7 +2438,8 @@
       storageDeletePlayer,
       isAdmin,
       canManage,
-      openSeriesDialog,
+      applySeriesEdit,
+      setTournamentSeries,
       setActiveId,
       refreshSession,
       getSession,

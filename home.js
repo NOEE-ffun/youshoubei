@@ -5,7 +5,7 @@
  * 不引入新的数据源。布局与入场动效见 styles.css 的 ov-* 段。
  */
 (function () {
-  const { escapeHtml, avatarMarkup, formatStartTime, notify, errMsg, groupTournamentsBySeries, canManage, openLightbox } = window.TournamentUtils;
+  const { escapeHtml, avatarMarkup, formatStartTime, notify, errMsg, groupTournamentsBySeries, openLightbox } = window.TournamentUtils;
 
   const STATUS = {
     upcoming: { text: '未开始', cls: 'status-upcoming' },
@@ -159,9 +159,13 @@
   /* 比赛总览:按系列分组的嵌套列表(系列名小节标题+届数计数),
    * 无 seriesId / 孤儿 seriesId / 系列名为空的届归末尾「未分组」;
    * 系列顺序 = workspace.series 数组序,届行排序与点击行为不变。
-   * 小节标题旁「编辑」按钮仅 canManage(series) 者可见(super 恒可,
-   * admin 需本人创建),点击唤出 common.js 的系列弹窗改名称/简介 */
+   * 系列编辑入口 = 区块头的「编辑」按钮(admin/super 可见)→ SeriesEditor
+   * (2026-09-09 系列编辑批,旧组头「编辑」弹窗已退役) */
   function renderTournaments(currentId) {
+    if (document.body.classList.contains('series-editing') && window.SeriesEditor) {
+      window.SeriesEditor.renderEdit();
+      return;
+    }
     const list = (window.TournamentApp.list || []).filter((t) => t && t.id);
     const box = $('ov-tournaments');
     if (!list.length) {
@@ -170,19 +174,15 @@
     }
     const seriesList = window.TournamentApp.series || [];
     box.innerHTML =
-      '<h2>比赛总览</h2>' +
+      '<div class="ov-t-head"><h2>比赛总览</h2>' +
+      (window.TournamentApp.isAdmin()
+        ? '<button type="button" class="btn btn-ghost btn-sm" id="ov-t-edit-btn" title="编辑系列">编辑</button>'
+        : '') +
+      '</div>' +
       groupTournamentsBySeries(list, seriesList).map((group) => {
-        const series = group.id != null
-          ? seriesList.find((s) => s && s.id === group.id)
-          : null;
-        const editBtn = series && canManage(series)
-          ? '<button type="button" class="btn btn-ghost btn-sm ov-t-edit" data-series-edit="' +
-            escapeHtml(series.id) + '" title="编辑系列" aria-label="编辑系列 ' +
-            escapeHtml(group.label) + '">编辑</button>'
-          : '';
         return '<section class="ov-t-group">' +
         '<h3 class="ov-t-group-title">' + escapeHtml(group.label) +
-        '<span class="ov-t-group-count">' + group.count + ' 届</span>' + editBtn + '</h3>' +
+        '<span class="ov-t-group-count">' + group.count + ' 届</span></h3>' +
         group.items.map((t) => tournamentRow(t, currentId)).join('') +
         '</section>';
       }).join('');
@@ -216,16 +216,12 @@
   });
 
   document.addEventListener('click', (event) => {
-    /* 系列小节标题旁「编辑系列」:唤出 common.js 系列弹窗(noMerge 精确流保存) */
-    const seriesBtn = event.target.closest('[data-series-edit]');
-    if (seriesBtn) {
-      const series = (window.TournamentApp.series || [])
-        .find((s) => s && s.id === seriesBtn.dataset.seriesEdit);
-      if (series && window.TournamentApp.openSeriesDialog) {
-        window.TournamentApp.openSeriesDialog(series);
-      }
+    /* 系列编辑态入口 → SeriesEditor;编辑态下行点击不切届 */
+    if (event.target.closest('#ov-t-edit-btn')) {
+      if (window.SeriesEditor) window.SeriesEditor.enter();
       return;
     }
+    if (document.body.classList.contains('series-editing')) return;
     const row = event.target.closest('.ov-t-row');
     if (!row || row.classList.contains('is-current')) return;
     switchTo(row.dataset.id);
