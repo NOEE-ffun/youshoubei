@@ -6,8 +6,8 @@ import { ADMIN_PHONE, smsLogin, seedWorkspace, makePlayer, resetStore } from './
 test.setTimeout(90_000);
 
 const BL = [{ id: 'bl1', name: '第一周表', cards: [
-  [501, '终焉之炎', 8, 4, 0],   /* 禁用 */
-  [502, '苍蓝少女', 3, 3, 1]    /* 限1 */
+  [501, '终焉之炎', 8, 4, 0, 2],  /* 禁用,皇家 */
+  [502, '苍蓝少女', 3, 3, 1, 0]   /* 限1,中立 */
 ] }];
 
 function deckWith(cards, cls) {
@@ -50,11 +50,26 @@ test('下拉展示:表名/排序/禁与限标记,无表届隐藏按钮', async (
   const dd = page.locator('.banlist-dropdown');
   await expect(dd).toBeVisible();
   await expect(dd.locator('.rules-dropdown-head')).toContainText('第一周表(2)');
-  /* 排序:苍蓝少女(3费)在终焉之炎(8费)前;禁=block 图标,限1=文字 */
-  const names = await dd.locator('.banlist-name').allInnerTexts();
-  expect(names).toEqual(['苍蓝少女', '终焉之炎']);
-  await expect(dd.locator('.banlist-row').first().locator('.banlist-mark.lim')).toHaveText('限1');
-  await expect(dd.locator('.banlist-row').nth(1).locator('.banlist-mark.ban img')).toBeVisible();
+  /* 职业分组:默认中立组只有苍蓝少女(r[5]=0),终焉之炎(r[5]=2)落隐藏的皇家组 */
+  const neutral = dd.locator('.banlist-cls-group[data-cls="0"]');
+  const royal = dd.locator('.banlist-cls-group[data-cls="2"]');
+  await expect(neutral).toBeVisible();
+  await expect(neutral.locator('.banlist-name')).toHaveText(['苍蓝少女']);
+  await expect(neutral.locator('.banlist-row .banlist-mark.lim')).toHaveText('限1');
+  await expect(royal).toBeHidden();
+  await expect(royal.locator('.banlist-name')).toHaveText(['终焉之炎']);
+  /* tab 初始 aria-pressed 初值(默认中立 true,其余 false,与点击后写入一致) */
+  await expect(dd.locator('.banlist-cls-tab[data-cls="0"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(dd.locator('.banlist-cls-tab[data-cls="2"]')).toHaveAttribute('aria-pressed', 'false');
+  /* 点皇家 tab:显隐切换组,终焉之炎(禁用=block 图标)可见,中立组让位 */
+  await dd.locator('.banlist-cls-tab[data-cls="2"]').click();
+  await expect(royal).toBeVisible();
+  await expect(neutral).toBeHidden();
+  await expect(royal.locator('.banlist-row .banlist-mark.ban img')).toBeVisible();
+  /* 空职业组:精灵无卡 → 「精灵暂无禁卡」提示 */
+  await dd.locator('.banlist-cls-tab[data-cls="1"]').click();
+  await expect(dd.locator('.banlist-cls-group[data-cls="1"]')).toBeVisible();
+  await expect(dd.locator('.banlist-cls-group[data-cls="1"] .banlist-empty-cls')).toHaveText('精灵暂无禁卡');
   /* 切到无表届:按钮隐藏(#tournament-switch option value=届 id,common.js 2230 行) */
   await page.locator('#header-banlist-btn').click(); /* 关闭 */
   await page.selectOption('#tournament-switch', 'tb0');
@@ -128,29 +143,69 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await expect(page.locator('.bl-paste-input')).toHaveValue('https://shadowverse-wb.com/chs/deck/detail/?hash=' + BATCH_HASH);
   await page.locator('.bl-paste-btn').click();
   await page.waitForTimeout(600);
-  const rows = page.locator('.bl-row');
+  const block1 = page.locator('.bl-block').first();
+  const rows = block1.locator('.bl-row');
   await expect(rows).toHaveCount(13); /* fixture 15 种卡 - 2 占位 = 13 */
-  const names = await page.locator('.bl-row .banlist-name').allInnerTexts();
+  const names = await block1.locator('.bl-row .banlist-name').allInnerTexts();
   expect(names, '占位卡不入表').not.toContain('不屈的剑斗士');
   expect(names, '占位卡不入表').not.toContain('商队猛犸象');
-  /* 张数→限档:×3=禁用,×2=限2,×1=限1(按行内卡名定位各自 select) */
-  const limitOf = async (name) => page.locator('.bl-row', { hasText: name }).locator('.bl-limit').inputValue();
-  await expect.poll(() => limitOf('禁卡甲')).toBe('0');
-  await expect.poll(() => limitOf('限卡乙')).toBe('2');
-  await expect.poll(() => limitOf('单卡丙')).toBe('1');
-  /* 搜索-单卡加禁不变:候选池含种子快照卡,搜"终焉" */
+  /* 职业 tab:可见行必须 .bl-row:not([hidden]) 过滤(toHaveCount 对 hidden 行也计数) */
+  const vis = block1.locator('.bl-row:not([hidden])');
+  const limitOf = (name) => block1.locator('.bl-row', { hasText: name }).locator('.bl-limit');
+  /* 默认中立 tab:810(fixture cls0)+ 703(fixture 无 class→null 兜底)= 2 行;张数1→限1 */
+  await expect(block1.locator('.bl-cls-tab.active')).toHaveAttribute('data-cls', '0');
+  await expect(vis).toHaveCount(2);
+  await expect(block1.locator('.bl-row:not([hidden]) .banlist-name')).toHaveText(['单卡丙', '填充810']);
+  await expect(limitOf('单卡丙')).toHaveValue('1');
+  /* 皇家 tab(701+804-806):701 张数3→禁用 '0' */
+  await block1.locator('.bl-cls-tab[data-cls="2"]').click();
+  await expect(vis).toHaveCount(4);
+  await expect(block1.locator('.bl-row:not([hidden]) .banlist-name')).toHaveText(['禁卡甲', '填充804', '填充805', '填充806']);
+  await expect(limitOf('禁卡甲')).toHaveValue('0');
+  /* 精灵 tab(702+801-803):702 张数2→限2 */
+  await block1.locator('.bl-cls-tab[data-cls="1"]').click();
+  await expect(vis).toHaveCount(4);
+  await expect(block1.locator('.bl-row:not([hidden]) .banlist-name')).toHaveText(['限卡乙', '填充801', '填充802', '填充803']);
+  await expect(limitOf('限卡乙')).toHaveValue('2');
+  /* 搜索-单卡:候选池来自种子快照 6 元组(无 class→null→中立);加卡不自动切 tab(停在精灵,可见行不变) */
   await page.locator('.bl-search').fill('终焉');
   await expect(page.locator('.bl-hit .banlist-name')).toHaveText(['终焉之炎']);
   await page.locator('.bl-hit').first().click();
   await expect(rows).toHaveCount(14);
+  await expect(block1.locator('.bl-cls-tab.active')).toHaveAttribute('data-cls', '1');
+  await expect(vis).toHaveCount(4);
+  /* 切回中立:终焉之炎落中立,可见 +1(=3) */
+  await block1.locator('.bl-cls-tab[data-cls="0"]').click();
+  await expect(vis).toHaveCount(3);
+  await expect(block1.locator('.bl-row:not([hidden]) .banlist-name')).toHaveText(['单卡丙', '填充810', '终焉之炎']);
+  /* 全局改职业:中立 tab 703 行 .bl-reclass 选皇家 → 中立 -1;皇家 tab 703 出现(=5) */
+  await block1.locator('.bl-row[data-card="703"] .bl-reclass').selectOption('2');
+  await expect(vis).toHaveCount(2);
+  await block1.locator('.bl-cls-tab[data-cls="2"]').click();
+  await expect(vis).toHaveCount(5);
+  await expect(block1.locator('.bl-row[data-card="703"]')).toHaveAttribute('data-cls', '2');
+  /* classMap 记忆:另建一张表粘同码,703 直接落皇家(新表默认中立只剩 810) */
+  await page.locator('#banlist-add-btn').click();
+  const block2 = page.locator('.bl-block').nth(1);
+  await block2.locator('.bl-paste-input').fill(BATCH_HASH);
+  await block2.locator('.bl-paste-btn').click();
+  await page.waitForTimeout(600);
+  await expect(block2.locator('.bl-row')).toHaveCount(13);
+  await expect(block2.locator('.bl-row[data-card="703"]')).toHaveAttribute('data-cls', '2');
+  await expect(block2.locator('.bl-row:not([hidden])')).toHaveCount(1);
   /* 终焉之炎默认禁用;改限2 后保存 */
-  await page.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit').selectOption('2');
+  await block1.locator('.bl-cls-tab[data-cls="0"]').click();
+  await block1.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit').selectOption('2');
   await page.locator('#settings-form button[type="submit"]').click();
   await page.waitForTimeout(800);
-  /* 重开设置仍在;下拉出现 */
+  /* 重开:tab 重置默认中立,703 仍皇家(卡元组第 6 位随保存持久),行集正确 */
   await page.locator('#settings-btn').click();
+  await expect(block1.locator('.bl-cls-tab.active')).toHaveAttribute('data-cls', '0');
   await expect(rows).toHaveCount(14);
-  await expect(page.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit')).toHaveValue('2');
+  await expect(vis).toHaveCount(2); /* 中立=终焉之炎+填充810 */
+  await expect(block1.locator('.bl-row[data-card="703"]')).toHaveAttribute('data-cls', '2');
+  await expect(page.locator('.bl-block').nth(1).locator('.bl-row')).toHaveCount(13);
+  await expect(block1.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit')).toHaveValue('2');
   await page.locator('#settings-form button[type="submit"]').click();
   await page.waitForTimeout(500);
   await page.locator('#header-banlist-btn').click();

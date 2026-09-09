@@ -1081,7 +1081,7 @@
       return '<div class="banlist-block">' +
         '<div class="rules-dropdown-head"><span class="banlist-head-name">' + escapeHtml(l.name) + '(' + l.cards.length + ')</span>' +
         '<span class="banlist-cls-tabs">' + window.CanvasModel.BANLIST_CLASSES.map((cls, i) =>
-          '<button type="button" class="banlist-cls-tab' + (i === 0 ? ' active' : '') + '" data-cls="' + i + '" title="' + cls + '" aria-label="只显示' + cls + '禁卡">' +
+          '<button type="button" class="banlist-cls-tab' + (i === 0 ? ' active' : '') + '" data-cls="' + i + '" title="' + cls + '" aria-label="只显示' + cls + '禁卡" aria-pressed="' + (i === 0) + '">' +
           '<img class="icon" src="icons/classes/' + cls + '.svg" alt="' + cls + '"></button>').join('') + '</span></div>' +
         '<div class="banlist-cols">' + groups + '</div></div>';
     }).join('');
