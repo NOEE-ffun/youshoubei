@@ -1033,7 +1033,18 @@
       '    <div class="form-field">' +
       '      <div class="banlists-field-head">' +
       '        <label for="settings-banlists">禁卡表</label>' +
-      '        <button type="button" id="banlist-add-btn" class="btn btn-secondary btn-sm">' + iconMarkup('add', '') + '新建禁卡表</button>' +
+      '        <span class="banlists-io-btns">' +
+      '        <button type="button" id="banlist-import-btn" class="btn btn-ghost btn-sm">导入JSON</button>' +
+      '        <button type="button" id="banlist-export-btn" class="btn btn-ghost btn-sm">导出JSON</button>' +
+      '        <button type="button" id="banlist-add-btn" class="btn btn-secondary btn-sm">' + iconMarkup('add', '') + '新建禁卡表</button></span>' +
+      '      </div>' +
+      '      <div class="bl-io" id="banlist-io" hidden>' +
+      '        <textarea class="bl-io-text" aria-label="禁卡表 JSON" spellcheck="false"></textarea>' +
+      '        <div class="bl-io-actions">' +
+      '          <button type="button" class="btn btn-secondary btn-sm bl-io-do" hidden>执行导入</button>' +
+      '          <button type="button" class="btn btn-secondary btn-sm bl-io-copy" hidden>复制全部</button>' +
+      '          <button type="button" class="btn btn-ghost btn-sm bl-io-close">收起</button>' +
+      '        </div>' +
       '      </div>' +
       '      <div id="settings-banlists" class="settings-banlists"></div>' +
       '      <p class="hint">每张表可对卡设置禁用或限 1/2 张;可粘贴卡组链接按张数批量加禁(带1=限1,2=限2,3=禁用);在画布卡片设置里勾选后对该卡的卡组生效。</p>' +
@@ -1178,6 +1189,68 @@
     });
     settingsDialog.querySelector('#banlist-add-btn').addEventListener('click', () => {
       banlistDraft.push({ id: uid('bl'), name: '禁卡表' + (banlistDraft.length + 1), cards: [] });
+      renderBanlistsEditor();
+    });
+
+    /* 禁卡表 JSON 导入/导出(admin 语境;保存门禁兜底):导入同名替换保表 id、
+     * 其余追加,全部落 draft——与手工编辑同语义,保存设置后才写库 */
+    const ioBox = () => settingsDialog.querySelector('#banlist-io');
+    const ioText = () => settingsDialog.querySelector('.bl-io-text');
+    settingsDialog.querySelector('#banlist-import-btn').addEventListener('click', () => {
+      const box = ioBox();
+      box.hidden = false;
+      ioText().value = '';
+      ioText().placeholder = '粘贴禁卡表 JSON 数组,如 [{"name":"突进禁卡表","cards":[[卡ID,"卡名",费用,稀有度,限档0-2,职业0-7中立精灵..复仇者],...]}];同名表替换(保留表 id),其余追加;保存设置后生效';
+      box.querySelector('.bl-io-do').hidden = false;
+      box.querySelector('.bl-io-copy').hidden = true;
+      ioText().focus();
+    });
+    settingsDialog.querySelector('#banlist-export-btn').addEventListener('click', () => {
+      const box = ioBox();
+      box.hidden = false;
+      ioText().value = JSON.stringify(banlistDraft.map((b) => ({ name: b.name, cards: b.cards.map((r) => r.slice()) })));
+      ioText().placeholder = '';
+      box.querySelector('.bl-io-do').hidden = true;
+      box.querySelector('.bl-io-copy').hidden = false;
+      ioText().focus();
+    });
+    settingsDialog.querySelector('#banlist-io').addEventListener('click', (event) => {
+      const t = event.target;
+      if (t.closest('.bl-io-close')) {
+        ioBox().hidden = true;
+        return;
+      }
+      if (t.closest('.bl-io-copy')) {
+        const ta = ioText();
+        ta.select();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(ta.value).then(
+            () => notify('已复制到剪贴板', 'success'),
+            () => notify('复制失败,请手动全选复制', 'danger'));
+        }
+        return;
+      }
+      if (!t.closest('.bl-io-do')) return;
+      const text = ioText().value.trim();
+      if (!text) { notify('请先粘贴 JSON', 'danger'); return; }
+      let data;
+      try { data = JSON.parse(text); } catch (error) { notify('JSON 解析失败:' + errMsg(error), 'danger'); return; }
+      const arr = Array.isArray(data) ? data : (data && Array.isArray(data.banLists)) ? data.banLists : null;
+      if (!arr) { notify('格式不正确:需为禁卡表数组或 {banLists:[...]}', 'danger'); return; }
+      /* 导出格式不含 id(跨届可移植):归一化前给缺 id 的表补齐,否则整表被剔除 */
+      const incoming = window.CanvasModel.normalizeBanLists(
+        arr.map((t) => ((t && typeof t === 'object' && !(typeof t.id === 'string' && t.id))
+          ? Object.assign({ id: uid('bl') }, t) : t)));
+      if (!incoming.length) { notify('未解析到有效禁卡表(空表或全非法会被剔除)', 'danger'); return; }
+      let replaced = 0;
+      let added = 0;
+      for (const table of incoming) {
+        const exist = banlistDraft.find((b) => b.name === table.name);
+        if (exist) { exist.cards = table.cards; replaced += 1; }
+        else { banlistDraft.push({ id: table.id, name: table.name, cards: table.cards }); added += 1; }
+      }
+      notify('导入完成:替换 ' + replaced + ' 张表,新增 ' + added + ' 张(共 ' + incoming.reduce((n, x) => n + x.cards.length, 0) + ' 卡);保存设置后生效', 'success');
+      ioBox().hidden = true;
       renderBanlistsEditor();
     });
 

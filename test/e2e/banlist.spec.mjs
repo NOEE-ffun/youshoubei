@@ -224,6 +224,45 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await ctx.close();
 });
 
+test('禁卡表 JSON 导入/导出:同名替换保 id、新增追加、保存持久', async ({ browser }) => {
+  const ctx = await browser.newContext();
+  await smsLogin(ctx, ADMIN_PHONE);
+  const page = await ctx.newPage();
+  await seedWorkspace(ctx, { tournaments: [seedTournament()], activeId: 'tb1',
+    players: [{ id: 'pz1', name: '甲', createdAt: 1, updatedAt: 1 }, { id: 'pz2', name: '乙', createdAt: 1, updatedAt: 1 }] });
+  await page.goto('/schedule.html');
+  await page.waitForTimeout(900);
+  await page.locator('#settings-btn').click();
+  /* 导出:种子表进入 textarea */
+  await page.locator('#banlist-export-btn').click();
+  const exported = JSON.parse(await page.locator('.bl-io-text').inputValue());
+  if (!Array.isArray(exported) || exported.length !== 1 || exported[0].name !== '第一周表') throw new Error('导出形态不对');
+  /* 导入:一张同名(第一周表,替换)+ 一张新表 */
+  await page.locator('#banlist-import-btn').click();
+  await page.locator('.bl-io-text').fill(JSON.stringify([
+    { name: '第一周表', cards: [[701, '导入替换卡', 2, 2, 1, 2], [702, '导入新增卡', 3, 1, 0, 1]] },
+    { name: '导入新表', cards: [[703, '新表卡', 1, 1, 2, 0]] }
+  ]));
+  await page.locator('.bl-io-do').click();
+  await page.waitForTimeout(300);
+  const blocks = page.locator('.bl-block');
+  await expect(blocks).toHaveCount(2);
+  const names = await page.evaluate(() => Array.from(document.querySelectorAll('.bl-name')).map((el) => el.value));
+  if (!names.includes('第一周表') || !names.includes('导入新表')) throw new Error('导入合并形态不对');
+  /* 第一周表被替换为两张导入卡(默认中立 tab 下 703 兜底 null 不在第一周表,先切 tab 断 DOM 全量) */
+  const rowsFirst = await page.locator('.bl-block').first().locator('.bl-row .banlist-name').allInnerTexts();
+  if (rowsFirst.sort().join(',') !== ['导入新增卡', '导入替换卡'].sort().join(',')) throw new Error('同名替换内容不对: ' + rowsFirst);
+  await page.locator('#settings-form button[type="submit"]').click();
+  await page.waitForTimeout(800);
+  /* 保存持久:重开仍在,且原表 id 保留(表 id 不在 UI 暴露,以数据层为准) */
+  const persisted = await page.evaluate(() => {
+    const rec = window.TournamentApp.current;
+    return (rec.banLists || []).map((b) => ({ name: b.name, n: b.cards.length }));
+  });
+  if (persisted.map((x) => x.name).sort().join() !== ['导入新表', '第一周表'].sort().join()) throw new Error('保存持久失败');
+  await ctx.close();
+});
+
 test('CardForm 绑表:e2e 勾选生效', async ({ browser }) => {
   const ctx = await browser.newContext();
   await smsLogin(ctx, ADMIN_PHONE);

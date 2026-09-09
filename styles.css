@@ -5478,3 +5478,10 @@ body.list-dragging .ov-t-group.drop-target > h3 {
 /* CardForm 禁卡表多选 */
 .cf-banlists { display: flex; flex-wrap: wrap; gap: 8px 14px; }
 .cf-banlist-opt { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+
+/* 禁卡表 JSON 导入/导出面板(届设置弹窗) */
+.banlists-io-btns { display: flex; gap: 6px; align-items: center; }
+.bl-io { display: grid; gap: 6px; }
+.bl-io-text { width: 100%; min-height: 120px; font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px; resize: vertical; }
+.bl-io-actions { display: flex; gap: 6px; }
