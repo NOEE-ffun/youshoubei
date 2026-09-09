@@ -995,6 +995,31 @@
     );
   });
 
+  /* 禁卡表下拉:届内各表分块;行=费用图标+卡名+禁/限N;排序同统计页
+   * (费用→稀有度→中文名);列优先布局见 styles.css .banlist-cols */
+  const banlistDropdown = createTopDropdown('header-banlist-btn', 'rules-dropdown banlist-dropdown', () => {
+    const rec = window.TournamentApp && window.TournamentApp.current;
+    const lists = ((rec && window.CanvasModel.normalizeBanLists(rec.banLists)) || []).filter((l) => l.cards.length);
+    if (!lists.length) return null;
+    const costIcon = (n) => {
+      const v = Math.max(0, Math.min(10, Number(n) || 0));
+      return '<img class="icon" src="icons/cost/cost-' + v + '.webp" alt="' + v + '费" title="' + v + ' 费" width="20" height="20" loading="lazy">';
+    };
+    const rows = (cards) => cards.slice()
+      .sort((x, y) => x[2] - y[2] || x[3] - y[3] || String(x[1]).localeCompare(String(y[1]), 'zh'))
+      .map((r) => '<div class="banlist-row">' + costIcon(r[2]) +
+        '<span class="banlist-name deck-name-r' + r[3] + '" title="' + escapeHtml(r[1]) + '">' + escapeHtml(r[1]) + '</span>' +
+        (r[4] === 0
+          ? '<em class="banlist-mark ban" title="禁用"><img class="icon" src="icons/block.svg" alt="禁用"></em>'
+          : '<em class="banlist-mark lim" title="限 ' + r[4] + ' 张">限' + r[4] + '</em>') +
+        '</div>').join('');
+    return lists.map((l) =>
+      '<div class="banlist-block">' +
+      '<div class="rules-dropdown-head">' + escapeHtml(l.name) + '(' + l.cards.length + ')</div>' +
+      '<div class="banlist-cols">' + rows(l.cards) + '</div>' +
+      '</div>').join('');
+  });
+
   function bindEditToolbar() {
     const toolbar = document.getElementById('edit-toolbar');
     if (!toolbar) return;
@@ -1053,7 +1078,8 @@
   window.BracketActions = {
     requestEdit,
     openRoster: () => rosterDropdown.toggle(),
-    openRules: () => rulesDropdown.toggle()
+    openRules: () => rulesDropdown.toggle(),
+      openBanlist: () => banlistDropdown.toggle()
   };
 
   document.addEventListener('ts:ready', () => {

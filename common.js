@@ -2067,6 +2067,7 @@
       ? searchBox +
         '<button type="button" id="view-toggle" class="btn btn-ghost btn-sm icon-btn" title="切换到列表视图" aria-label="切换到列表视图">' + iconMarkup('view_list', '切换到列表视图') + '</button>' +
         '<button type="button" id="header-rules-btn" class="btn btn-ghost btn-sm icon-btn" title="赛制规则" aria-label="赛制规则">' + iconMarkup('rule', '赛制规则') + '</button>' +
+        '<button type="button" id="header-banlist-btn" class="btn btn-ghost btn-sm icon-btn" title="禁卡表" aria-label="禁卡表" hidden>' + iconMarkup('block', '禁卡表') + '</button>' +
         '<button type="button" id="header-roster-btn" class="btn btn-ghost btn-sm icon-btn" title="选手名单" aria-label="选手名单">' + iconMarkup('how_to_reg', '选手名单') + '</button>' +
         '<button type="button" id="header-edit-btn" class="btn btn-secondary btn-sm icon-btn" title="编辑" aria-label="编辑">' + iconMarkup('edit', '编辑') + '</button>' +
         '<button type="button" id="settings-btn" class="btn btn-secondary btn-sm icon-btn" title="赛事设置" aria-label="赛事设置">' + iconMarkup('settings', '赛事设置') + '</button>'
@@ -2126,6 +2127,14 @@
     if (rulesBtn) {
       rulesBtn.addEventListener('click', () => {
         if (window.BracketActions && window.BracketActions.openRules) window.BracketActions.openRules();
+      });
+    }
+    const banBtn = placeholder.querySelector('#header-banlist-btn');
+    if (banBtn) {
+      const blists = (appInstance.current && window.CanvasModel.normalizeBanLists(appInstance.current.banLists)) || [];
+      banBtn.hidden = !blists.some((l) => l.cards.length);
+      banBtn.addEventListener('click', () => {
+        if (window.BracketActions && window.BracketActions.openBanlist) window.BracketActions.openBanlist();
       });
     }
     const rosterBtn = placeholder.querySelector('#header-roster-btn');

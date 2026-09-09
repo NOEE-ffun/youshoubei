@@ -2468,6 +2468,23 @@ body.card-panel-open .style-drawer { right: calc(min(19rem, 78vw) + 0.5rem); }
   line-height: 1.7;
 }
 
+/* 禁卡表下拉(复用 rules-dropdown 基座,加宽+列布局) */
+.banlist-dropdown {
+  width: min(600px, calc(100vw - 2rem));
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.banlist-block + .banlist-block { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.banlist-cols { columns: 2; column-gap: 14px; max-height: 44vh; overflow-y: auto; padding: 4px 10px; }
+.banlist-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; break-inside: avoid; }
+.banlist-row .icon { flex: none; }
+.banlist-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banlist-mark { flex: none; font-style: normal; font-size: 12px; }
+.banlist-mark.ban .icon { width: 14px; height: 14px; opacity: 0.9; }
+.banlist-mark.ban { color: var(--danger, #dc3545); display: inline-flex; align-items: center; }
+@media (min-width: 1100px) { .banlist-cols { columns: 3; } }
+@media (max-width: 640px) { .banlist-cols { columns: 1; } }
+
 /* ---------- 海报页头控制 ---------- */
 
 .header-poster-controls {
