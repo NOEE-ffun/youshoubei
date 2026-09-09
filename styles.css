@@ -134,12 +134,13 @@ body.side-expanded {
 }
 
 /* 职业 svg 是彩色图标,任何主题保持原色
- * (覆盖全部消费容器:画布职业槽/统计职业条/列表视图/我的卡组/禁卡表编辑tab) */
+ * (覆盖全部消费容器:画布职业槽/统计职业条/列表视图/我的卡组/禁卡表编辑tab/禁卡表顶栏下拉tab) */
 .class-slot .icon,
 .class-bar .icon,
 .list-class .icon,
 .md-deck-row .icon,
-.bl-cls-tab .icon {
+.bl-cls-tab .icon,
+.banlist-cls-tab .icon {
   filter: none;
 }
 
@@ -2482,6 +2483,13 @@ body.card-panel-open .style-drawer { right: calc(min(19rem, 78vw) + 0.5rem); }
   overflow-y: auto;
 }
 .banlist-block + .banlist-block { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+/* 表头:表名左、8 职业 tab 右(默认中立);tab 样式同编辑器 .bl-cls-tab */
+.banlist-dropdown .rules-dropdown-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.banlist-head-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banlist-cls-tabs { display: flex; gap: 2px; flex: none; }
+.banlist-cls-tab { padding: 2px; border: 1px solid transparent; border-radius: 6px; background: none; cursor: pointer; line-height: 0; }
+.banlist-cls-tab .icon { width: 18px; height: 18px; object-fit: contain; }
+.banlist-cls-tab.active { border-color: var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.12); }
 .banlist-cols { columns: 2; column-gap: 14px; max-height: 44vh; overflow-y: auto; padding: 4px 10px; }
 .banlist-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; break-inside: avoid; }
 .banlist-row .icon { flex: none; }

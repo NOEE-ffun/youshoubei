@@ -1054,7 +1054,8 @@
   });
 
   /* 禁卡表下拉:届内各表分块;行=费用图标+卡名+禁/限N;排序同统计页
-   * (费用→稀有度→中文名);列优先布局见 styles.css .banlist-cols */
+   * (费用→稀有度→中文名);列优先布局见 styles.css .banlist-cols;
+   * 表头右侧 8 职业 tab(默认中立),点击显隐切换职业组,不重渲染 */
   const banlistDropdown = createTopDropdown('header-banlist-btn', 'rules-dropdown banlist-dropdown', () => {
     const rec = window.TournamentApp && window.TournamentApp.current;
     const lists = ((rec && window.CanvasModel.normalizeBanLists(rec.banLists)) || []).filter((l) => l.cards.length);
@@ -1071,11 +1072,35 @@
           ? '<em class="banlist-mark ban" title="禁用"><img class="icon" src="icons/block.svg" alt="禁用"></em>'
           : '<em class="banlist-mark lim" title="限 ' + r[4] + ' 张">限' + r[4] + '</em>') +
         '</div>').join('');
-    return lists.map((l) =>
-      '<div class="banlist-block">' +
-      '<div class="rules-dropdown-head">' + escapeHtml(l.name) + '(' + l.cards.length + ')</div>' +
-      '<div class="banlist-cols">' + rows(l.cards) + '</div>' +
-      '</div>').join('');
+    return lists.map((l) => {
+      const groups = window.CanvasModel.BANLIST_CLASSES.map((cls, i) => {
+        const rowsHtml = rows(l.cards.filter((r) => (r[5] ?? 0) === i));
+        return '<div class="banlist-cls-group" data-cls="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
+          (rowsHtml || '<div class="hint banlist-empty-cls">' + cls + '暂无禁卡</div>') + '</div>';
+      }).join('');
+      return '<div class="banlist-block">' +
+        '<div class="rules-dropdown-head"><span class="banlist-head-name">' + escapeHtml(l.name) + '(' + l.cards.length + ')</span>' +
+        '<span class="banlist-cls-tabs">' + window.CanvasModel.BANLIST_CLASSES.map((cls, i) =>
+          '<button type="button" class="banlist-cls-tab' + (i === 0 ? ' active' : '') + '" data-cls="' + i + '" title="' + cls + '" aria-label="只显示' + cls + '禁卡">' +
+          '<img class="icon" src="icons/classes/' + cls + '.svg" alt="' + cls + '"></button>').join('') + '</span></div>' +
+        '<div class="banlist-cols">' + groups + '</div></div>';
+    }).join('');
+  });
+
+  /* 禁卡表下拉职业 tab:显隐切换(下拉 innerHTML 由 createTopDropdown 注入,
+   * 无绑定钩子,document 委托一次;点击表头不冒泡关闭——tab 在下拉 el 内,天然不触发 onOutside) */
+  document.addEventListener('click', (event) => {
+    const tab = event.target.closest('.banlist-cls-tab');
+    if (!tab) return;
+    const block = tab.closest('.banlist-block');
+    if (!block) return;
+    block.querySelectorAll('.banlist-cls-tab').forEach((b) => {
+      const on = b === tab;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    const cls = tab.dataset.cls;
+    block.querySelectorAll('.banlist-cls-group').forEach((g) => { g.hidden = g.dataset.cls !== cls; });
   });
 
   function bindEditToolbar() {
