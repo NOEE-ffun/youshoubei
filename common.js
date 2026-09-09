@@ -1283,11 +1283,10 @@
           '<option value="1"' + (r[4] === 1 ? ' selected' : '') + '>限1</option>' +
           '<option value="2"' + (r[4] === 2 ? ' selected' : '') + '>限2</option>' +
           '</select>' +
-          (activeCls === 0 && (r[5] ?? 0) === 0
-            ? '<select class="bl-reclass" aria-label="改职业">' +
-            window.CanvasModel.BANLIST_CLASSES.map((cn, ci) => '<option value="' + ci + '"' + (ci === 0 ? ' selected' : '') + '>' + cn + '</option>').join('') +
-            '</select>'
-            : '') +
+          /* 改职业下拉:任意职业 tab 的任意行都渲染,selected 跟当前值(r[5] ?? 0)——改出中立后可再改回(可逆);届内全局生效 */
+          '<select class="bl-reclass" aria-label="改职业">' +
+          window.CanvasModel.BANLIST_CLASSES.map((cn, ci) => '<option value="' + ci + '"' + (ci === (r[5] ?? 0) ? ' selected' : '') + '>' + cn + '</option>').join('') +
+          '</select>' +
           '<button type="button" class="btn btn-ghost btn-sm bl-row-del" title="移除此卡" aria-label="移除此卡">' + iconMarkup('close', '') + '</button>' +
           '</div>').join('') +
           '<p class="hint bl-empty-cls"' + (hasVisible ? ' hidden' : '') + '>当前职业暂无禁卡</p>'
