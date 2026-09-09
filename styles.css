@@ -5427,3 +5427,7 @@ body.list-dragging .ov-t-group.drop-target > h3 {
 .legal-page .md-body li { margin: 0.35rem 0; }
 .login-legal { margin-top: 0.75rem; text-align: center; }
 .login-legal a { color: var(--accent); }
+
+/* CardForm 禁卡表多选 */
+.cf-banlists { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.cf-banlist-opt { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }

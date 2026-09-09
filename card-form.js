@@ -42,6 +42,11 @@
       '    <div class="form-field"><label>败者名次</label><input type="number" class="cf-rank-loser" placeholder="如 2" aria-label="败者出口名次"></div>' +
       '  </div>' +
       '</div>' +
+      '<div class="cf-section cf-banlist-section" hidden>' +
+      '  <div class="cf-section-title">禁卡表</div>' +
+      '  <div class="form-field span-2 cf-banlists"></div>' +
+      '  <p class="hint">勾选本卡生效的禁卡表;双方卡组命中禁用或超限卡会在比赛页标红。</p>' +
+      '</div>' +
       '<div class="cf-section">' +
       '  <div class="cf-section-title">职业卡组</div>' +
       '  <div class="form-field"><label>A 位选手(查看模式点击图标跳转)</label><div class="cl-list cf-cl-a"></div></div>' +
@@ -108,6 +113,20 @@
   function fill(container, card, eff, flowSourceLabels) {
     const labels = flowSourceLabels || {};
     container.querySelector('.cf-label').value = card.label || '';
+    const blSection = container.querySelector('.cf-banlist-section');
+    if (blSection) {
+      const rec = window.TournamentApp && window.TournamentApp.current;
+      const lists = (rec && window.CanvasModel.normalizeBanLists(rec.banLists) || []).filter((l) => l.cards.length);
+      if (lists.length) {
+        const bound = new Set(window.CanvasModel.normalizeBanListIds(card.banListIds));
+        container.querySelector('.cf-banlists').innerHTML = lists.map((l) =>
+          '<label class="cf-banlist-opt"><input type="checkbox" class="cf-banlist-check" value="' + escapeHtml(l.id) + '"' +
+          (bound.has(l.id) ? ' checked' : '') + '>' + escapeHtml(l.name) + '(' + l.cards.length + ' 卡)</label>').join('');
+        blSection.hidden = false;
+      } else {
+        blSection.hidden = true;
+      }
+    }
     container.querySelector('.cf-phase').value = card.phase || '';
     container.querySelector('.cf-format').value = card.format || 'BO3';
     container.querySelector('.cf-deck-count').value = card.deckCount || '';
@@ -182,7 +201,8 @@
         rankWinner: Number.isFinite(rw) ? rw : null,
         rankLoser: Number.isFinite(rl) ? rl : null,
         groupA: ga,
-        groupB: gb
+        groupB: gb,
+        banListIds: Array.from(container.querySelectorAll('.cf-banlist-check:checked')).map((el) => el.value),
       }
     };
   }
@@ -205,6 +225,8 @@
     card.phase = data.phase;
     card.format = data.format;
     card.deckCount = data.deckCount;
+    if (Array.isArray(data.banListIds) && data.banListIds.length) card.banListIds = data.banListIds;
+    else delete card.banListIds;
     if (data.slotAValue === '') {
       card.slots[0] = { type: 'empty' };
     } else if (data.slotAValue && data.slotAValue !== '__flow') {
