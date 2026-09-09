@@ -140,7 +140,9 @@ body.side-expanded {
 .list-class .icon,
 .md-deck-row .icon,
 .bl-cls-tab .icon,
-.banlist-cls-tab .icon {
+.banlist-cls-tab .icon,
+/* 费用 webp 彩色圆底数字,任何主题保持原色(.icon.cost-ic 双类保特异性压过暗色全局反色) */
+.icon.cost-ic {
   filter: none;
 }
 
@@ -2478,8 +2480,8 @@ body.card-panel-open .style-drawer { right: calc(min(19rem, 78vw) + 0.5rem); }
 
 /* 禁卡表下拉(复用 rules-dropdown 基座,加宽+列布局) */
 .banlist-dropdown {
-  width: min(600px, calc(100vw - 2rem));
-  max-height: 60vh;
+  width: min(620px, calc(100vw - 2rem)); /* 右对齐,加宽即向左扩展,多展示文字 */
+  max-height: calc(100dvh - 110px); /* 顶栏下 6px 起,底部留呼吸 */
   overflow-y: auto;
 }
 .banlist-block + .banlist-block { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
@@ -2490,7 +2492,7 @@ body.card-panel-open .style-drawer { right: calc(min(19rem, 78vw) + 0.5rem); }
 .banlist-cls-tab { padding: 2px; border: 1px solid transparent; border-radius: 6px; background: none; cursor: pointer; line-height: 0; }
 .banlist-cls-tab .icon { width: 18px; height: 18px; object-fit: contain; }
 .banlist-cls-tab.active { border-color: var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.12); }
-.banlist-cols { columns: 2; column-gap: 14px; max-height: 44vh; overflow-y: auto; padding: 4px 10px; }
+.banlist-cols { columns: 2; column-gap: 14px; max-height: calc(100dvh - 220px); overflow-y: auto; padding: 4px 10px; }
 .banlist-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; break-inside: avoid; }
 .banlist-row .icon { flex: none; }
 .banlist-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

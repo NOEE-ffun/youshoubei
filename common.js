@@ -1383,7 +1383,8 @@
 
   function blCostIcon(cost) {
     const n = Math.max(0, Math.min(10, Number(cost) || 0));
-    return '<img class="icon" src="icons/cost/cost-' + n + '.webp" alt="' + n + '费" width="20" height="20" loading="lazy">';
+    /* cost-ic:彩色费用 webp 任何主题保持原色(暗色全局 invert 会洗坏,同统计页 cost-icon 语义) */
+    return '<img class="icon cost-ic" src="icons/cost/cost-' + n + '.webp" alt="' + n + '费" width="20" height="20" loading="lazy">';
   }
 
   function renderBanlistsEditor() {

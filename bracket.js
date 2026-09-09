@@ -409,7 +409,7 @@
     }
     const costIcon = (n) => {
       const v = Math.max(0, Math.min(10, Number(n) || 0));
-      return '<img class="icon" src="icons/cost/cost-' + v + '.webp" alt="' + v + '费" width="20" height="20">';
+      return '<img class="icon cost-ic" src="icons/cost/cost-' + v + '.webp" alt="' + v + '费" width="20" height="20">';
     };
     const row = (v) => '<div class="banlist-row">' + costIcon(v.cost) +
       '<span class="banlist-name deck-name-r' + v.rarity + '">' + escapeHtml(v.name) + '</span>' +
@@ -1062,7 +1062,7 @@
     if (!lists.length) return null;
     const costIcon = (n) => {
       const v = Math.max(0, Math.min(10, Number(n) || 0));
-      return '<img class="icon" src="icons/cost/cost-' + v + '.webp" alt="' + v + '费" title="' + v + ' 费" width="20" height="20" loading="lazy">';
+      return '<img class="icon cost-ic" src="icons/cost/cost-' + v + '.webp" alt="' + v + '费" title="' + v + ' 费" width="20" height="20" loading="lazy">';
     };
     const rows = (cards) => cards.slice()
       .sort((x, y) => x[2] - y[2] || x[3] - y[3] || String(x[1]).localeCompare(String(y[1]), 'zh'))
