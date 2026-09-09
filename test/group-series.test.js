@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-function loadGroupFn() {
+function loadUtils() {
   const src = fs.readFileSync(path.join(__dirname, '..', 'common.js'), 'utf8');
   const sandbox = { console, setTimeout, clearTimeout };
   sandbox.window = sandbox; /* 源码经 window.TournamentUtils 出口 */
@@ -21,10 +21,11 @@ function loadGroupFn() {
   const utils = sandbox.window.TournamentUtils;
   assert.ok(utils && typeof utils.groupTournamentsBySeries === 'function',
     'common.js 应在 window.TournamentUtils 暴露 groupTournamentsBySeries');
-  return utils.groupTournamentsBySeries;
+  return utils;
 }
 
-const group = loadGroupFn();
+const utils = loadUtils();
+const group = utils.groupTournamentsBySeries;
 
 /* 造届记录:seriesId 缺参=无 seriesId 字段值 null */
 const t = (id, seriesId) => ({ id, name: '届' + id, seriesId: seriesId === undefined ? null : seriesId });
@@ -86,4 +87,39 @@ assert.deepStrictEqual(
   'id=0 视为有效系列 id'
 );
 
-console.log('✓ group-series: 系列-届分组纯函数(顺序/未分组/空组/脏行/边界)');
+/* 8. keepEmpty(系列编辑态):无届系列保留为空组;无届的「未分组」仍不出现 */
+assert.deepStrictEqual(
+  shape(group([t('t1', 's1')], [{ id: 's-empty', name: '空' }, { id: 's1', name: 'A' }], { keepEmpty: true })),
+  [['s-empty', '空', 0, []], ['s1', 'A', 1, ['t1']]],
+  'keepEmpty 保留空系列组(系列数组序)'
+);
+assert.deepStrictEqual(
+  shape(group([], [{ id: 's1', name: 'A' }], { keepEmpty: true })),
+  [['s1', 'A', 0, []]],
+  'keepEmpty 下无届未分组仍不出现'
+);
+assert.deepStrictEqual(
+  shape(group([t('t1', 's1')], [{ id: 's-empty', name: '空' }, { id: 's1', name: 'A' }], {})),
+  [['s1', 'A', 1, ['t1']]],
+  '默认(opts 空对象)仍过滤空系列'
+);
+
+/* 9. applySeriesOrder:系列守卫式重排(编辑器组块拖拽的写回口径) */
+const order = utils.applySeriesOrder;
+assert.ok(typeof order === 'function', 'common.js 应导出 applySeriesOrder');
+const srcSeries = [{ id: 's1', name: '一' }, { id: 's2', name: '二' }, { id: 's3', name: '三' }];
+/* 完整置换 → 新数组按 orderedIds 序 */
+assert.deepStrictEqual(order(srcSeries, ['s3', 's1', 's2']).map((s) => s.id), ['s3', 's1', 's2'], '完整重排');
+/* 部分提及 → 未提及者按原序追加尾部(无空名系列在编辑态不可见,重排不可因它失败) */
+assert.deepStrictEqual(order(srcSeries, ['s2', 's1']).map((s) => s.id), ['s2', 's1', 's3'], 'leftover 原序追加');
+/* 空 orderedIds → 原序拷贝 */
+assert.deepStrictEqual(order(srcSeries, []).map((s) => s.id), ['s1', 's2', 's3'], '空序=identity');
+/* 重复/未知 id → null 且数据不动 */
+assert.strictEqual(order(srcSeries, ['s1', 's1', 's2']), null, '重复 id 拒绝');
+assert.strictEqual(order(srcSeries, ['s1', 'ghost']), null, '未知 id 拒绝');
+assert.strictEqual(order(srcSeries, 's1'), null, '非数组拒绝');
+assert.deepStrictEqual(srcSeries.map((s) => s.id), ['s1', 's2', 's3'], '入参永不被改');
+/* 返回的是浅拷贝新数组:调用方 ws.series = 结果 直接替换 */
+assert.notStrictEqual(order(srcSeries, ['s1', 's2', 's3']), srcSeries, '返回新数组');
+
+console.log('✓ group-series: 系列-届分组与系列重排纯函数(顺序/未分组/空组/keepEmpty/applySeriesOrder)');

@@ -1616,11 +1616,12 @@
    * - 无 seriesId、seriesId 指向不存在的系列(孤儿)、系列名为空 → 归末尾「未分组」;
    * - 届行保持传入顺序,排序与点击行为由调用方决定;
    * - 没有任何届的系列不产出空组。 */
-  function groupTournamentsBySeries(tournaments, series) {
+  function groupTournamentsBySeries(tournaments, series, opts) {
+    const keepEmpty = Boolean(opts && opts.keepEmpty);
     const groups = [];
     const byId = new Map();
     for (const s of (series || []).filter(Boolean)) {
-      if (!s.name) continue; /* 系列名为空:其届归「未分组」 */
+      if (!s.name) continue; /* 系列名为空:其届归「未分组」,编辑态也不可见(僵尸仅 API 可造) */
       const group = { id: s.id, label: s.name, count: 0, items: [] };
       groups.push(group);
       if (s.id != null && !byId.has(s.id)) byId.set(s.id, group);
@@ -1631,9 +1632,31 @@
       group.items.push(t);
       group.count += 1;
     }
-    const result = groups.filter((g) => g.count > 0);
+    const result = keepEmpty ? groups.slice() : groups.filter((g) => g.count > 0);
     if (ungrouped.count > 0) result.push(ungrouped);
     return result;
+  }
+
+  /* 系列守卫式重排(编辑器组块拖拽写回):orderedIds 含重复或未知 id → null(数据不动);
+   * 合法时按 orderedIds 序返回新数组,未提及的系列(编辑态不可见的无空名系列等)
+   * 按原序追加尾部——重排不因僵尸系列而永远失败。不改入参,浅拷贝条目引用。 */
+  function applySeriesOrder(seriesList, orderedIds) {
+    if (!Array.isArray(seriesList) || !Array.isArray(orderedIds)) return null;
+    const byId = new Map();
+    for (const s of seriesList) {
+      if (!s || s.id == null || byId.has(s.id)) continue;
+      byId.set(s.id, s);
+    }
+    const seen = new Set();
+    for (const id of orderedIds) {
+      if (!byId.has(id) || seen.has(id)) return null;
+      seen.add(id);
+    }
+    const ordered = orderedIds.map((id) => byId.get(id));
+    for (const s of seriesList) {
+      if (s && s.id != null && !seen.has(s.id)) ordered.push(s);
+    }
+    return ordered;
   }
 
   /* 赛程页的浮动缩放控件绑定 */
@@ -1699,7 +1722,9 @@
     bindZoomDock,
     bindZoomFitOnResize,
     requirePlayerSession,
-    groupTournamentsBySeries
+    groupTournamentsBySeries,
+    applySeriesOrder,
+    uid
   };
 
   function applyBackground(record) {
