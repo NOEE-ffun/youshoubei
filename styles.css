@@ -4208,6 +4208,64 @@ body.series-editing #ov-tournaments .ov-t-row.is-movable:hover {
   color: var(--text);
 }
 
+/* 组尾「+ 新建比赛」chip:比新建系列矮一档,行级虚线 */
+.ov-t-add-t {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  inline-size: 100%;
+  margin-block-start: 0.25rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px dashed var(--border-soft);
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.ov-t-add-t:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* 行删除钮:指针设备 hover 行才现身,触屏恒显(无 hover) */
+.ov-t-row-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0.15rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ov-t-row-del .icon {
+  inline-size: 0.95rem;
+  block-size: 0.95rem;
+}
+
+.ov-t-row-del:hover {
+  background: var(--accent-soft);
+  color: var(--danger);
+}
+
+@media (hover: hover) {
+  body.series-editing .ov-t-row .ov-t-row-del {
+    opacity: 0;
+    transition: opacity var(--dur-fast) var(--ease-out);
+  }
+
+  body.series-editing .ov-t-row:hover .ov-t-row-del,
+  body.series-editing .ov-t-row-del:focus-visible {
+    opacity: 1;
+  }
+}
+
 .ov-t-group-ungrouped .ov-t-group-title {
   color: var(--text-muted);
 }

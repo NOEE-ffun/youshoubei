@@ -7,6 +7,8 @@
   const META_STORE = 'meta';
   const META_PLAYERS = 'globalPlayers';
   const META_SERIES = 'globalSeries';
+  /* 本地模式届序(idb 逐条存无数组序,届序由此 meta 承载;云端=workspace.tournaments 数组序) */
+  const META_TOURNAMENT_ORDER = 'globalTournamentOrder';
   const LS_ACTIVE = 'ts:activeTournamentId';
   /* 跨文件事件协议:数据变更 / 应用就绪。common.js 派发,各页面监听 */
   const EVT_CHANGED = 'ts:changed';
@@ -582,6 +584,16 @@
       const fresh = makeDefaultTournament('我的赛事', players.map((p) => p.id));
       tournaments.push(fresh);
     }
+    /* 上传届序按本地 META_TOURNAMENT_ORDER(idb 键序≠用户排序) */
+    const localOrder = (await idbGetMeta(META_TOURNAMENT_ORDER)) || [];
+    if (localOrder.length) {
+      const rank = new Map(localOrder.map((id, i) => [String(id), i]));
+      tournaments.sort((a, b) => {
+        const ra = rank.get(String(a.id));
+        const rb = rank.get(String(b.id));
+        return (ra == null ? localOrder.length : ra) - (rb == null ? localOrder.length : rb);
+      });
+    }
 
     const workspace = {
       series: localSeries,
@@ -601,6 +613,8 @@
     const workspace = await cloudGetWorkspace();
     await idbPutMeta(META_PLAYERS, workspace.players || []);
     await idbPutMeta(META_SERIES, workspace.series || []);
+    await idbPutMeta(META_TOURNAMENT_ORDER,
+      (workspace.tournaments || []).map((t) => t && t.id).filter((x) => x != null));
     for (const record of workspace.tournaments) {
       await idbPut(record);
     }
@@ -923,15 +937,16 @@
     }
   }
 
-  /* ---------- 系列编辑事务(主页系列编辑模式,2026-09-09) ----------
-   * mutator 收到 {series, tournaments} 就地改;云端走 noMerge 精确流
+  /* ---------- 工作区编辑事务(主页系列/届编辑模式,2026-09-09) ----------
+   * mutator 收到 {series, tournaments} 就地改(含届数组重排);云端走 noMerge 精确流
    * (GET 服务端原始 JSON → 就地改 → PUT {noMerge:true} → 回读盖章 createdBy,
-   * 与退役系列弹窗同契约——merge 对 series 是云端按 id 权威,精确流是铁律);
-   * 本地改 META_SERIES + 受影响届(仅 seriesId 变化者)逐条 idbPut。
-   * 完成后 refreshApp + ts:changed,主页/页头下拉等派生视图统一重建。 */
-  async function applySeriesEdit(mutator) {
+   * 与退役系列弹窗同契约——merge 对 series 是云端按 id 权威,且 mergeWorkspace
+   * 输出以云端数组序为序,届序重排同样会被 merge 抹掉,两类序变更都必须精确流);
+   * 本地改 META_SERIES + META_TOURNAMENT_ORDER + 受影响届(仅 seriesId 变化者)
+   * 逐条 idbPut。完成后 refreshApp + ts:changed,派生视图统一重建。 */
+  async function applyWorkspaceEdit(mutator) {
     if (mode === 'cloud') {
-      if (!isAdmin()) throw new Error('系列管理需要管理员账号');
+      if (!isAdmin()) throw new Error('需要管理员账号');
       const latest = await cloudGetWorkspace();
       latest.series = Array.isArray(latest.series) ? latest.series : [];
       latest.tournaments = Array.isArray(latest.tournaments) ? latest.tournaments : [];
@@ -946,10 +961,16 @@
     } else {
       const series = (await idbGetMeta(META_SERIES)) || [];
       const tournaments = await idbGetAll();
+      const orderBefore = tournaments.map((t) => (t && t.id != null ? t.id : null)).filter((x) => x != null).join('|');
       const before = new Map(tournaments.map((t) => [t.id, t.seriesId == null ? null : t.seriesId]));
       const ws = { series, tournaments };
       await mutator(ws);
       await idbPutMeta(META_SERIES, ws.series || []);
+      const orderAfter = (ws.tournaments || []).map((t) => (t && t.id != null ? t.id : null)).filter((x) => x != null).join('|');
+      if (orderAfter !== orderBefore) {
+        await idbPutMeta(META_TOURNAMENT_ORDER,
+          (ws.tournaments || []).map((t) => t && t.id).filter((x) => x != null));
+      }
       for (const t of ws.tournaments || []) {
         const cur = t.seriesId == null ? null : t.seriesId;
         if (before.get(t.id) !== cur) await idbPut(t);
@@ -960,28 +981,16 @@
     document.dispatchEvent(new CustomEvent(EVT_CHANGED));
   }
 
-  /* 届改挂系列(主页拖拽落点):云端走常规 merge 流(updatedAt 打戳取新者胜,
-   * seriesId 变化属届内容变更,与改名同路径,并发安全);归属前端预判,
-   * 服务端整库守卫仍是权威兜底。本地无归属概念(合成本地超管恒可)。 */
-  async function setTournamentSeries(id, seriesId) {
-    const target = seriesId || null;
-    if (mode === 'cloud') {
-      const record = ((cloudWorkspace && cloudWorkspace.tournaments) || []).find((t) => t && t.id === id);
-      if (!record) throw new Error('该届已不存在，请刷新后重试');
-      if (!canManage(record)) throw new Error('无权移动该届（仅创建者或超管）');
-      if ((record.seriesId || null) === target) return;
-      record.seriesId = target;
-      await storagePut(record);
-    } else {
-      const all = await idbGetAll();
-      const record = all.find((t) => t && t.id === id);
-      if (!record) throw new Error('该届已不存在，请刷新后重试');
-      if ((record.seriesId || null) === target) return;
-      record.seriesId = target;
-      await idbPut(record);
-    }
+  /* 就地新建届(主页编辑态组尾 chip):空白画布 + 所属系列;与管理弹窗建届同
+   * storagePut 路径(merge 流,新届自然落数组尾),但不切 activeId——整理场景
+   * 不打断当前届。管理弹窗模板选择等重场景不走这里。 */
+  async function createTournament(name, seriesId) {
+    const record = makeBlankTournament(name);
+    record.seriesId = seriesId || null; /* createdBy 由服务端整库守卫盖章,前端不管 */
+    await storagePut(record);
     await refreshApp();
     document.dispatchEvent(new CustomEvent(EVT_CHANGED));
+    return record;
   }
 
   /* ---------- 设置弹窗 ---------- */
@@ -1621,6 +1630,40 @@
     return ordered;
   }
 
+  /* 届落位(主页编辑态行拖拽写回口径):把 id 届挂到 seriesId 组的第 indexInGroup 位
+   * (组内下标=剔除拖拽行后的插入位),并同步调整数组序——组内显示序是数组序在该组的
+   * 投影,故组内重排即全局重排(页头下拉/管理列表届序随之同步)。
+   * 返回重排后的新数组(拖拽届换浅拷贝、seriesId 已改;其余条目引用不变);
+   * 无操作(届不存在/同组同位)返回 null。不改入参。 */
+  function placeTournamentInGroup(tournaments, id, seriesId, indexInGroup) {
+    if (!Array.isArray(tournaments)) return null;
+    const idx = tournaments.findIndex((t) => t && t.id === id);
+    if (idx < 0) return null;
+    const moved = tournaments[idx];
+    const key = (t) => (t == null || t.seriesId == null ? null : t.seriesId);
+    const target = seriesId || null;
+    const groupKey = (t) => key(t);
+    const sameGroupRows = tournaments.filter((t) => t && t !== moved && groupKey(t) === target);
+    if (key(moved) === target) {
+      /* 同组:当前组内位(剔除自身、只数其前方的同组行)与目标位一致 → no-op */
+      const curPos = tournaments.slice(0, idx).filter((t) => t && groupKey(t) === target).length;
+      if (curPos === Math.min(indexInGroup, sameGroupRows.length)) return null;
+    }
+    const rest = tournaments.filter((t) => t !== moved);
+    const next = Object.assign({}, moved, { seriesId: target });
+    const anchor = indexInGroup < sameGroupRows.length ? sameGroupRows[indexInGroup] : null;
+    const lastOfGroup = sameGroupRows.length ? sameGroupRows[sameGroupRows.length - 1] : null;
+    const out = [];
+    let placed = false;
+    for (const t of rest) {
+      if (anchor === t) { out.push(next); placed = true; }
+      out.push(t);
+      if (!anchor && lastOfGroup === t) { out.push(next); placed = true; }
+    }
+    if (!placed) out.push(next); /* 目标组为空(或锚点缺失)→ 数组尾追 */
+    return out;
+  }
+
   /* 赛程页的浮动缩放控件绑定 */
   function bindZoomDock(handlers) {
     const dock = document.getElementById('zoom-dock');
@@ -1686,6 +1729,7 @@
     requirePlayerSession,
     groupTournamentsBySeries,
     applySeriesOrder,
+    placeTournamentInGroup,
     uid
   };
 
@@ -2313,6 +2357,19 @@
 
   async function refreshApp() {
     let all = await storageGetAll();
+    if (mode !== 'cloud') {
+      /* 本地逐条存 idb 无数组序,届序由 META_TOURNAMENT_ORDER 承载
+       * (未收录 id 按原序尾追,新建/迁移零改造成本) */
+      const orderIds = await idbGetMeta(META_TOURNAMENT_ORDER);
+      if (Array.isArray(orderIds) && orderIds.length) {
+        const rank = new Map(orderIds.map((id, i) => [String(id), i]));
+        const known = [];
+        const unknown = [];
+        for (const t of all) (rank.has(String(t && t.id)) ? known : unknown).push(t);
+        known.sort((a, b) => rank.get(String(a.id)) - rank.get(String(b.id)));
+        all = known.concat(unknown);
+      }
+    }
     let players = await storageGetPlayers();
     /* 归一化选手字段（title 对象结构 / color 校验），损坏条目丢弃并标记待回写 */
     let playersDirty = false;
@@ -2438,8 +2495,9 @@
       storageDeletePlayer,
       isAdmin,
       canManage,
-      applySeriesEdit,
-      setTournamentSeries,
+      applyWorkspaceEdit,
+      createTournament,
+      deleteTournament,
       setActiveId,
       refreshSession,
       getSession,

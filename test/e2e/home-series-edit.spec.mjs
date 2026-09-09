@@ -200,6 +200,89 @@ test('同组放下与原位放下均为无操作(不落盘不报错)', async ({ 
   await page.request.post('/api/dev/reset');
 });
 
+test('组尾就地产届:系列组建届挂对系列+空白画布,未分组组建届 seriesId=null', async ({ page }) => {
+  const context = page.context();
+  await seedDefault(context);
+  await enterEdit(page);
+  /* 系列甲组尾建届 */
+  await page.locator('.ov-t-group[data-series="sr-a"] [data-add-tournament]').click();
+  await page.locator('.ov-t-name-input').fill('丙一届');
+  await page.locator('.ov-t-name-input').press('Enter');
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.ov-t-group[data-series="sr-a"] .ov-t-row')].some((r) => r.textContent.includes('丙一届')));
+  /* 未分组组尾建届 */
+  await page.locator('.ov-t-group-ungrouped [data-add-tournament]').click();
+  await page.locator('.ov-t-name-input').fill('散二届');
+  await page.locator('.ov-t-name-input').press('Enter');
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.ov-t-group-ungrouped .ov-t-row')].some((r) => r.textContent.includes('散二届')));
+  const ws = await (await page.request.get('/api/data')).json();
+  const byName = (n) => ws.tournaments.find((t) => t.name === n);
+  expect(byName('丙一届').seriesId).toBe('sr-a');
+  expect(byName('散二届').seriesId).toBeNull();
+  expect(Array.isArray(byName('丙一届').canvas.cards) && byName('丙一届').canvas.cards).toHaveLength(0); /* 空白画布 */
+  await page.request.post('/api/dev/reset');
+});
+
+test('行删除比赛:确认后届消失(确认弹窗在 common.js deleteTournament 内)', async ({ page }) => {
+  const context = page.context();
+  await seedDefault(context);
+  await enterEdit(page);
+  await page.locator('.ov-t-row[data-id="t-free"] [data-del-tournament]').click();
+  await page.locator('#confirm-dialog [data-confirm-ok]').click();
+  await page.waitForFunction(() =>
+    !document.querySelector('.ov-t-row[data-id="t-free"]'));
+  const ws = await (await page.request.get('/api/data')).json();
+  expect(ws.tournaments.map((t) => t.id)).not.toContain('t-free');
+  await page.request.post('/api/dev/reset');
+});
+
+test('届组内排序:同组拖拽重排落库为数组序(全局届序)', async ({ page }) => {
+  const context = page.context();
+  await seedDefault(context);
+  await enterEdit(page);
+  const before = await (await page.request.get('/api/data')).json();
+  expect(before.tournaments.map((t) => t.id)).toEqual(['t-a1', 't-a2', 't-free']);
+  /* 落点坑:拖拽启动即原行 display:none 让位,后续行整体上移一行——拖前测的
+   * t-a2 底缘坐标在拖后已过期 47px,落在组外真空带会被「就近归属+间隙条反馈」
+   * 吸进相邻组。正确落点=被拖行原槽位底部 -10px(拖后该槽位正是 t-a2 实身,
+   * 处于其下半区 → 组内第 1 位)。 */
+  const s = await page.locator('.ov-t-row[data-id="t-a1"]').boundingBox();
+  await dragMouse(page,
+    { x: s.x + s.width * 0.5, y: s.y + s.height / 2 },
+    { x: s.x + s.width * 0.5, y: s.y + s.height - 10 });
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll('.ov-t-group[data-series="sr-a"] .ov-t-row')].map((r) => r.dataset.id).join(',') === 't-a2,t-a1');
+  const ws = await (await page.request.get('/api/data')).json();
+  expect(ws.tournaments.map((x) => x.id)).toEqual(['t-a2', 't-a1', 't-free']); /* 组内序=数组序投影 */
+  await page.request.post('/api/dev/reset');
+});
+
+test('跨组拖拽顺带落位:拖入目标组第 0 位,数组序插到该组首行之前', async ({ page }) => {
+  const context = page.context();
+  await seedDefault(context);
+  /* 增补系列乙(GET 现库再补,整库 PUT 全量替换语义) */
+  const ws = await (await context.request.get('/api/data')).json();
+  ws.series.push({ id: 'sr-b', name: '系列乙' });
+  ws.tournaments.push(makeTournament('t-b1', '乙一届', 'sr-b'));
+  const put = await context.request.put('/api/data', { data: ws });
+  expect(put.ok()).toBeTruthy();
+  await enterEdit(page);
+  /* t-free(未分组)拖到系列乙组头中心=组内第 0 位 */
+  const s = await page.locator('.ov-t-row[data-id="t-free"]').boundingBox();
+  const d = await page.locator('.ov-t-group[data-series="sr-b"] .ov-t-group-title').boundingBox();
+  await dragMouse(page,
+    { x: s.x + s.width * 0.5, y: s.y + s.height / 2 },
+    { x: d.x + 80, y: d.y + d.height / 2 });
+  await page.waitForFunction(() =>
+    document.querySelector('.ov-t-group[data-series="sr-b"]')?.querySelector('.ov-t-row[data-id="t-free"]'));
+  const after = await (await page.request.get('/api/data')).json();
+  const ids = after.tournaments.map((x) => x.id);
+  expect(ids.indexOf('t-free')).toBe(ids.indexOf('t-b1') - 1); /* t-free 紧贴乙组首行之前 */
+  expect(after.tournaments.find((x) => x.id === 't-free').seriesId).toBe('sr-b');
+  await page.request.post('/api/dev/reset');
+});
+
 test('admin 权限边界:他人届无手柄不可拖,他人系列不可改名,删除预判禁用,排序放行', async ({ page, context, browser }) => {
   await resetStore(context);
   const PHONE_B = '13800003333';
@@ -233,11 +316,13 @@ test('admin 权限边界:他人届无手柄不可拖,他人系列不可改名,�
   await pageB.goto('/');
   await pageB.locator('#ov-t-edit-btn').click();
   await pageB.waitForSelector('body.series-editing');
-  /* 他人届(超管届,现在系列乙下):无 is-movable、无手柄 */
+  /* 他人届(超管届,现在系列乙下):无 is-movable、无手柄、无行删除钮 */
   await expect(pageB.locator('.ov-t-row[data-id="t-super"]')).not.toHaveClass(/is-movable/);
   await expect(pageB.locator('.ov-t-row[data-id="t-super"] .list-handle')).toHaveCount(0);
-  /* 自己届:可拖 */
+  await expect(pageB.locator('.ov-t-row[data-id="t-super"] [data-del-tournament]')).toHaveCount(0);
+  /* 自己届:可拖、可删 */
   await expect(pageB.locator('.ov-t-row[data-id="t-b"]')).toHaveClass(/is-movable/);
+  await expect(pageB.locator('.ov-t-row[data-id="t-b"] [data-del-tournament]')).toHaveCount(1);
   /* 他人系列(sr-a/sr-b 均 super 建):无改名按钮、无删除按钮 */
   await expect(pageB.locator('.ov-t-group[data-series="sr-a"] [data-rename]')).toHaveCount(0);
   await expect(pageB.locator('.ov-t-group[data-series="sr-a"] [data-del]')).toHaveCount(0);

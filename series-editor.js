@@ -2,11 +2,11 @@
   'use strict';
 
   /* 主页总览系列编辑器(2026-09-09 批):编辑态生命周期(body.series-editing)、
-   * 系列行内新建/改名/删除、拖拽(届跨系列改挂/系列整块重排)。
-   * 交互契约移植自 list-editor.js:位移阈值区分点击/拖拽、延迟指针捕获、
-   * 幽灵跟随、间隙条落点、FLIP、logicalTop 命中、suppressClick、Esc 取消。
-   * 数据一律经 TournamentApp.applySeriesEdit(系列精确流)/
-   * setTournamentSeries(届 merge 流)——本模块不直接碰 workspace。 */
+   * 系列行内新建/改名/删除、组尾就地产届、行删除、拖拽(届跨系列改挂+组内排序/
+   * 系列整块重排)。交互契约移植自 list-editor.js:位移阈值区分点击/拖拽、
+   * 延迟指针捕获、幽灵跟随、间隙条落点、FLIP、logicalTop 命中、suppressClick、
+   * Esc 取消。数据一律经 TournamentApp 的工作区事务助手(applyWorkspaceEdit 精确流)
+   * 与 createTournament/deleteTournament——本模块不直接碰 workspace。 */
 
   const DRAG_THRESHOLD = 4;   /* 超过此位移才算拖拽,否则纯点击 */
   const EDGE_SCROLL_ZONE = 48;
@@ -48,12 +48,17 @@
 
   function rowHtml(t) {
     const manage = utils().canManage(t);
+    const delBtn = manage
+      ? '<button type="button" class="ov-t-row-del" data-del-tournament="' + esc(t.id) + '" aria-label="删除比赛 ' + esc(t.name || t.id) + '" title="删除比赛">' +
+        '<img class="icon" src="icons/delete.svg" alt="" aria-hidden="true"></button>'
+      : '';
     return '<div class="ov-t-row' + (manage ? ' is-movable' : '') + '" data-id="' + esc(t.id) + '"' +
       (manage ? ' title="拖拽移动到其他系列"' : ' title="仅创建者或超管可移动"') + '>' +
       (manage ? handleHtml() : '') +
       '<span class="ov-t-name">' + esc(t.name || t.id) + '</span>' +
       '<span class="status-badge status-' + esc(t.status || 'upcoming') + '">' +
       esc(STATUS_TEXT[t.status] || STATUS_TEXT.upcoming) + '</span>' +
+      delBtn +
       '</div>';
   }
 
@@ -77,6 +82,8 @@
       '<span class="ov-t-group-count">' + g.count + ' 届</span>' + delBtn +
       '</h3>' +
       g.items.map(rowHtml).join('') +
+      '<button type="button" class="ov-t-add-t" data-add-tournament="' + esc(seriesKey(g)) + '" title="在该系列新建比赛">' +
+      '<img class="icon" src="icons/add.svg" alt="" aria-hidden="true">新建比赛</button>' +
       '</section>';
   }
 
@@ -146,7 +153,7 @@
       if (!name) { utils().notify('系列名称不能为空'); renderEdit(); return; }
       if (name === series.name) { renderEdit(); return; }
       try {
-        await app().applySeriesEdit((ws) => {
+        await app().applyWorkspaceEdit((ws) => {
           const target = ws.series.find((s) => s && s.id === seriesId);
           if (target) target.name = name;
         });
@@ -164,12 +171,28 @@
       const name = value.trim().slice(0, NAME_MAX);
       if (!name) { renderEdit(); return; }
       try {
-        await app().applySeriesEdit((ws) => {
+        await app().applyWorkspaceEdit((ws) => {
           ws.series.push({ id: utils().uid('s'), name: name, desc: '', createdAt: Date.now() });
         });
         utils().notify('系列已创建');
       } catch (error) {
         utils().notify('新建系列失败：' + utils().errMsg(error), 'danger');
+      }
+    });
+  }
+
+  /* 组尾就地产届:空白画布,所属系列=所在组(未分组=null);确认弹窗在
+   * common.js deleteTournament 内部,这里只管建。 */
+  function beginCreateTournament(chip) {
+    const seriesId = chip.dataset.addTournament || '';
+    inlineInput(chip, '', async (value) => {
+      const name = value.trim();
+      if (!name) { renderEdit(); return; }
+      try {
+        await app().createTournament(name, seriesId || null);
+        utils().notify('比赛已创建');
+      } catch (error) {
+        utils().notify('新建比赛失败：' + utils().errMsg(error), 'danger');
       }
     });
   }
@@ -182,7 +205,7 @@
     const ok = await utils().uiConfirm('删除系列「' + g.label + '」？其中 ' + g.count + ' 届将归入未分组。');
     if (!ok) return;
     try {
-      await app().applySeriesEdit((ws) => {
+      await app().applyWorkspaceEdit((ws) => {
         ws.series = ws.series.filter((s) => s && s.id !== seriesId);
         for (const t of ws.tournaments) {
           if (t && t.seriesId === seriesId) t.seriesId = null;
@@ -203,6 +226,14 @@
     if (renameBtn) { beginRename(renameBtn); return; }
     const delBtn = event.target.closest('[data-del]');
     if (delBtn && !delBtn.disabled) { removeSeries(delBtn.dataset.del); return; }
+    const addT = event.target.closest('[data-add-tournament]');
+    if (addT) { beginCreateTournament(addT); return; }
+    const delT = event.target.closest('[data-del-tournament]');
+    if (delT) {
+      /* 确认弹窗/删光兜底/当前届切换全在 common.js deleteTournament 内 */
+      app().deleteTournament(delT.dataset.delTournament);
+      return;
+    }
     if (event.target.closest('#ov-t-add-btn')) { beginCreate(); return; }
     if (event.target.closest('#ov-t-done-btn')) { exit(); return; }
   }
@@ -473,8 +504,9 @@
     scrollRaf = requestAnimationFrame(step);
   }
 
-  /* 落定:行=改挂(setTournamentSeries,同组无操作);组=重排(applySeriesOrder
-   * 守卫 + applySeriesEdit 精确流)。写完由 ts:changed 管线统一重渲染。 */
+  /* 落定:行=落位(placeTournamentInGroup:改挂+组内序,同组同位无操作);
+   * 组=重排(applySeriesOrder 守卫)。都走 applyWorkspaceEdit 精确流,
+   * 写完由 ts:changed 管线统一重渲染。 */
   async function finishDrag() {
     const d = drag;
     drag = null;
@@ -492,8 +524,13 @@
     if (!d) return;
     try {
       if (d.kind === 'row') {
-        if (d.targetKey === d.sourceKey) return; /* 同组放下=取消 */
-        await app().setTournamentSeries(d.cardId, d.targetKey || null);
+        /* 落位 = 改挂 + 组内序(组内显示序是全局数组序的投影,一并写回;
+         * 同组同位纯函数返回 null=no-op,先用本地摘要预检免掉无谓的服务器往返) */
+        if (!utils().placeTournamentInGroup(app().list || [], d.cardId, d.targetKey || null, d.targetIndex)) return;
+        await app().applyWorkspaceEdit((ws) => {
+          const placed = utils().placeTournamentInGroup(ws.tournaments, d.cardId, d.targetKey || null, d.targetIndex);
+          if (placed) ws.tournaments = placed;
+        });
       } else {
         const ordered = blockCandidates().map((g) => g.dataset.series);
         const from = ordered.indexOf(d.sourceKey);
@@ -505,7 +542,7 @@
         ordered.splice(d.targetIndex, 0, d.sourceKey);
         const applied = utils().applySeriesOrder(app().series || [], ordered);
         if (!applied) return;
-        await app().applySeriesEdit((ws) => { ws.series = applied; });
+        await app().applyWorkspaceEdit((ws) => { ws.series = applied; });
       }
     } catch (error) {
       utils().notify('移动失败：' + utils().errMsg(error), 'danger');

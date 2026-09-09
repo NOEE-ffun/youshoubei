@@ -122,4 +122,45 @@ assert.deepStrictEqual(srcSeries.map((s) => s.id), ['s1', 's2', 's3'], '入参�
 /* 返回的是浅拷贝新数组:调用方 ws.series = 结果 直接替换 */
 assert.notStrictEqual(order(srcSeries, ['s1', 's2', 's3']), srcSeries, '返回新数组');
 
-console.log('✓ group-series: 系列-届分组与系列重排纯函数(顺序/未分组/空组/keepEmpty/applySeriesOrder)');
+/* 10. placeTournamentInGroup:届落位(主页编辑态行拖拽写回,组内序=全局数组序投影) */
+const place = utils.placeTournamentInGroup;
+assert.ok(typeof place === 'function', 'common.js 应导出 placeTournamentInGroup');
+/* 造届摘要:seriesId 缺参=未分组(null) */
+const tt = (id, seriesId) => ({ id, name: id, seriesId: seriesId === undefined ? null : seriesId });
+const idsOf = (list) => JSON.parse(JSON.stringify(list.map((x) => x.id)));
+
+/* 同组重排:t1(S) 挪到组内第 2 位(剔除自身计) */
+assert.deepStrictEqual(
+  idsOf(place([tt('t1', 'S'), tt('t2', 'S'), tt('t3', 'S')], 't1', 'S', 2)),
+  ['t2', 't3', 't1'], '同组重排生效');
+/* 同组同位 = 无操作 → null */
+assert.strictEqual(place([tt('t1', 'S'), tt('t2', 'S')], 't1', 'S', 0), null, '同组同位 no-op');
+assert.strictEqual(place([tt('t1', 'S'), tt('t2', 'S')], 't2', 'S', 1), null, '组尾原位 no-op');
+/* 跨组落位:t1 从 S 挂 B 第 0 位 → 插在 B 组首行之前,seriesId 改写 */
+{
+  const src = [tt('a1', 'S'), tt('b1', 'B'), tt('a2', 'S'), tt('c0')];
+  const out = place(src, 'a1', 'B', 0);
+  assert.deepStrictEqual(idsOf(out), ['a1', 'b1', 'a2', 'c0'], '跨组插到目标组首行之前');
+  assert.strictEqual(out[0].seriesId, 'B', 'seriesId 改写(新对象)');
+  assert.strictEqual(src[0].seriesId, 'S', '入参条目不被改');
+  assert.notStrictEqual(out[0], src[0], '拖拽届换成浅拷贝');
+}
+/* 跨组末位(下标超出组内行数)→ 目标组末行之后 */
+assert.deepStrictEqual(
+  idsOf(place([tt('a1', 'S'), tt('b1', 'B'), tt('a2', 'S'), tt('c0')], 'a1', 'B', 9)),
+  ['b1', 'a1', 'a2', 'c0'], '跨组末位=目标组末行之后');
+/* 目标组为空(空系列)→ 尾追 */
+assert.deepStrictEqual(
+  idsOf(place([tt('a1', 'S'), tt('b1', 'B')], 'a1', 'EMPTY', 0)),
+  ['b1', 'a1'], '空目标组=数组尾追');
+/* 挂未分组:seriesId 置 null,落未分组组内位 */
+{
+  const out = place([tt('a1', 'S'), tt('a2', 'S'), tt('c0')], 'a2', null, 0);
+  assert.deepStrictEqual(idsOf(out), ['a1', 'a2', 'c0'], '挂未分组插未分组首行之前');
+  assert.strictEqual(out[1].seriesId, null, '未分组=seriesId null');
+}
+/* 届不存在 / 入参非数组 → null */
+assert.strictEqual(place([tt('a1', 'S')], 'ghost', 'S', 0), null, '未知 id 拒绝');
+assert.strictEqual(place(null, 'a1', 'S', 0), null, '非数组拒绝');
+
+console.log('✓ group-series: 系列-届分组与重排纯函数(顺序/未分组/空组/keepEmpty/applySeriesOrder/placeTournamentInGroup)');

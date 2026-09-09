@@ -148,6 +148,14 @@ r = workspacePutGuard(U, curSeries(), {
 assert.strictEqual(r.ok, true, '纯重排(含他人/系统系列)放行');
 assert.deepStrictEqual(r.workspace.series.map((s) => s.id), ['s3', 's1', 's2'], '重排顺序生效');
 
+/* admin 纯重排届(组内排序写回,仅换位不改内容)→ 放行(guardList 同口径泛化) */
+r = workspacePutGuard(U, curSeries(), {
+  series: curSeries().series,
+  tournaments: [curSeries().tournaments[1], curSeries().tournaments[0]], players: [], activeId: 't1'
+});
+assert.strictEqual(r.ok, true, '届纯重排放行');
+assert.deepStrictEqual(r.workspace.tournaments.map((t) => t.id), ['t2', 't1'], '届重排顺序生效');
+
 /* admin 删自己的系列但属下含他人届:清 seriesId = 他人届内容变化 → 403 带届名 */
 const curDel = () => ({
   series: [{ id: 's1', name: '一', createdBy: 'uA', createdAt: 't' }],
