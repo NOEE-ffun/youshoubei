@@ -208,10 +208,18 @@
   }
 
   /* 保存时一侧的最终值:own 模式清空到零行 → null(显式阻断继承);
-   * inherited 模式未改动 → 不动原值(继续继承);其余写入行内容 */
+   * inherited 模式未改动 → 不动原值(继续继承);其余写入行内容。
+   * own 模式行内容未变(cls+url 同)时保留旧条目的 deck 快照——表单只回读
+   * cls/url/text,逐字重建会把服务端解析/选手提交附带的快照抹掉,连带丢
+   * 禁卡表违规判定与统计口径(改链接/换职业时快照失效,丢弃走补解析) */
   function resolveGroup(currentLinks, groupId, result) {
     if (result.fill === 'own') {
-      return result.links.length ? result.links : null;
+      if (!result.links.length) return null;
+      const prev = (currentLinks && Array.isArray(currentLinks[groupId])) ? currentLinks[groupId] : [];
+      return result.links.map((entry) => {
+        const old = prev.find((e) => e && e.deck && e.cls === entry.cls && e.url === entry.url);
+        return old ? Object.assign({ deck: old.deck }, entry) : entry;
+      });
     }
     if (result.unchangedInherited) {
       return (currentLinks && currentLinks[groupId] !== undefined) ? currentLinks[groupId] : [];

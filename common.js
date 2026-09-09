@@ -1160,6 +1160,27 @@
   /* ---- 禁卡表编辑(工作副本 banlistDraft,保存时整体落 record.banLists) ---- */
   let banlistDraft = [];
   let banlistPoolExtra = []; /* 粘码解析并入的临时候选卡,仅本次会话 */
+  /* 历届全量记录缓存(候选池数据源):appInstance.list 是无 canvas 的摘要投影,
+   * 弹窗打开时经 storageGetAll 异步刷新(云端=内存工作区,本地=IndexedDB 全量) */
+  let banlistPoolRecords = [];
+
+  function refreshBanlistPoolRecords() {
+    Promise.resolve(appInstance && appInstance.storageGetAll ? appInstance.storageGetAll() : [])
+      .then((all) => {
+        banlistPoolRecords = Array.isArray(all) ? all : [];
+        /* 池晚到时已渲染的搜索结果按现有关键词重算(输入框不动,只补结果区) */
+        const wrap = settingsDialog && settingsDialog.querySelector('#settings-banlists');
+        if (!wrap || !settingsDialog.open) return;
+        wrap.querySelectorAll('.bl-block').forEach((block) => {
+          const bl = banlistDraft.find((x) => x.id === block.dataset.bl);
+          const input = block.querySelector('.bl-search');
+          if (bl && input && input.value) {
+            block.querySelector('.bl-results').innerHTML = blSearchResults(bl, input.value);
+          }
+        });
+      })
+      .catch(() => { /* 池刷新失败=搜索退化为仅粘码补充卡,不阻塞弹窗 */ });
+  }
 
   /* 候选池 = 历届快照聚合 distinct 卡 + 本次粘码补充 */
   function banlistCandidatePool() {
@@ -1170,12 +1191,15 @@
       pool.set(id, { id, name: String(row[1] || '?'), cost: Number(row[2]) || 0,
         rarity: Math.min(4, Math.max(1, Number(row[3]) || 1)) });
     };
-    for (const rec of appInstance.list || []) {
+    for (const rec of banlistPoolRecords) {
       for (const card of (rec && rec.canvas && rec.canvas.cards) || []) {
         for (const side of ['a', 'b']) {
           const links = card.classLinks && Array.isArray(card.classLinks[side]) ? card.classLinks[side] : [];
           for (const entry of links) {
-            for (const row of (entry && entry.deck && Array.isArray(entry.deck.cards)) || []) add(row);
+            /* 三元而非 && 链短路:`x && Array.isArray(y) || []` 求值为布尔,
+             * 快照存在时 for..of 布尔直接抛 TypeError(池一有数据搜索即崩) */
+            const deckCards = entry && entry.deck && Array.isArray(entry.deck.cards) ? entry.deck.cards : [];
+            for (const row of deckCards) add(row);
           }
         }
       }
@@ -1652,6 +1676,7 @@
       id: bl.id, name: bl.name, cards: bl.cards.map((r) => r.slice())
     }));
     banlistPoolExtra = [];
+    refreshBanlistPoolRecords();
     renderBanlistsEditor();
     if (statusInput) statusInput.value = record.status || 'upcoming';
     if (liveUrlInput) liveUrlInput.value = record.liveUrl || '';
