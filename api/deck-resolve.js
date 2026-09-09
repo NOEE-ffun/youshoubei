@@ -76,7 +76,9 @@ function mapResponse(json, resolvedAt) {
     if (!name) return { ok: false, reason: 'card-detail-missing:' + id };
     const copies = Number(n);
     if (!(copies >= 1 && copies <= 3)) return { ok: false, reason: 'copies:' + id };
-    cards.push([Number(id), name, Number(common.cost) || 0, Number(common.rarity) || 0, Number(common.type) || 0, copies]);
+    cards.push([Number(id), name, Number(common.cost) || 0, Number(common.rarity) || 0, Number(common.type) || 0, copies,
+      /* 单卡职业(0=中立,官方 card_details.common.class;禁卡表按职业显示用) */
+      (Number(common.class) >= 0 && Number(common.class) <= 7) ? Number(common.class) : null]);
     total += copies;
   }
   if (total !== 40) return { ok: false, reason: 'not-40:' + total };

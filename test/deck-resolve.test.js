@@ -14,17 +14,19 @@ const HASH = '1.2.cEZs.cEZs.cEZs.cEaA.dmyk.dmyk.dmyk.e9NO.eXnk.eXnu.eXnu.eXnu.ev
 function okRes(cardList, classId) {
   const deck_card_num = {};
   const card_details = {};
-  for (const [id, name, cost, rarity, type, n] of cardList) {
+  for (const [id, name, cost, rarity, type, n, cls] of cardList) {
     deck_card_num[id] = n;
-    card_details[id] = { common: { card_id: id, name, cost, rarity, type } };
+    const common = { card_id: id, name, cost, rarity, type };
+    if (cls !== undefined) common.class = cls; /* 单卡职业(官方 0-7);不设即测缺字段 → null */
+    card_details[id] = { common };
   }
   return { data: { class_id: classId === undefined ? 2 : classId, battle_format: 1, deck_card_num, card_details } };
 }
 
-/* 13 种 ×3 + 1 种 ×1 = 40 */
+/* 13 种 ×3 + 1 种 ×1 = 40;循环卡 class 取 i%8 覆盖 0-7,末卡不带 class 测缺失兜底 */
 function stdCards() {
   const cards = [];
-  for (let i = 0; i < 13; i++) cards.push([10021110 + i, '卡' + i, (i % 8) + 1, (i % 4) + 1, (i % 3) + 1, 3]);
+  for (let i = 0; i < 13; i++) cards.push([10021110 + i, '卡' + i, (i % 8) + 1, (i % 4) + 1, (i % 3) + 1, 3, i % 8]);
   cards.push([10924120, '武皇的变貌·贝尔铁佐', 8, 4, 1, 1]);
   return cards;
 }
@@ -90,8 +92,12 @@ async function main() {
   assert.equal(mapped.deck.resolvedAt, '2026-08-31T00:00:00.000Z');
   assert.equal(mapped.deck.cards.length, 14, '14 种卡');
   assert.equal(mapped.deck.cards.reduce((s, c) => s + c[5], 0), 40, '总张数 40');
-  assert.ok(mapped.deck.cards.every((c) => Array.isArray(c) && c.length === 6), '紧凑六元组');
+  assert.ok(mapped.deck.cards.every((c) => Array.isArray(c) && c.length === 7), '紧凑七元组');
   assert.ok(mapped.deck.cards.every((c, i, a) => i === 0 || a[i - 1][0] <= c[0]), '按 cardId 升序');
+  /* 单卡职业进快照第 7 位(禁卡表按职业显示);card_details 缺 class 字段的卡 → null */
+  assert.equal(mapped.deck.cards.find((c) => c[0] === 10021110)[6], 0, 'class=0(中立)透传');
+  assert.equal(mapped.deck.cards.find((c) => c[0] === 10021117)[6], 7, 'class=7 透传');
+  assert.equal(mapped.deck.cards.find((c) => c[0] === 10924120)[6], null, '缺 class 字段 → null');
 
   assert.equal(mapResponse({ data: null }, 't').reason, 'bad-shape', '缺 data 拒判');
   assert.equal(mapResponse({ data: { deck_card_num: {}, card_details: {}, class_id: 9 } }, 't').reason, 'class-id', '职业位越界拒判');
@@ -108,6 +114,16 @@ async function main() {
     const m = mapResponse(okRes(cards), 't');
     assert.equal(m.ok, true);
     assert.equal(m.deck.cards.find((c) => c[0] === 10021110)[1].length, 60, '卡名截断 60');
+  }
+  {
+    /* class 越界(8/-1)与缺字段同兜底 → null */
+    const cards = [[10021110, '越界', 1, 1, 1, 1, 8], [10021111, '负数', 1, 1, 1, 3, -1]];
+    for (let i = 2; i <= 13; i++) cards.push([10021110 + i, '卡' + i, 1, 1, 1, 3, i % 8]);
+    const m = mapResponse(okRes(cards), 't');
+    assert.equal(m.ok, true);
+    assert.equal(m.deck.cards.find((c) => c[0] === 10021110)[6], null, 'class 8 越界 → null');
+    assert.equal(m.deck.cards.find((c) => c[0] === 10021111)[6], null, 'class -1 越界 → null');
+    assert.equal(m.deck.cards.find((c) => c[0] === 10021112)[6], 2, 'class 2 正常透传');
   }
 
   /* ---------- resolveDeck:注入 fetchImpl ---------- */
@@ -163,6 +179,10 @@ async function main() {
       assert.equal(r.ok, true, 'fixture 模式读到文件');
       assert.equal(r.deck.cards.length, 14);
       assert.equal(net, 0, 'fixture 模式绝不出网');
+      /* fixture 解析形:单卡职业进快照第 7 位,缺 class 字段的卡 → null */
+      assert.ok(r.deck.cards.every((row) => row.length === 7), 'fixture 快照七元组');
+      assert.equal(r.deck.cards.find((row) => row[0] === 10021110)[6], 0, 'fixture 单卡 class 透传');
+      assert.equal(r.deck.cards.find((row) => row[0] === 10924120)[6], null, 'fixture 缺 class 字段 → null');
     }
     {
       const r = await resolveDeck('1.2.noSuchHash.aaaa.bbbb', {});
