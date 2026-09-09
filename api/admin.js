@@ -492,6 +492,21 @@ function createHandlers(options) {
     });
   }
 
+  /* POST /api/admin/decks/preview:禁卡表录入辅助——粘卡组码即时解析,
+   * 只返回快照不落库(候选池主体由前端聚合历届快照);访问记审计一行。 */
+  async function deckPreview(req, res) {
+    const operator = await requireRole(req, res, ['admin', 'super']);
+    if (!operator) return;
+    const body = await readJsonBody(req, res, MAX_BODY);
+    if (body === undefined) return;
+    const parsed = parseDeckHash(typeof body.q === 'string' ? body.q : '');
+    if (!parsed) return sendJson(res, 400, { error: '无法识别的卡组链接或码' });
+    const result = await resolveDeck(parsed.hash);
+    if (!result.ok) return sendJson(res, 502, { error: '解析失败:' + result.reason });
+    appendAudit('admin.deckPreview', 'hash=' + parsed.hash + ' by=' + maskUsername(operator.username));
+    return sendJson(res, 200, { ok: true, deck: result.deck });
+  }
+
   /* POST /api/admin/decks/backfill:存量 WB 链接补解析。三段式:
    * ①无锁读收集"有 WB 链接且无 deck"候选;②锁外逐副 resolveDeck(同 hash 去重,
    *   间隔 backfillGapMs 防压,超 BACKFILL_MAX 本批不做、skipped 返回分批);
@@ -623,6 +638,10 @@ function createHandlers(options) {
     if (tail === 'backup' || tail === 'restore') {
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
       return tail === 'backup' ? backup(req, res) : restore(req, res);
+    }
+    if (tail === 'decks/preview') {
+      if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
+      return deckPreview(req, res);
     }
     if (tail === 'decks/backfill') {
       if (req.method !== 'POST') return sendJson(res, 405, { error: 'Method Not Allowed' });
