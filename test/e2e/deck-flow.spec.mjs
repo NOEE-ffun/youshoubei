@@ -53,6 +53,7 @@ test('国服牌组码提交:粘贴自动转官网链接入库', async ({ browser
   await admin.waitForTimeout(800);
 
   await admin.locator('#settings-btn').click();
+    await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#deck-window-manual').selectOption('open');
   await admin.locator('#settings-form button[type="submit"]').click();
@@ -124,6 +125,7 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
 
   /* ---- 4. 开窗(手动:开启) ---- */
   await admin.locator('#settings-btn').click();
+    await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#deck-window-manual').selectOption('open');
   await admin.locator('#settings-form button[type="submit"]').click();
@@ -164,6 +166,7 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
 
   /* ---- 8. 管理员关窗 → 全员公示 ---- */
   await admin.locator('#settings-btn').click();
+    await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#deck-window-manual').selectOption('closed');
   await admin.locator('#settings-form button[type="submit"]').click();

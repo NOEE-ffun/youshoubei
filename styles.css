@@ -781,7 +781,7 @@ dialog {
   padding: 0;
   background: var(--surface);
   color: var(--text);
-  inline-size: min(92vw, 34rem);
+  inline-size: min(92vw, 40rem);
   max-block-size: min(85vh, 46rem);
   overflow: auto;
 }
@@ -5485,3 +5485,29 @@ body.list-dragging .ov-t-group.drop-target > h3 {
 .bl-io-text { width: 100%; min-height: 120px; font-family: var(--mono, ui-monospace, monospace);
   font-size: 12px; resize: vertical; }
 .bl-io-actions { display: flex; gap: 6px; }
+
+/* 届设置分节签(P1):容器 data-active-sec 控显隐,字段 DOM 恒在不丢输入态 */
+.settings-sections { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+.settings-sec { border: 1px solid transparent; background: none; border-radius: 8px; padding: 4px 12px;
+  cursor: pointer; color: inherit; font-size: 13px; }
+.settings-sec:hover { background: rgba(127, 127, 127, 0.1); }
+.settings-sec.active { border-color: var(--accent, #2f6be3); background: rgba(47, 107, 227, 0.1); color: var(--accent, #2f6be3); font-weight: 600; }
+.dialog-body:not([data-active-sec="basic"]) .form-field[data-sec="basic"],
+.dialog-body:not([data-active-sec="signup"]) .form-field[data-sec="signup"],
+.dialog-body:not([data-active-sec="banlists"]) .form-field[data-sec="banlists"] { display: none; }
+
+/* 禁卡表手风琴(P2):收起一行,展开唯一 */
+.bl-block.bl-collapsed { border-style: dashed; }
+.bl-collapsed-head { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none;
+  padding: 6px 8px; cursor: pointer; color: inherit; text-align: left; border-radius: 6px; }
+.bl-collapsed-head:hover { background: rgba(127, 127, 127, 0.08); }
+.bl-collapsed-head .icon { width: 14px; height: 14px; flex: none; opacity: 0.6; }
+.bl-collapsed-head .bl-chevron-open { transform: rotate(90deg); }
+.bl-collapsed-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bl-collapsed-head em { font-style: normal; font-size: 12px; opacity: 0.65; flex: none; margin-left: auto; }
+.bl-block > .bl-collapsed-head { margin: -4px -6px 6px; }
+
+/* 宽屏下届设置弹窗再放大(有背景模糊,多利用空间;禁卡表行含双下拉更舒展) */
+@media (min-width: 1280px) {
+  #settings-dialog { inline-size: min(72vw, 46rem); }
+}

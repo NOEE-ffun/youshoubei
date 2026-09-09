@@ -1005,12 +1005,17 @@
       '  <button type="button" class="btn btn-ghost btn-sm" data-dialog-close>关闭</button>' +
       '</div>' +
       '<form id="settings-form">' +
-      '  <div class="dialog-body">' +
-      '    <div class="form-field">' +
+      '  <div class="dialog-body" data-active-sec="basic">' +
+      '    <div class="settings-sections" role="group" aria-label="设置分区">' +
+      '      <button type="button" class="settings-sec active" data-sec="basic">基本信息</button>' +
+      '      <button type="button" class="settings-sec" data-sec="signup">报名与提交</button>' +
+      '      <button type="button" class="settings-sec" data-sec="banlists">禁卡表</button>' +
+      '    </div>' +
+      '    <div class="form-field" data-sec="basic">' +
       '      <label for="settings-name">比赛名称</label>' +
       '      <input type="text" id="settings-name" required>' +
       '    </div>' +
-      '    <div class="form-field">' +
+      '    <div class="form-field" data-sec="basic">' +
       '      <label for="settings-status">赛事状态</label>' +
       '      <select id="settings-status">' +
       '        <option value="upcoming">未开始</option>' +
@@ -1018,19 +1023,19 @@
       '        <option value="finished">已结束</option>' +
       '      </select>' +
       '    </div>' +
-      '    <div class="form-field">' +
+      '    <div class="form-field" data-sec="basic">' +
       '      <label for="settings-live-url">直播链接</label>' +
       '      <input type="url" id="settings-live-url" placeholder="https://..." autocomplete="off">' +
       '    </div>' +
-      '    <div class="form-field">' +
+      '    <div class="form-field" data-sec="basic">' +
       '      <label for="settings-start-time">开赛时间</label>' +
       '      <input type="datetime-local" id="settings-start-time">' +
       '    </div>' +
-      '    <div class="form-field">' +
+      '    <div class="form-field" data-sec="basic">' +
       '      <label for="settings-rules">赛制规则</label>' +
       '      <textarea id="settings-rules"></textarea>' +
       '    </div>' +
-      '    <div class="form-field">' +
+      '    <div class="form-field" data-sec="banlists">' +
       '      <div class="banlists-field-head">' +
       '        <label for="settings-banlists">禁卡表</label>' +
       '        <span class="banlists-io-btns">' +
@@ -1049,7 +1054,7 @@
       '      <div id="settings-banlists" class="settings-banlists"></div>' +
       '      <p class="hint">每张表可对卡设置禁用或限 1/2 张;可粘贴卡组链接按张数批量加禁(带1=限1,2=限2,3=禁用);在画布卡片设置里勾选后对该卡的卡组生效。</p>' +
       '    </div>' +
-      '    <div class="form-field">' +
+      '    <div class="form-field" data-sec="basic">' +
       '      <span id="bg-label">背景图片</span>' +
       '      <div class="bg-controls">' +
       '        <div class="bg-preview" id="bg-preview" role="img" aria-label="背景图预览"></div>' +
@@ -1058,7 +1063,7 @@
       '      </div>' +
       '      <p class="hint" id="bg-hint">支持常见图片格式，上传后自动压缩至最长边 1600px。</p>' +
       '    </div>' +
-      '    <div class="form-field">' +
+      '    <div class="form-field" data-sec="signup">' +
       '      <span id="deck-window-label">卡组提交</span>' +
       '      <div class="deck-window-controls">' +
       '        <label for="deck-window-open">每日开放</label>' +
@@ -1073,7 +1078,7 @@
       '      </div>' +
       '      <p class="hint" id="deck-window-hint">开启期间：选手可在「我的对局」修改自己未开始场次的卡组，未开始场次的卡组对其他人隐藏；关闭即全员公示。时段留空则只看手动开关。</p>' +
       '    </div>' +
-'    <div class="form-field">' +
+'    <div class="form-field" data-sec="signup">' +
 '      <span id="signup-label">比赛报名</span>' +
 '      <div class="deck-window-controls">' +
 '        <select id="signup-open" aria-label="报名开关">' +
@@ -1110,6 +1115,17 @@
     /* 禁卡表编辑区事件委托(弹窗 DOM 建立后此处绑定) */
     settingsDialog.querySelector('#settings-banlists').addEventListener('click', (event) => {
       const t = event.target;
+      /* 手风琴切换:收起行=展开该表;展开块头=收起;同时只展开一张 */
+      const head = t.closest('.bl-collapsed-head');
+      if (head) {
+        const block = head.closest('.bl-block');
+        const wasCollapsed = block.classList.contains('bl-collapsed');
+        const target = banlistDraft.find((x) => x.id === block.dataset.bl);
+        for (const other of banlistDraft) other._open = false;
+        if (target && wasCollapsed) target._open = true;
+        renderBanlistsEditor();
+        return;
+      }
       /* 职业 tab:纯 DOM 显隐过滤,只动工作副本内存字段,不改 draft 卡数据 */
       const tab = t.closest('.bl-cls-tab');
       if (tab) {
@@ -1187,8 +1203,23 @@
       const card = bl.cards.find((r) => r[0] === Number(row.dataset.card));
       if (card) card[4] = Number(t.value);
     });
+    /* 分节签:容器 data-active-sec + CSS 显隐——字段 DOM 恒在,切节不丢输入态 */
+    settingsDialog.querySelectorAll('.settings-sec').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        settingsDialog.querySelectorAll('.settings-sec').forEach((b) => {
+          const on = b === btn;
+          b.classList.toggle('active', on);
+          b.setAttribute('aria-pressed', String(on));
+        });
+        settingsDialog.querySelector('.dialog-body').dataset.activeSec = btn.dataset.sec;
+      });
+    });
+
     settingsDialog.querySelector('#banlist-add-btn').addEventListener('click', () => {
-      banlistDraft.push({ id: uid('bl'), name: '禁卡表' + (banlistDraft.length + 1), cards: [] });
+      const bl = { id: uid('bl'), name: '禁卡表' + (banlistDraft.length + 1), cards: [] };
+      for (const other of banlistDraft) other._open = false; /* 手风琴:同时只展开一张 */
+      bl._open = true; /* 新建即展开直接编辑 */
+      banlistDraft.push(bl);
       renderBanlistsEditor();
     });
 
@@ -1251,6 +1282,7 @@
       }
       notify('导入完成:替换 ' + replaced + ' 张表,新增 ' + added + ' 张(共 ' + incoming.reduce((n, x) => n + x.cards.length, 0) + ' 卡);保存设置后生效', 'success');
       ioBox().hidden = true;
+      for (const b of banlistDraft) b._open = false; /* 手风琴:导入结果靠 toast 汇报,表全收起 */
       renderBanlistsEditor();
     });
 
@@ -1350,11 +1382,24 @@
     }
     const isCloud = mode === 'cloud';
     wrap.innerHTML = banlistDraft.map((bl) => {
+      /* 手风琴:默认收起为一行(表名+卡数),_open 的表才渲染完整编辑块 */
+      if (!bl._open) {
+        return '<div class="bl-block bl-collapsed" data-bl="' + escapeHtml(bl.id) + '">' +
+          '<button type="button" class="bl-collapsed-head" data-bl-toggle aria-expanded="false">' +
+          '<img class="icon" src="icons/chevron_right.svg" alt="" aria-hidden="true">' +
+          '<span class="bl-collapsed-name" title="' + escapeHtml(bl.name) + '">' + escapeHtml(bl.name) + '</span>' +
+          '<em>' + bl.cards.length + ' 卡</em></button></div>';
+      }
       /* 当前职业 tab:工作副本内存字段 _activeCls(每表独立,默认 0=中立);r[5] null 与 0 同权算中立 */
       const activeCls = bl._activeCls ?? 0;
       const hasVisible = bl.cards.some((r) => (r[5] ?? 0) === activeCls);
       return (
         '<div class="bl-block" data-bl="' + escapeHtml(bl.id) + '">' +
+        '<div class="bl-collapsed-head" data-bl-toggle aria-expanded="true">' +
+        '<img class="icon bl-chevron-open" src="icons/chevron_right.svg" alt="" aria-hidden="true">' +
+        '<span class="bl-collapsed-name" title="' + escapeHtml(bl.name) + '">' + escapeHtml(bl.name) + '</span>' +
+        '<em>' + bl.cards.length + ' 卡</em></span>' +
+        '</div>' +
         '<div class="bl-head">' +
         '<input type="text" class="bl-name" value="' + escapeHtml(bl.name) + '" maxlength="40" aria-label="表名">' +
         '<button type="button" class="btn btn-danger btn-sm bl-del" title="删除此表" aria-label="删除此表">' + iconMarkup('delete', '') + '</button>' +
@@ -1435,6 +1480,7 @@
       }
       notify('批量入表:' + added + ' 张(占位忽略 ' + skippedPlaceholder + ',已在表 ' + skippedDup + ')', 'success');
       input.value = '';
+      /* 保持本表展开(加卡不自动切 tab,用户自己切看);多表级的 JSON 导入才整体收起 */
       renderBanlistsEditor();
     } catch (error) {
       notify('解析失败:' + errMsg(error), 'danger');

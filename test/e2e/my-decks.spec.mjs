@@ -56,6 +56,7 @@ test('卡组公示锁:开关手动开启后,未开始的卡显示锁占位', asy
 
   /* 打开赛事设置,切到「手动:开启」并保存 */
   await page.locator('#settings-btn').click();
+    await page.locator('.settings-sec[data-sec=\"signup\"]').click();
   await page.waitForSelector('#settings-form');
   await page.locator('#deck-window-manual').selectOption('open');
   await page.locator('#settings-form button[type="submit"]').click();
@@ -75,6 +76,7 @@ test('卡组公示锁:开关手动开启后,未开始的卡显示锁占位', asy
 
   /* 改回「手动:关闭」→ 锁消失(公示;观看者清 SWR 缓存再刷新) */
   await page.locator('#settings-btn').click();
+    await page.locator('.settings-sec[data-sec=\"signup\"]').click();
   await page.waitForSelector('#settings-form');
   await page.locator('#deck-window-manual').selectOption('closed');
   await page.locator('#settings-form button[type="submit"]').click();

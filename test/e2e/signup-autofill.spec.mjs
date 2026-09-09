@@ -72,6 +72,7 @@ test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入',
   await admin.goto('/schedule.html');
   await admin.waitForTimeout(800);
   await admin.locator('#settings-btn').click();
+    await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await expect(admin.locator('#signup-slots')).toHaveValue('4');
   await expect(admin.locator('#signup-slots-hint')).toContainText('当前入场空位 8 个');
@@ -82,6 +83,7 @@ test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入',
   await admin.waitForTimeout(300);
 
   await admin.locator('#settings-btn').click();
+    await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#signup-slots').fill('4');
   await admin.locator('#signup-autofill').click();

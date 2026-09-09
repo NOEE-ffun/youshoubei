@@ -134,6 +134,7 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await page.goto('/schedule.html');
   await page.waitForTimeout(900);
   await page.locator('#settings-btn').click();
+  await page.locator('.settings-sec[data-sec="banlists"]').click();
   await page.locator('#banlist-add-btn').click();
   await page.locator('.bl-name').fill('新表');
   /* 粘码批量:粘国服牌组码整段 → 失焦就地转官网链接(与选手提交同款)→ 解析入表 */
@@ -204,19 +205,23 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await expect(block2.locator('.bl-row')).toHaveCount(13);
   await expect(block2.locator('.bl-row[data-card="703"]')).toHaveAttribute('data-cls', '2');
   await expect(block2.locator('.bl-row:not([hidden])')).toHaveCount(1);
-  /* 终焉之炎默认禁用;改限2 后保存 */
+  /* 终焉之炎默认禁用;改限2 后保存(block1 因新建二表被手风琴收起,先展开) */
+  await page.locator('.bl-block').first().locator('.bl-collapsed-head').click();
   await block1.locator('.bl-cls-tab[data-cls="0"]').click();
   await block1.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit').selectOption('2');
   await page.locator('#settings-form button[type="submit"]').click();
   await page.waitForTimeout(800);
-  /* 重开:tab 重置默认中立,703 仍皇家(卡元组第 6 位随保存持久),行集正确 */
+  /* 重开:分节重置且手风琴全收起——切禁卡表节,展开第一张逐一断言 */
   await page.locator('#settings-btn').click();
+  await page.locator('.settings-sec[data-sec="banlists"]').click();
+  await page.locator('.bl-block').first().locator('.bl-collapsed-head').click();
   await expect(block1.locator('.bl-cls-tab.active')).toHaveAttribute('data-cls', '0');
   await expect(rows).toHaveCount(14);
   await expect(vis).toHaveCount(2); /* 中立=终焉之炎+填充810 */
   await expect(block1.locator('.bl-row[data-card="703"]')).toHaveAttribute('data-cls', '2');
-  await expect(page.locator('.bl-block').nth(1).locator('.bl-row')).toHaveCount(13);
   await expect(block1.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit')).toHaveValue('2');
+  await page.locator('.bl-block').nth(1).locator('.bl-collapsed-head').click();
+  await expect(page.locator('.bl-block').nth(1).locator('.bl-row')).toHaveCount(13);
   await page.locator('#settings-form button[type="submit"]').click();
   await page.waitForTimeout(500);
   await page.locator('#header-banlist-btn').click();
@@ -233,6 +238,7 @@ test('禁卡表 JSON 导入/导出:同名替换保 id、新增追加、保存持
   await page.goto('/schedule.html');
   await page.waitForTimeout(900);
   await page.locator('#settings-btn').click();
+  await page.locator('.settings-sec[data-sec="banlists"]').click();
   /* 导出:种子表进入 textarea */
   await page.locator('#banlist-export-btn').click();
   const exported = JSON.parse(await page.locator('.bl-io-text').inputValue());
@@ -245,11 +251,13 @@ test('禁卡表 JSON 导入/导出:同名替换保 id、新增追加、保存持
   ]));
   await page.locator('.bl-io-do').click();
   await page.waitForTimeout(300);
+  /* JSON 导入后手风琴整体收起:两行收起行,名称+卡数可见 */
   const blocks = page.locator('.bl-block');
   await expect(blocks).toHaveCount(2);
-  const names = await page.evaluate(() => Array.from(document.querySelectorAll('.bl-name')).map((el) => el.value));
-  if (!names.includes('第一周表') || !names.includes('导入新表')) throw new Error('导入合并形态不对');
-  /* 第一周表被替换为两张导入卡(默认中立 tab 下 703 兜底 null 不在第一周表,先切 tab 断 DOM 全量) */
+  const collapsedNames = await page.locator('.bl-collapsed-name').allInnerTexts();
+  if (!collapsedNames.includes('第一周表') || !collapsedNames.includes('导入新表')) throw new Error('导入合并形态不对: ' + collapsedNames);
+  /* 展开第一张(第一周表,被替换为两张导入卡)断言行集 */
+  await page.locator('.bl-block').first().locator('.bl-collapsed-head').click();
   const rowsFirst = await page.locator('.bl-block').first().locator('.bl-row .banlist-name').allInnerTexts();
   if (rowsFirst.sort().join(',') !== ['导入新增卡', '导入替换卡'].sort().join(',')) throw new Error('同名替换内容不对: ' + rowsFirst);
   await page.locator('#settings-form button[type="submit"]').click();

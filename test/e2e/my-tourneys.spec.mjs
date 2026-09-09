@@ -35,6 +35,7 @@ test('报名:开窗→报名→退报→关闭只读', async ({ browser, request
   await admin.waitForTimeout(300);
 
   await admin.locator('#settings-btn').click();
+    await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#signup-open').selectOption('open');
   await admin.locator('#settings-form button[type="submit"]').click();
@@ -65,6 +66,7 @@ test('报名:开窗→报名→退报→关闭只读', async ({ browser, request
 
   /* 6. 管理员关报名 → 选手刷新后只读(已报名·关闭) */
   await admin.locator('#settings-btn').click();
+    await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#signup-open').selectOption('closed');
   await admin.locator('#settings-form button[type="submit"]').click();
@@ -109,6 +111,7 @@ test('注册即选手:新手机登录无需兑码直接报名', async ({ browser
   await admin.locator('#manage-dialog [data-dialog-close]').click();
   await admin.waitForTimeout(300);
   await admin.locator('#settings-btn').click();
+    await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#signup-open').selectOption('open');
   await admin.locator('#settings-form button[type="submit"]').click();
