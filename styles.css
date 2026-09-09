@@ -2485,6 +2485,21 @@ body.card-panel-open .style-drawer { right: calc(min(19rem, 78vw) + 0.5rem); }
 @media (min-width: 1100px) { .banlist-cols { columns: 3; } }
 @media (max-width: 640px) { .banlist-cols { columns: 1; } }
 
+/* 画布禁卡违规徽标与弹层 */
+.class-slot.ban-violated { border-color: var(--danger, #dc3545); background: rgba(220, 53, 69, 0.12); position: relative; }
+.class-slot.ban-violated .icon { width: 16px; height: 16px; }
+.ban-count { position: absolute; top: -6px; right: -6px; min-width: 14px; height: 14px; line-height: 14px;
+  font-size: 10px; font-style: normal; text-align: center; border-radius: 7px;
+  background: var(--danger, #dc3545); color: #fff; padding: 0 3px; }
+.ban-popover { position: fixed; z-index: 1200; background: var(--surface, #fff); color: inherit;
+  border: 1px solid var(--border, #ccc); border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 10px 12px; min-width: 240px; max-width: min(360px, calc(100vw - 16px));
+  max-height: 50vh; overflow-y: auto; }
+.ban-pop-title { font-weight: 600; margin-bottom: 6px; }
+.ban-pop-list + .ban-pop-list { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border, #ccc); }
+.ban-pop-listname { font-size: 12px; opacity: 0.8; margin-bottom: 2px; }
+.ban-pop-meta { font-style: normal; font-size: 12px; opacity: 0.85; flex: none; }
+
 /* ---------- 海报页头控制 ---------- */
 
 .header-poster-controls {

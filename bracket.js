@@ -139,6 +139,7 @@
   }
 
   function renderAll() {
+    closeBanPopover();
     const app = window.TournamentApp;
     if (!app || !app.current) return;
     for (const d of topDropdowns) d.close();
@@ -338,10 +339,17 @@
     );
   }
 
-  function classGroupHtml(card, group, effLinks) {
-    /* 有效链接 = 自己填的,否则沿连线继承来源卡中该选手一侧的卡组 */
+  function classGroupHtml(card, group, effLinks, violations, hidden) {
     const links = ((effLinks || card.classLinks || {})[group]) || [];
     let html = links.map((entry, idx) => classSlotHtml(card, group, entry, idx)).join('');
+    /* 禁卡违规徽标:该 side 存在违规且该 side 未被公示锁隐藏才显示
+     * (锁隐藏期对非所属者标红会泄露卡组信息,与 sideDeckHidden 同口径) */
+    if (violations && violations.length && !hidden) {
+      html += '<button type="button" class="class-slot ban-violated" data-ban-card="' + card.id +
+        '" data-ban-side="' + group + '" title="禁卡违规 ' + violations.length + ' 项" aria-label="查看禁卡违规">' +
+        '<img class="icon" src="icons/block.svg" alt="" aria-hidden="true">' +
+        '<em class="ban-count">' + violations.length + '</em></button>';
+    }
     if (editMode) {
       html += '<button type="button" class="class-slot empty" data-cl-card="' + card.id + '" data-cl-group="' + group + '" data-cl-idx="new"' +
         ' title="添加职业卡组" aria-label="添加职业卡组"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true"></button>';
@@ -366,15 +374,60 @@
   const DECK_LOCK_HTML = '<span class="cl-locked" title="卡组提交中,公示后可见" aria-label="卡组待公示">🔒</span>';
 
   function classRowHtml(card, match, effLinks) {
+    let violations = [];
+    try { violations = CanvasModel.checkBanViolations(currentRecord(), card.id); } catch (e) { violations = []; }
     const lockA = match ? sideDeckHidden(match, 'a') : false;
     const lockB = match ? sideDeckHidden(match, 'b') : false;
-    const a = lockA ? DECK_LOCK_HTML : classGroupHtml(card, 'a', effLinks);
-    const b = lockB ? DECK_LOCK_HTML : classGroupHtml(card, 'b', effLinks);
+    const a = lockA ? DECK_LOCK_HTML : classGroupHtml(card, 'a', effLinks, violations.filter((v) => v.side === 'a'), lockA);
+    const b = lockB ? DECK_LOCK_HTML : classGroupHtml(card, 'b', effLinks, violations.filter((v) => v.side === 'b'), lockB);
     if (!a && !b) return '';
     let html = a;
     if (a && b) html += '<span class="vs-sep">对</span>';
     html += b;
     return '<div class="deck-class-row">' + html + '</div>';
+  }
+
+  /* 违规弹层:点徽标按表分组列出违规卡;点外部/重渲染关闭 */
+  let banPopoverEl = null;
+  function closeBanPopover() {
+    if (banPopoverEl) banPopoverEl.remove();
+    banPopoverEl = null;
+    document.removeEventListener('click', onBanPopoverOutside, true);
+  }
+  function onBanPopoverOutside(event) {
+    if (banPopoverEl && !banPopoverEl.contains(event.target) && !event.target.closest('.ban-violated')) closeBanPopover();
+  }
+  function openBanPopover(anchor, cardId, side) {
+    closeBanPopover();
+    let viols = [];
+    try { viols = CanvasModel.checkBanViolations(currentRecord(), cardId).filter((v) => v.side === side); } catch (e) { /* 同上 */ }
+    if (!viols.length) return;
+    const byList = new Map();
+    for (const v of viols) {
+      if (!byList.has(v.listName)) byList.set(v.listName, []);
+      byList.get(v.listName).push(v);
+    }
+    const costIcon = (n) => {
+      const v = Math.max(0, Math.min(10, Number(n) || 0));
+      return '<img class="icon" src="icons/cost/cost-' + v + '.webp" alt="' + v + '费" width="20" height="20">';
+    };
+    const row = (v) => '<div class="banlist-row">' + costIcon(v.cost) +
+      '<span class="banlist-name deck-name-r' + v.rarity + '">' + escapeHtml(v.name) + '</span>' +
+      '<em class="ban-pop-meta">带 ' + v.copies + ' 张 / ' + (v.limit === 0 ? '禁用' : '限' + v.limit) +
+      (v.cls ? '(' + escapeHtml(v.cls) + ')' : '') + '</em></div>';
+    banPopoverEl = document.createElement('div');
+    banPopoverEl.className = 'ban-popover';
+    banPopoverEl.setAttribute('role', 'dialog');
+    banPopoverEl.setAttribute('aria-label', '禁卡违规清单');
+    banPopoverEl.innerHTML = '<div class="ban-pop-title">' + (side === 'a' ? 'A 侧' : 'B 侧') + '禁卡违规</div>' +
+      [...byList].map(([ln, vs]) =>
+        '<div class="ban-pop-list"><div class="ban-pop-listname">' + escapeHtml(ln) + '</div>' + vs.map(row).join('') + '</div>').join('');
+    document.body.appendChild(banPopoverEl);
+    const r = anchor.getBoundingClientRect();
+    const pw = banPopoverEl.offsetWidth;
+    banPopoverEl.style.top = Math.min(r.bottom + 6, window.innerHeight - banPopoverEl.offsetHeight - 8) + 'px';
+    banPopoverEl.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8)) + 'px';
+    document.addEventListener('click', onBanPopoverOutside, true);
   }
 
   function cardHtml(match, card, effLinksMap) {
@@ -868,6 +921,11 @@
       const scoreBtn = event.target.closest('[data-score-open]');
       if (scoreBtn && !scoreBtn.disabled) {
         openScoreDialog(scoreBtn.dataset.scoreOpen);
+        return;
+      }
+      const banBtn = event.target.closest('.ban-violated');
+      if (banBtn) {
+        openBanPopover(banBtn, banBtn.dataset.banCard, banBtn.dataset.banSide);
         return;
       }
       const classSlot = event.target.closest('[data-cl-card]');
