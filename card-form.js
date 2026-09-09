@@ -102,7 +102,13 @@
       } else {
         list.dataset.fill = 'inherited';
         const effRows = (eff[groupId] || []);
-        list.dataset.effSig = JSON.stringify(effRows);
+        /* 签名只取 UI 可见三字段并按读取侧同规则归一:上游条目可能携带 deck 快照,
+         * 整体 stringify 会与读取侧 {cls,url,text} 恒不等,继承侧被误判为用户改动而固化 */
+        list.dataset.effSig = JSON.stringify(effRows.map((e) => ({
+          cls: e.cls || '',
+          url: window.CanvasModel.normalizeDeckUrl(e.url || ''),
+          text: String(e.text || '').trim().slice(0, 60)
+        })));
         list.innerHTML = effRows.map(clRowHtml).join('') + clRowHtml(null);
       }
     }

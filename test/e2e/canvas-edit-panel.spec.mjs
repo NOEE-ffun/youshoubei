@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
+import { ADMIN_PHONE, smsLogin, resetStore, seedWorkspace } from './helpers.mjs';
 
 /* 编辑模式更新回归:卡高统一、八端口居中、选中抽屉、工具栏精简。 */
 
@@ -194,5 +194,79 @@ test('拖动卡片不开设置抽屉,纯点击才开', async ({ page }) => {
   /* 同一张卡纯点击(无位移)仍即时开抽屉 */
   await card.locator('.match-head').click();
   await expect(panel).toBeVisible();
+  await page.request.post('/api/dev/reset');
+});
+
+/* 回归(effSig 含 deck,2026-09-09 禁卡表批终审移交):继承侧上游条目带快照时,
+ * 面板无关编辑(改名/勾禁卡表)不得把该侧固化成无 deck 的 own 值——
+ * 快照是卡组构成统计与禁卡违规判定的数据源,固化=静默失明+继承断链。 */
+test('继承侧带快照:面板无关编辑不固化 own 值、快照与继承保持', async ({ page }) => {
+  const context = page.context();
+  const LINK = 'https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.effsig';
+  const deck = { v: 1, resolvedAt: 1, classId: 2, format: null,
+    cards: [[501, '快照禁卡', 2, 3, 0, 3], [999, '快照杂卡', 1, 1, 0, 3]] };
+  await seedWorkspace(context, {
+    tournaments: [{
+      id: 'teff', name: 'effSig回归届', status: 'ongoing', createdAt: 1, updatedAt: 1,
+      canvas: { cards: [
+        { id: 'k1', label: '上游决赛', phase: '', format: 'BO3', x: 0, y: 0,
+          slots: [{ type: 'player', playerId: 'pz1' }, { type: 'player', playerId: 'pz2' }],
+          exitRanks: { winner: 1, loser: 2 }, deckCount: null, color: null,
+          classLinks: { a: [{ cls: '皇家', url: LINK, text: '', deck }], b: [] } },
+        { id: 'k2', label: '下游半决赛', phase: '', format: 'BO3', x: 4, y: 0,
+          slots: [{ type: 'flow', cardId: 'k1', outcome: 'winner' }, { type: 'player', playerId: 'pz2' }],
+          exitRanks: { winner: 1, loser: 2 }, deckCount: null, color: null,
+          classLinks: { a: [], b: [] }, banListIds: ['bl1'] }
+      ], style: {} },
+      scores: { k1: { a: 2, b: 0 } }, roster: ['pz1', 'pz2'],
+      banLists: [{ id: 'bl1', name: '表一', cards: [[501, '快照禁卡', 2, 3, 0]] }]
+    }],
+    series: [], activeId: 'teff',
+    players: [{ id: 'pz1', name: '甲', createdAt: 1, updatedAt: 1 }, { id: 'pz2', name: '乙', createdAt: 1, updatedAt: 1 }]
+  });
+
+  await enterEdit(page, { fit: true });
+  await page.locator('.canvas-card').nth(1).click();
+  await expect(page.locator('#card-panel')).toBeVisible();
+  /* A 侧应回显继承行(带快照的上游条目) */
+  await expect(page.locator('#card-panel .cf-cl-a .cl-row input.cl-url').first()).toHaveValue(LINK);
+
+  /* 无关编辑:改标题 + 点画布空白触发 change 落用 */
+  await page.locator('#card-panel .cf-label').fill('下游半决赛改');
+  await clickCanvasBlank(page);
+  await page.waitForTimeout(800);
+
+  const state = await page.evaluate(() => {
+    const rec = window.TournamentApp.current;
+    const k2 = rec.canvas.cards.find((c) => c.id === 'k2');
+    const eff = window.CanvasModel.resolveEffectiveClassLinks(rec.canvas, rec.scores || {});
+    const rows = (eff.get('k2') || { a: [] }).a;
+    return {
+      ownSolidified: Array.isArray(k2.classLinks && k2.classLinks.a) && k2.classLinks.a.length > 0,
+      effDeckOk: Boolean(rows[0] && rows[0].deck),
+      viol: window.CanvasModel.checkBanViolations(rec, 'k2').length,
+      label: k2.label
+    };
+  });
+  expect(state.ownSolidified, '继承侧不得被固化成 own').toBe(false);
+  expect(state.effDeckOk, '有效链接仍带快照').toBe(true);
+  expect(state.viol, '继承快照驱动的禁卡判定仍在(1 项禁用)').toBe(1);
+  expect(state.label).toBe('下游半决赛改');
+
+  /* 真修改继承行:应固化 own(新值,无快照属预期——URL 变了旧快照失效) */
+  await page.locator('.canvas-card').nth(1).click();
+  await page.locator('#card-panel .cf-cl-a .cl-row input.cl-url').first()
+    .fill('https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.changed');
+  await clickCanvasBlank(page);
+  await page.waitForTimeout(800);
+  const solidified = await page.evaluate(() => {
+    const k2 = window.TournamentApp.current.canvas.cards.find((c) => c.id === 'k2');
+    return { own: (k2.classLinks && k2.classLinks.a) || [],
+      viol: window.CanvasModel.checkBanViolations(window.TournamentApp.current, 'k2').length };
+  });
+  expect(solidified.own.length).toBe(1);
+  expect(solidified.own[0].url).toContain('1.2.changed');
+  expect(solidified.own[0].deck, '改 URL 后旧快照不随行(走补解析)').toBeUndefined();
+  expect(solidified.viol, '改后无快照不判定').toBe(0);
   await page.request.post('/api/dev/reset');
 });
