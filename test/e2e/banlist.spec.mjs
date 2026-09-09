@@ -181,6 +181,8 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await expect(vis).toHaveCount(3);
   await expect(block1.locator('.bl-row:not([hidden]) .banlist-name')).toHaveText(['单卡丙', '填充810', '终焉之炎']);
   /* 全局改职业:中立 tab 703 行 .bl-reclass 选皇家 → 中立 -1;皇家 tab 703 出现(=5) */
+  await block1.locator('.bl-row[data-card="703"] .bl-reclass-btn').click();
+  await expect(block1.locator('.bl-row[data-card="703"]')).toHaveClass(/show-reclass/);
   await block1.locator('.bl-row[data-card="703"] .bl-reclass').selectOption('2');
   await expect(vis).toHaveCount(2);
   await block1.locator('.bl-cls-tab[data-cls="2"]').click();
@@ -188,12 +190,16 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await expect(block1.locator('.bl-row[data-card="703"]')).toHaveAttribute('data-cls', '2');
   /* 可逆:皇家 tab 703 行同样有 .bl-reclass(selected 跟当前值 2),选回中立 → 皇家 -1(4)、中立 +1(3) */
   await expect(block1.locator('.bl-row[data-card="703"] .bl-reclass')).toHaveValue('2');
+  await block1.locator('.bl-row[data-card="703"] .bl-reclass-btn').click();
+  await expect(block1.locator('.bl-row[data-card="703"]')).toHaveClass(/show-reclass/);
   await block1.locator('.bl-row[data-card="703"] .bl-reclass').selectOption('0');
   await expect(vis).toHaveCount(4);
   await expect(block1.locator('.bl-row[data-card="703"]')).toHaveAttribute('data-cls', '0');
   await block1.locator('.bl-cls-tab[data-cls="0"]').click();
   await expect(vis).toHaveCount(3);
   /* 复原:改回皇家,使后续 classMap 记忆断言(703 落皇家)成立 */
+  await block1.locator('.bl-row[data-card="703"] .bl-reclass-btn').click();
+  await expect(block1.locator('.bl-row[data-card="703"]')).toHaveClass(/show-reclass/);
   await block1.locator('.bl-row[data-card="703"] .bl-reclass').selectOption('2');
   await expect(vis).toHaveCount(2);
   /* classMap 记忆:另建一张表粘同码,703 直接落皇家(新表默认中立只剩 810) */
@@ -289,6 +295,7 @@ test('CardForm 绑表:e2e 勾选生效', async ({ browser }) => {
   await page.waitForSelector('.canvas-board.editing');
   await page.locator('.canvas-card').first().click();
   await expect(page.locator('#card-panel')).toBeVisible();
+  await page.locator('#card-panel .cf-banlist-section .cf-section-title').click(); /* P4:禁卡表分区默认折叠 */
   const checks = page.locator('#card-panel .cf-banlist-check');
   await expect(checks).toHaveCount(1);
   await checks.first().check();

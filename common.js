@@ -1115,6 +1115,19 @@
     /* 禁卡表编辑区事件委托(弹窗 DOM 建立后此处绑定) */
     settingsDialog.querySelector('#settings-banlists').addEventListener('click', (event) => {
       const t = event.target;
+      /* 改职业次级入口:只显隐本行的 reclass(重渲染后自然收回) */
+      const rcBtn = t.closest('.bl-reclass-btn');
+      if (rcBtn) {
+        rcBtn.closest('.bl-row').classList.toggle('show-reclass');
+        return;
+      }
+      /* 加卡入口折叠:切换工作副本内存标记后重渲染 */
+      if (t.closest('.bl-add-toggle')) {
+        const blk = t.closest('.bl-block');
+        const target = banlistDraft.find((x) => x.id === blk.dataset.bl);
+        if (target) { target._addOpen = !target._addOpen; renderBanlistsEditor(); }
+        return;
+      }
       /* 手风琴切换:收起行=展开该表;展开块头=收起;同时只展开一张 */
       const head = t.closest('.bl-collapsed-head');
       if (head) {
@@ -1216,9 +1229,9 @@
     });
 
     settingsDialog.querySelector('#banlist-add-btn').addEventListener('click', () => {
-      const bl = { id: uid('bl'), name: '禁卡表' + (banlistDraft.length + 1), cards: [] };
+      const bl = { id: uid('bl'), name: '禁卡表' + (banlistDraft.length + 1), cards: [], _addOpen: true };
       for (const other of banlistDraft) other._open = false; /* 手风琴:同时只展开一张 */
-      bl._open = true; /* 新建即展开直接编辑 */
+      bl._open = true; /* 新建即展开直接编辑,加卡入口也随之展开 */
       banlistDraft.push(bl);
       renderBanlistsEditor();
     });
@@ -1417,7 +1430,8 @@
           '<option value="1"' + (r[4] === 1 ? ' selected' : '') + '>限1</option>' +
           '<option value="2"' + (r[4] === 2 ? ' selected' : '') + '>限2</option>' +
           '</select>' +
-          /* 改职业下拉:任意职业 tab 的任意行都渲染,selected 跟当前值(r[5] ?? 0)——改出中立后可再改回(可逆);届内全局生效 */
+          /* 改职业下拉(P3 收次级):默认隐藏,点行尾 swap 按钮现出;selected 跟当前值(r[5] ?? 0),届内全局生效 */
+          '<button type="button" class="btn btn-ghost btn-sm bl-reclass-btn" title="改职业" aria-label="改职业">' + iconMarkup('swap_horiz', '') + '</button>' +
           '<select class="bl-reclass" aria-label="改职业">' +
           window.CanvasModel.BANLIST_CLASSES.map((cn, ci) => '<option value="' + ci + '"' + (ci === (r[5] ?? 0) ? ' selected' : '') + '>' + cn + '</option>').join('') +
           '</select>' +
@@ -1425,14 +1439,17 @@
           '</div>').join('') +
           '<p class="hint bl-empty-cls"' + (hasVisible ? ' hidden' : '') + '>当前职业暂无禁卡</p>'
           : '<p class="hint">尚未加卡。</p>') + '</div>' +
-        '<div class="bl-add">' +
+        /* 加卡入口(P3 收次级):默认收起只留「+ 加卡」,点开现出搜索与粘码 */
+        (bl._addOpen
+          ? '<div class="bl-add">' +
         '<input type="search" class="bl-search" placeholder="搜索卡名加入(站内卡池)" aria-label="搜索卡名">' +
         '<div class="bl-results"></div>' +
         (isCloud
           ? '<div class="bl-paste"><input type="text" class="bl-paste-input" placeholder="粘贴卡组链接批量加禁:带1张=限1,2张=限2,3张=禁用(中立基本卡仅凑数,忽略)" aria-label="粘贴卡组码批量加禁">' +
             '<button type="button" class="btn btn-secondary btn-sm bl-paste-btn">' + iconMarkup('content_paste', '') + '解析</button></div>'
           : '') +
-        '</div>' +
+        '</div>'
+          : '<button type="button" class="btn btn-ghost btn-sm bl-add-toggle">' + iconMarkup('add', '') + '加卡</button>') +
         '</div>'
       );
     }).join('');

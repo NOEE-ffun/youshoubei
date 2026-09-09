@@ -5511,3 +5511,16 @@ body.list-dragging .ov-t-group.drop-target > h3 {
 @media (min-width: 1280px) {
   #settings-dialog { inline-size: min(72vw, 46rem); }
 }
+
+/* P3:禁卡表行内改职业收次级 + 加卡入口折叠 */
+.bl-row .bl-reclass { display: none; width: auto; }
+.bl-row.show-reclass .bl-reclass { display: inline-block; }
+.bl-row .bl-reclass-btn { flex: none; padding: 2px 4px; }
+.bl-add-toggle { justify-self: start; }
+
+/* P4:CardForm 分区折叠(标题行点按,内容 DOM 恒在) */
+.cf-section-title { display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+.cf-section-title .cf-chevron { width: 14px; height: 14px; opacity: 0.55; transition: transform 0.15s; transform: rotate(90deg); }
+.cf-section[data-open="0"] .cf-section-title .cf-chevron { transform: none; }
+.cf-section[data-open="0"] .cf-section-body { display: none; }
+.cf-banlists { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 14px; }

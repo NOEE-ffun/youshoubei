@@ -21,36 +21,46 @@
    * 所有控件 class(cf- 与 cl- 前缀)是跨容器契约,改动须同步两侧调用方与 e2e 选择器 */
   function fieldsHtml() {
     return (
-      '<div class="cf-section">' +
-      '  <div class="cf-section-title">基本信息</div>' +
+      '<div class="cf-section" data-open="1">' +
+      '  <div class="cf-section-title" role="button" tabindex="0" aria-expanded="true">基本信息<img class="icon cf-chevron" src="icons/chevron_right.svg" alt="" aria-hidden="true"></div>' +
+      '  <div class="cf-section-body">' +
       '  <div class="cf-grid">' +
       '    <div class="form-field span-2"><label>标题</label><input type="text" class="cf-label" aria-label="标题"></div>' +
       '    <div class="form-field"><label>阶段</label><input type="text" class="cf-phase" placeholder="胜者组决赛" aria-label="阶段"></div>' +
       '    <div class="form-field"><label>赛制</label><input type="text" class="cf-format" placeholder="BO3 / 自定义" aria-label="赛制文本"></div>' +
       '    <div class="form-field span-2"><label>卡组数量（留空自动）</label><input type="number" class="cf-deck-count" min="1" step="1" aria-label="卡组数量"></div>' +
       '  </div>' +
+      '  </div>' +
       '</div>' +
-      '<div class="cf-section">' +
-      '  <div class="cf-section-title">对阵</div>' +
+      '<div class="cf-section" data-open="1">' +
+      '  <div class="cf-section-title" role="button" tabindex="0" aria-expanded="true">对阵<img class="icon cf-chevron" src="icons/chevron_right.svg" alt="" aria-hidden="true"></div>' +
+      '  <div class="cf-section-body">' +
       '  <div class="form-field"><label>A 位选手</label><select class="cf-slot-a" aria-label="A 位选手"></select><select class="cf-flow-outcome-a flow-outcome" hidden aria-label="A 位连线取哪个出口"><option value="winner">取其胜者</option><option value="loser">取其败者</option></select></div>' +
       '  <div class="form-field"><label>B 位选手</label><select class="cf-slot-b" aria-label="B 位选手"></select><select class="cf-flow-outcome-b flow-outcome" hidden aria-label="B 位连线取哪个出口"><option value="winner">取其胜者</option><option value="loser">取其败者</option></select></div>' +
+      '  </div>' +
       '</div>' +
-      '<div class="cf-section">' +
-      '  <div class="cf-section-title">出口名次</div>' +
+      '<div class="cf-section" data-open="0">' +
+      '  <div class="cf-section-title" role="button" tabindex="0" aria-expanded="false">出口名次<img class="icon cf-chevron" src="icons/chevron_right.svg" alt="" aria-hidden="true"></div>' +
+      '  <div class="cf-section-body">' +
       '  <div class="cf-grid">' +
       '    <div class="form-field"><label>胜者名次</label><input type="number" class="cf-rank-winner" placeholder="如 1" aria-label="胜者出口名次"></div>' +
       '    <div class="form-field"><label>败者名次</label><input type="number" class="cf-rank-loser" placeholder="如 2" aria-label="败者出口名次"></div>' +
       '  </div>' +
+      '  </div>' +
       '</div>' +
-      '<div class="cf-section cf-banlist-section" hidden>' +
-      '  <div class="cf-section-title">禁卡表</div>' +
+      '<div class="cf-section cf-banlist-section" hidden data-open="0">' +
+      '  <div class="cf-section-title" role="button" tabindex="0" aria-expanded="false">禁卡表<img class="icon cf-chevron" src="icons/chevron_right.svg" alt="" aria-hidden="true"></div>' +
+      '  <div class="cf-section-body">' +
       '  <div class="form-field span-2 cf-banlists"></div>' +
       '  <p class="hint">勾选本卡生效的禁卡表;双方卡组命中禁用或超限卡会在比赛页标红。</p>' +
+      '  </div>' +
       '</div>' +
-      '<div class="cf-section">' +
-      '  <div class="cf-section-title">职业卡组</div>' +
+      '<div class="cf-section" data-open="1">' +
+      '  <div class="cf-section-title" role="button" tabindex="0" aria-expanded="true">职业卡组<img class="icon cf-chevron" src="icons/chevron_right.svg" alt="" aria-hidden="true"></div>' +
+      '  <div class="cf-section-body">' +
       '  <div class="form-field"><label>A 位选手(查看模式点击图标跳转)</label><div class="cl-list cf-cl-a"></div></div>' +
       '  <div class="form-field"><label>B 位选手</label><div class="cl-list cf-cl-b"></div></div>' +
+      '  </div>' +
       '</div>'
     );
   }
@@ -284,6 +294,23 @@
   /* 行级事件委托:renderClassLinkRows/ensureTrailingRow 重建行不需要重复绑定;
    * 弹窗与抽屉两容器各自挂一次。删除行 + 国服牌组码失焦转官网链接(canvas-model 同一规则源) */
   function bindRowDeletion(container) {
+    /* 分区折叠(P4):标题行点按切换 cf-section data-open,内容 DOM 恒在不丢输入态 */
+    container.addEventListener('click', (event) => {
+      const title = event.target.closest('.cf-section-title');
+      if (!title) return;
+      const sec = title.closest('.cf-section');
+      if (!sec) return;
+      const open = sec.dataset.open !== '0';
+      sec.dataset.open = open ? '0' : '1';
+      title.setAttribute('aria-expanded', String(!open));
+    });
+    container.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const title = event.target.closest ? event.target.closest('.cf-section-title') : null;
+      if (!title) return;
+      event.preventDefault();
+      title.click();
+    });
     for (const listCls of ['.cf-cl-a', '.cf-cl-b']) {
       const list = container.querySelector(listCls);
       if (!list) continue;
