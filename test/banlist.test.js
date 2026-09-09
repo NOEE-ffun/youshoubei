@@ -40,9 +40,9 @@ const BL1 = [{ id: 'bl1', name: '第一周', cards: [[501, '禁卡A', 2, 3, 0], 
     [501, 'x', 1, 1, 3], [501, 'y', 1, 1, 2], [502, 'z', 1, 1, 0], [502, 'z', 1, 1, 0]
   ] }]), [{ id: 'a', name: 'A', cards: [[501, 'y', 1, 1, 2, null], [502, 'z', 1, 1, 0, null]] }]);
   assert.deepStrictEqual(CM.normalizeBanLists([{ id: '', name: 'A', cards: [] }, { id: 'b', name: ' ', cards: [] }]), []);
-  /* 表上限 12 */
-  const many = Array.from({ length: 15 }, (_, i) => ({ id: 'b' + i, name: 'N' + i, cards: [[1, 'c', 1, 1, 0]] }));
-  assert.strictEqual(CM.normalizeBanLists(many).length, 12);
+  /* 表上限 32 */
+  const many = Array.from({ length: 35 }, (_, i) => ({ id: 'b' + i, name: 'N' + i, cards: [[1, 'c', 1, 1, 0]] }));
+  assert.strictEqual(CM.normalizeBanLists(many).length, 32);
 
   /* ---- normalizeBanListIds / normalizeCard 白名单 ---- */
   assert.deepStrictEqual(CM.normalizeBanListIds(['a', 'a', 3, '', 'b', undefined]), ['a', 'b']);

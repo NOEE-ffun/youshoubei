@@ -593,7 +593,7 @@ function arrowDefs(prefix) {
 
   /* ========== 禁卡表(2026-09 设计:docs/superpowers/specs/2026-09-09-banlist-design.md) ========== */
 
-  const MAX_BAN_LISTS = 12;
+  const MAX_BAN_LISTS = 32;
   const MAX_BAN_CARDS = 200;
   /* class 归一化:0-7 整数有效,非法(含字符串数字)/缺失→null(禁卡表第 6 位与快照第 7 位共用) */
   function normalizeCls(v){ const n = Number(v); return (Number.isInteger(v) && n >= 0 && n <= 7) ? n : null; }
