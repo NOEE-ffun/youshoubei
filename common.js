@@ -1036,7 +1036,7 @@
       '        <button type="button" id="banlist-add-btn" class="btn btn-secondary btn-sm">' + iconMarkup('add', '') + '新建禁卡表</button>' +
       '      </div>' +
       '      <div id="settings-banlists" class="settings-banlists"></div>' +
-      '      <p class="hint">每张表可对卡设置禁用或限 1/2 张;在画布卡片设置里勾选后对该卡的卡组生效。</p>' +
+      '      <p class="hint">每张表可对卡设置禁用或限 1/2 张;可粘贴卡组链接按张数批量加禁(带1=限1,2=限2,3=禁用);在画布卡片设置里勾选后对该卡的卡组生效。</p>' +
       '    </div>' +
       '    <div class="form-field">' +
       '      <span id="bg-label">背景图片</span>' +
@@ -1123,7 +1123,7 @@
         return;
       }
       if (t.closest('.bl-paste-btn')) {
-        banlistPaste(block.querySelector('.bl-paste-input'));
+        banlistPaste(block.querySelector('.bl-paste-input'), block.dataset.bl);
       }
     });
     settingsDialog.querySelector('#settings-banlists').addEventListener('input', (event) => {
@@ -1159,7 +1159,9 @@
 
   /* ---- 禁卡表编辑(工作副本 banlistDraft,保存时整体落 record.banLists) ---- */
   let banlistDraft = [];
-  let banlistPoolExtra = []; /* 粘码解析并入的临时候选卡,仅本次会话 */
+  /* 中立-基本卡(官方 cls0/set10000 全 7 张):禁卡表粘码的填充占位,
+   * 带多少张都忽略——仅用于把牌组凑满 40 张;按 card_id 过滤,跨语言稳 */
+  const BANLIST_PLACEHOLDER_IDS = new Set([10001110, 10001120, 10001210, 10002110, 10002210, 10001130, 10002120]);
   /* 历届全量记录缓存(候选池数据源):appInstance.list 是无 canvas 的摘要投影,
    * 弹窗打开时经 storageGetAll 异步刷新(云端=内存工作区,本地=IndexedDB 全量) */
   let banlistPoolRecords = [];
@@ -1179,10 +1181,10 @@
           }
         });
       })
-      .catch(() => { /* 池刷新失败=搜索退化为仅粘码补充卡,不阻塞弹窗 */ });
+      .catch(() => { /* 池刷新失败=搜索无结果,不阻塞弹窗 */ });
   }
 
-  /* 候选池 = 历届快照聚合 distinct 卡 + 本次粘码补充 */
+  /* 候选池 = 历届快照聚合 distinct 卡(搜索-单卡加禁的来源) */
   function banlistCandidatePool() {
     const pool = new Map();
     const add = (row) => {
@@ -1204,7 +1206,6 @@
         }
       }
     }
-    for (const c of banlistPoolExtra) add([c.id, c.name, c.cost, c.rarity]);
     return pool;
   }
 
@@ -1242,7 +1243,7 @@
         '<input type="search" class="bl-search" placeholder="搜索卡名加入(站内卡池)" aria-label="搜索卡名">' +
         '<div class="bl-results"></div>' +
         (isCloud
-          ? '<div class="bl-paste"><input type="text" class="bl-paste-input" placeholder="粘贴卡组链接或码,解析出的卡并入卡池" aria-label="粘贴卡组码">' +
+          ? '<div class="bl-paste"><input type="text" class="bl-paste-input" placeholder="粘贴卡组链接批量加禁:带1张=限1,2张=限2,3张=禁用(中立基本卡仅凑数,忽略)" aria-label="粘贴卡组码批量加禁">' +
             '<button type="button" class="btn btn-secondary btn-sm bl-paste-btn">' + iconMarkup('content_paste', '') + '解析</button></div>'
           : '') +
         '</div>' +
@@ -1257,15 +1258,19 @@
     const pool = banlistCandidatePool();
     const inList = new Set(bl.cards.map((r) => r[0]));
     const hits = [...pool.values()].filter((c) => !inList.has(c.id) && c.name.toLowerCase().includes(t)).slice(0, 8);
-    if (!hits.length) return '<p class="hint">无匹配' + (banlistPoolExtra.length ? '' : '(可粘贴卡组码补充卡池)') + '</p>';
+    if (!hits.length) return '<p class="hint">无匹配</p>';
     return hits.map((c) =>
       '<button type="button" class="bl-hit" data-add="' + c.id + '">' + blCostIcon(c.cost) +
       '<span class="banlist-name deck-name-r' + c.rarity + '">' + escapeHtml(c.name) + '</span></button>').join('');
   }
 
-  async function banlistPaste(input) {
+  /* 粘卡组码批量加禁(2026-09-09 改版):张数即限档——带1=限1、带2=限2、带3=禁用;
+   * 中立-基本卡是凑 40 张的占位,整组忽略;已在表内的卡跳过不动(保已有限档) */
+  async function banlistPaste(input, listId) {
     const q = input.value.trim();
     if (!q) return;
+    const bl = banlistDraft.find((x) => x.id === listId);
+    if (!bl) return;
     input.disabled = true;
     try {
       const res = await fetch('/api/admin/decks/preview', {
@@ -1275,8 +1280,19 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) { notify('解析失败:' + (data.error || res.status), 'danger'); return; }
-      for (const row of data.deck.cards) banlistPoolExtra.push({ id: row[0], name: row[1], cost: row[2], rarity: row[3] });
-      notify('已并入卡池:' + data.deck.cards.length + ' 张卡', 'success');
+      const inList = new Set(bl.cards.map((r) => r[0]));
+      let added = 0;
+      let skippedPlaceholder = 0;
+      let skippedDup = 0;
+      for (const row of data.deck.cards) {
+        if (BANLIST_PLACEHOLDER_IDS.has(row[0])) { skippedPlaceholder += 1; continue; }
+        if (inList.has(row[0])) { skippedDup += 1; continue; }
+        inList.add(row[0]);
+        /* row=[id,name,cost,rarity,type,copies],copies∈1..3:1→限1,2→限2,3→禁用 */
+        bl.cards.push([row[0], row[1], row[2], row[3], row[5] >= 3 ? 0 : row[5]]);
+        added += 1;
+      }
+      notify('批量入表:' + added + ' 张(占位忽略 ' + skippedPlaceholder + ',已在表 ' + skippedDup + ')', 'success');
       input.value = '';
       renderBanlistsEditor();
     } catch (error) {
@@ -1675,7 +1691,6 @@
     banlistDraft = window.CanvasModel.normalizeBanLists(record.banLists).map((bl) => ({
       id: bl.id, name: bl.name, cards: bl.cards.map((r) => r.slice())
     }));
-    banlistPoolExtra = [];
     refreshBanlistPoolRecords();
     renderBanlistsEditor();
     if (statusInput) statusInput.value = record.status || 'upcoming';

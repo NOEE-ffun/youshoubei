@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { ADMIN_PHONE, smsLogin, seedWorkspace, makePlayer, resetStore } from './helpers.mjs';
 
-/* 禁卡表全链:设置弹窗录入(搜索+粘码)→ 顶栏下拉 → CardForm 绑表 → 画布标红+弹层 → 公示锁可见性。
+/* 禁卡表全链:设置弹窗录入(粘码批量加禁=张数即限档、中立基本卡占位忽略;搜索-单卡不变)→ 顶栏下拉 → CardForm 绑表 → 画布标红+弹层 → 公示锁可见性。
  * 种子直接内联 deck 快照(判定只读快照,不出网);粘码用 fixture 现有 hash。 */
 test.setTimeout(90_000);
 
@@ -110,7 +110,7 @@ test('隐藏期可见性:锁侧不显徽标;公示期全员可见', async ({ bro
   await adminCtx.close();
 });
 
-test('设置弹窗录入:候选池搜索+三档+保存持久', async ({ browser }) => {
+test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索单卡+保存持久', async ({ browser }) => {
   const ctx = await browser.newContext();
   await smsLogin(ctx, ADMIN_PHONE);
   const page = await ctx.newPage();
@@ -121,23 +121,37 @@ test('设置弹窗录入:候选池搜索+三档+保存持久', async ({ browser 
   await page.locator('#settings-btn').click();
   await page.locator('#banlist-add-btn').click();
   await page.locator('.bl-name').fill('新表');
-  /* 候选池含种子快照卡:搜"终焉" */
+  /* 粘码批量:fixture 牌组 40 张 = 2 占位(3+2)+禁卡甲×3+限卡乙×2+单卡丙×1+填充×29 */
+  await page.locator('.bl-paste-input').fill('https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.bn01.bn01.bn01.bn02.bn02.bn03.bn03.bn03.bn04.bn04.bn05.bn06.bn06.bn06.bn07.bn07.bn07.bn08.bn08.bn08.bn09.bn09.bn09.bn10.bn10.bn10.bn11.bn11.bn11.bn12.bn12.bn12.bn13.bn13.bn13.bn14.bn14.bn14.bn15.bn15');
+  await page.locator('.bl-paste-btn').click();
+  await page.waitForTimeout(600);
+  const rows = page.locator('.bl-row');
+  await expect(rows).toHaveCount(13); /* fixture 15 种卡 - 2 占位 = 13 */
+  const names = await page.locator('.bl-row .banlist-name').allInnerTexts();
+  expect(names, '占位卡不入表').not.toContain('不屈的剑斗士');
+  expect(names, '占位卡不入表').not.toContain('商队猛犸象');
+  /* 张数→限档:×3=禁用,×2=限2,×1=限1(按行内卡名定位各自 select) */
+  const limitOf = async (name) => page.locator('.bl-row', { hasText: name }).locator('.bl-limit').inputValue();
+  await expect.poll(() => limitOf('禁卡甲')).toBe('0');
+  await expect.poll(() => limitOf('限卡乙')).toBe('2');
+  await expect.poll(() => limitOf('单卡丙')).toBe('1');
+  /* 搜索-单卡加禁不变:候选池含种子快照卡,搜"终焉" */
   await page.locator('.bl-search').fill('终焉');
   await expect(page.locator('.bl-hit .banlist-name')).toHaveText(['终焉之炎']);
   await page.locator('.bl-hit').first().click();
-  await expect(page.locator('.bl-row .banlist-name')).toHaveText(['终焉之炎']);
-  /* 默认禁用;改限2 */
-  await page.locator('.bl-limit').selectOption('2');
+  await expect(rows).toHaveCount(14);
+  /* 终焉之炎默认禁用;改限2 后保存 */
+  await page.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit').selectOption('2');
   await page.locator('#settings-form button[type="submit"]').click();
   await page.waitForTimeout(800);
   /* 重开设置仍在;下拉出现 */
   await page.locator('#settings-btn').click();
-  await expect(page.locator('.bl-row .banlist-name')).toHaveText(['终焉之炎']);
-  await expect(page.locator('.bl-limit')).toHaveValue('2');
+  await expect(rows).toHaveCount(14);
+  await expect(page.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit')).toHaveValue('2');
   await page.locator('#settings-form button[type="submit"]').click();
   await page.waitForTimeout(500);
   await page.locator('#header-banlist-btn').click();
-  await expect(page.locator('.banlist-dropdown .banlist-mark.lim')).toHaveText('限2');
+  await expect(page.locator('.banlist-dropdown .banlist-row', { hasText: '终焉之炎' }).locator('.banlist-mark.lim')).toHaveText('限2');
   await ctx.close();
 });
 
