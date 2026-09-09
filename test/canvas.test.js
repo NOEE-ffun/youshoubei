@@ -173,7 +173,7 @@ const model = require('../canvas-model.js');
   const a4 = withDeck.cards[0].classLinks.a;
   assert.equal(a4.length, 3, 'deck 非法不丢条目');
   assert.deepEqual(a4[0].deck, { v: 1, resolvedAt: '2026-08-31T00:00:00.000Z', classId: 2, format: 1,
-    cards: [[10021110, '须臾剑士', 1, 1, 1, 3], [10724110, '统音的安纳提玛', 5, 4, 1, 2]] }, '合法快照原样透传');
+    cards: [[10021110, '须臾剑士', 1, 1, 1, 3, null], [10724110, '统音的安纳提玛', 5, 4, 1, 2, null]] }, '合法快照原样透传');
   assert.ok(!('deck' in a4[1]) && !('deck' in a4[2]), '非法快照(classId 越界/空卡表)整体丢弃');
 }
 

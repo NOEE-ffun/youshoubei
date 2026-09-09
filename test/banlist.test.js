@@ -34,11 +34,11 @@ const BL1 = [{ id: 'bl1', name: '第一周', cards: [[501, '禁卡A', 2, 3, 0], 
   assert.deepStrictEqual(CM.normalizeBanLists(undefined), []);
   assert.deepStrictEqual(CM.normalizeBanLists('x'), []);
   assert.deepStrictEqual(CM.normalizeBanLists([{ id: 'bl1', name: 'X', cards: [[501, 'a', 2, 3, 0]] }]),
-    [{ id: 'bl1', name: 'X', cards: [[501, 'a', 2, 3, 0]] }]);
+    [{ id: 'bl1', name: 'X', cards: [[501, 'a', 2, 3, 0, null]] }]);
   /* 非法 limit 剔除;重复 cardId 保首条;缺 id/name 剔除 */
   assert.deepStrictEqual(CM.normalizeBanLists([{ id: 'a', name: 'A', cards: [
     [501, 'x', 1, 1, 3], [501, 'y', 1, 1, 2], [502, 'z', 1, 1, 0], [502, 'z', 1, 1, 0]
-  ] }]), [{ id: 'a', name: 'A', cards: [[501, 'y', 1, 1, 2], [502, 'z', 1, 1, 0]] }]);
+  ] }]), [{ id: 'a', name: 'A', cards: [[501, 'y', 1, 1, 2, null], [502, 'z', 1, 1, 0, null]] }]);
   assert.deepStrictEqual(CM.normalizeBanLists([{ id: '', name: 'A', cards: [] }, { id: 'b', name: ' ', cards: [] }]), []);
   /* 表上限 12 */
   const many = Array.from({ length: 15 }, (_, i) => ({ id: 'b' + i, name: 'N' + i, cards: [[1, 'c', 1, 1, 0]] }));
@@ -86,6 +86,28 @@ const BL1 = [{ id: 'bl1', name: '第一周', cards: [[501, '禁卡A', 2, 3, 0], 
   assert.strictEqual(r.length, 1); assert.strictEqual(r[0].copies, 3);
   /* 卡不存在 → [] */
   assert.strictEqual(CM.checkBanViolations(mkRecord({ banLists: BL1 }), 'nope').length, 0);
+
+  /* ---- 职业分类(2026-09-09 按职业显示批) ---- */
+  assert.strictEqual(CM.BANLIST_CLASSES.length, 8);
+  assert.strictEqual(CM.BANLIST_CLASSES[0], '中立');
+  assert.strictEqual(CM.BANLIST_CLASSES[7], '复仇者');
+  assert.deepStrictEqual(CM.BANLIST_CLASSES.slice(1), CM.CLASS_LIST);
+  /* banLists 卡元组第 6 位 class:钳 0-7,非法/缺失→null,输出恒 6 位 */
+  let bl = CM.normalizeBanLists([{ id: 'a', name: 'A', cards: [
+    [501, 'x', 1, 1, 0, 2], [502, 'y', 1, 1, 0, 0], [503, 'z', 1, 1, 0, 7],
+    [504, 'w', 1, 1, 0, 8], [505, 'v', 1, 1, 0, '2'], [506, 'u', 1, 1, 0]
+  ] }])[0].cards;
+  assert.deepStrictEqual(bl.map((r) => r[5]), [2, 0, 7, null, null, null]);
+  assert.ok(bl.every((r) => r.length === 6));
+  /* 旧 5 元组数据(迁移前)仍合法归一为 null */
+  assert.deepStrictEqual(CM.normalizeBanLists([{ id: 'a', name: 'A', cards: [[501, 'x', 1, 1, 0]] }])[0].cards[0][5], null);
+  /* classMap:键 String 化,值 0-7,非法剔除 */
+  assert.deepStrictEqual(CM.normalizeBanListClassMap({ 501: 2, '502': '0', bad: 9, '503': null }), { '501': 2, '502': 0 });
+  assert.deepStrictEqual(CM.normalizeBanListClassMap(undefined), {});
+  /* 快照卡第 7 位 class 透传(旧 6 位数据补 null) */
+  let snap = CM.normalizeDeckSnapshot({ v: 1, classId: 2, cards: [[501, 'x', 1, 1, 0, 3, 2], [502, 'y', 1, 1, 0, 1]] });
+  assert.deepStrictEqual(snap.cards.map((r) => r[6]), [2, null]);
+  assert.ok(snap.cards.every((r) => r.length === 7));
 
   console.log('banlist tests passed');
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -145,6 +145,8 @@ function edgePath(p1, n1, p2, n2) {
 
   /* 职业 svg 名单(icons/classes/<名>.svg),卡片职业槽引用 */
   const CLASS_LIST = ['精灵', '皇家', '法师', '龙族', '梦魇', '主教', '复仇者'];
+  /* 禁卡表职业顺序:中立在前拼接 7 职业,class id 0-7 与下标对齐 */
+  const BANLIST_CLASSES = ['中立'].concat(CLASS_LIST);
 
   /* ========== WB 卡组码提取与规范链接(国服牌组码 → 官网卡组链接) ==========
    * 国服《影之诗:超凡世界》客户端导出的牌组码是带 # 注释行的整段文本:
@@ -198,7 +200,8 @@ function edgePath(p1, n1, p2, n2) {
         Number(row[2]) || 0,
         Math.min(4, Math.max(1, Number(row[3]) || 1)),
         Number(row[4]) || 0,
-        Math.min(3, Math.max(1, Number(row[5]) || 1))
+        Math.min(3, Math.max(1, Number(row[5]) || 1)),
+        normalizeCls(row[6])
       ]);
     }
     if (!cards.length) return null;
@@ -592,6 +595,8 @@ function arrowDefs(prefix) {
 
   const MAX_BAN_LISTS = 12;
   const MAX_BAN_CARDS = 200;
+  /* class 归一化:0-7 整数有效,非法(含字符串数字)/缺失→null(禁卡表第 6 位与快照第 7 位共用) */
+  function normalizeCls(v){ const n = Number(v); return (Number.isInteger(v) && n >= 0 && n <= 7) ? n : null; }
 
   function normalizeBanListIds(ids) {
     if (!Array.isArray(ids)) return [];
@@ -624,9 +629,22 @@ function arrowDefs(prefix) {
         if (limit !== 0 && limit !== 1 && limit !== 2) continue;
         seen.add(cardId);
         cards.push([cardId, String(row[1] || '?').slice(0, 60), Number(row[2]) || 0,
-          Math.min(4, Math.max(1, Number(row[3]) || 1)), limit]);
+          Math.min(4, Math.max(1, Number(row[3]) || 1)), limit, normalizeCls(row[5])]);
       }
       out.push({ id, name, cards });
+    }
+    return out;
+  }
+
+  /* 届级职业记忆:全局改职业落到这里,后续加同卡沿用(键 String 化) */
+  function normalizeBanListClassMap(value) {
+    const out = {};
+    if (!value || typeof value !== 'object') return out;
+    for (const [k, v] of Object.entries(value)) {
+      const id = Number(k);
+      const n = Number(v);
+      if (!(id > 0) || v == null || !(n >= 0 && n <= 7)) continue;
+      out[String(id)] = n;
     }
     return out;
   }
@@ -913,6 +931,7 @@ function arrowDefs(prefix) {
   return {
     AVATAR_COLORS,
     CLASS_LIST,
+    BANLIST_CLASSES,
     resolveEffectiveClassLinks,
     extractDeckCode,
     normalizeDeckUrl,
@@ -950,6 +969,8 @@ function arrowDefs(prefix) {
     isWindowOpen,
     parseHHMM,
     normalizeBanLists,
+    normalizeBanListClassMap,
+    normalizeDeckSnapshot,
     normalizeBanListIds,
     checkBanViolations,
     resolveCanvas,
