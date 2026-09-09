@@ -2129,10 +2129,10 @@
         if (window.BracketActions && window.BracketActions.openRules) window.BracketActions.openRules();
       });
     }
+    /* 禁卡表按钮:click 绑定每页一次即可;显隐按届变化,由 syncHeaderState
+     * 同步(骨架被 headerBuilt 守卫只建一次,切届不重建) */
     const banBtn = placeholder.querySelector('#header-banlist-btn');
     if (banBtn) {
-      const blists = (appInstance.current && window.CanvasModel.normalizeBanLists(appInstance.current.banLists)) || [];
-      banBtn.hidden = !blists.some((l) => l.cards.length);
       banBtn.addEventListener('click', () => {
         if (window.BracketActions && window.BracketActions.openBanlist) window.BracketActions.openBanlist();
       });
@@ -2200,6 +2200,13 @@
         if (editEntryBtn) editEntryBtn.hidden = !ownerEditable;
         const settingsEntryBtn = header.querySelector('#settings-btn');
         if (settingsEntryBtn) settingsEntryBtn.hidden = !ownerEditable;
+        /* 禁卡表按钮按届显隐:届内有任一非空禁卡表才显示(骨架只建一次,
+         * 切届不重建,故显隐必须在此随每届 current 变化同步;edit-btn 同款判空) */
+        const banlistBtn = header.querySelector('#header-banlist-btn');
+        if (banlistBtn) {
+          const blists = window.CanvasModel.normalizeBanLists(appInstance.current && appInstance.current.banLists);
+          banlistBtn.hidden = !blists.some((l) => l.cards.length);
+        }
         /* 非 owner 管理员打开他人届:顶部一次性提示(每届每页一次) */
         if (mode === 'cloud' && !ownerEditable && isAdmin() && !ownershipNoticed.has(active.id)) {
           ownershipNoticed.add(active.id);
