@@ -199,3 +199,102 @@ test('同组放下与原位放下均为无操作(不落盘不报错)', async ({ 
   expect(after.series).toHaveLength(before.series.length);
   await page.request.post('/api/dev/reset');
 });
+
+test('admin 权限边界:他人届无手柄不可拖,他人系列不可改名,删除预判禁用,排序放行', async ({ page, context, browser }) => {
+  await resetStore(context);
+  const PHONE_B = '13800003333';
+  const contextB = await browser.newContext();
+  const userB = await makeAdmin(contextB, PHONE_B);
+  expect(userB.role).toBe('admin');
+  /* 种子顺序注意:主页有 60s workspace 缓存,页面只加载一次且在全部 API 种子完成之后,
+   * 否则会命中旧缓存令权限预判失真 */
+  await smsLogin(context, ADMIN_PHONE);
+  await seedWorkspace(context, {
+    series: [{ id: 'sr-a', name: '系列甲' }],
+    tournaments: [makeTournament('t-super', '超管届', 'sr-a')],
+    players: [], activeId: 't-super'
+  });
+  /* super 把超管届挂进系列乙的「预定地」:先建系列乙(super 建,归属 super)——
+   * 再由 adminB 增补自己的届;最后 super 把超管届移入系列乙(守卫放行,现状语义) */
+  const ws1 = await (await context.request.get('/api/data')).json();
+  ws1.series.push({ id: 'sr-b', name: '系列乙', desc: '' });
+  const put1 = await context.request.put('/api/data', { data: ws1 });
+  expect(put1.ok()).toBeTruthy();
+  const wsB = await (await contextB.request.get('/api/data')).json();
+  wsB.tournaments.push(makeTournament('t-b', 'B届', 'sr-b'));
+  const putB = await contextB.request.put('/api/data', { data: wsB });
+  expect(putB.ok()).toBeTruthy();
+  const wsS = await (await context.request.get('/api/data')).json();
+  wsS.tournaments.find((t) => t.id === 't-super').seriesId = 'sr-b';
+  const putS = await context.request.put('/api/data', { data: wsS });
+  expect(putS.ok()).toBeTruthy();
+
+  const pageB = await contextB.newPage();
+  await pageB.goto('/');
+  await pageB.locator('#ov-t-edit-btn').click();
+  await pageB.waitForSelector('body.series-editing');
+  /* 他人届(超管届,现在系列乙下):无 is-movable、无手柄 */
+  await expect(pageB.locator('.ov-t-row[data-id="t-super"]')).not.toHaveClass(/is-movable/);
+  await expect(pageB.locator('.ov-t-row[data-id="t-super"] .list-handle')).toHaveCount(0);
+  /* 自己届:可拖 */
+  await expect(pageB.locator('.ov-t-row[data-id="t-b"]')).toHaveClass(/is-movable/);
+  /* 他人系列(sr-a/sr-b 均 super 建):无改名按钮、无删除按钮 */
+  await expect(pageB.locator('.ov-t-group[data-series="sr-a"] [data-rename]')).toHaveCount(0);
+  await expect(pageB.locator('.ov-t-group[data-series="sr-a"] [data-del]')).toHaveCount(0);
+  await pageB.close();
+
+  /* 删除预判禁用需要「自己的系列含他人届」:adminB 建系列丙,super 把超管届移入 */
+  const ws2 = await (await contextB.request.get('/api/data')).json();
+  ws2.series.push({ id: 'sr-c', name: '系列丙', desc: '' });
+  const put2 = await contextB.request.put('/api/data', { data: ws2 });
+  expect(put2.ok()).toBeTruthy();
+  const ws3 = await (await context.request.get('/api/data')).json();
+  ws3.tournaments.find((t) => t.id === 't-super').seriesId = 'sr-c';
+  const put3 = await context.request.put('/api/data', { data: ws3 });
+  expect(put3.ok()).toBeTruthy();
+
+  const pageC = await contextB.newPage();
+  await pageC.addInitScript(() => {
+    /* 同 context 二次加载会命中 60s 缓存,清掉工作区缓存强制拉新 */
+    for (const key of Object.keys(localStorage)) {
+      if (/workspace/i.test(key)) localStorage.removeItem(key);
+    }
+  });
+  await pageC.goto('/');
+  await pageC.locator('#ov-t-edit-btn').click();
+  await pageC.waitForSelector('body.series-editing');
+  await expect(pageC.locator('.ov-t-group[data-series="sr-c"] [data-del]')).toBeDisabled();
+  /* 排序对 admin 放行:拖系列乙组头到系列甲之上(sr-c 无届不渲染干扰:
+     编辑态空系列也渲染,落点按组中点计数,丙在乙之后不影响) */
+  const s = await pageC.locator('.ov-t-group[data-series="sr-b"] .ov-t-group-title').boundingBox();
+  const d = await pageC.locator('.ov-t-group[data-series="sr-a"]').boundingBox();
+  await dragMouse(pageC,
+    { x: s.x + 20, y: s.y + s.height / 2 },
+    { x: d.x + 60, y: d.y + d.height * 0.4 });
+  await pageC.waitForFunction(() =>
+    document.querySelectorAll('#ov-tournaments .ov-t-group')[0]?.dataset.series === 'sr-b');
+  const ws = await (await contextB.request.get('/api/data')).json();
+  expect(ws.series.map((x) => x.id)).toEqual(['sr-b', 'sr-a', 'sr-c']);
+  await pageC.close();
+  await contextB.close();
+  await resetStore(context);
+});
+
+test('非管理员(选手)无编辑按钮,主页纯只读', async ({ page, context }) => {
+  await resetStore(context);
+  await smsLogin(context, ADMIN_PHONE);
+  await seedWorkspace(context, {
+    series: [{ id: 'sr-a', name: '系列甲' }],
+    tournaments: [makeTournament('t-a1', '甲一届', 'sr-a')],
+    players: [], activeId: 't-a1'
+  });
+  const playerCtx = await context.browser().newContext();
+  await smsLogin(playerCtx, '13800004444');
+  const playerPage = await playerCtx.newPage();
+  await playerPage.goto('/');
+  await playerPage.waitForSelector('.ov-t-group');
+  await expect(playerPage.locator('#ov-t-edit-btn')).toHaveCount(0);
+  await playerPage.close();
+  await playerCtx.close();
+  await resetStore(context);
+});
