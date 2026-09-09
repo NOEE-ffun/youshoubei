@@ -134,11 +134,12 @@ body.side-expanded {
 }
 
 /* 职业 svg 是彩色图标,任何主题保持原色
- * (覆盖全部消费容器:画布职业槽/统计职业条/列表视图/我的卡组) */
+ * (覆盖全部消费容器:画布职业槽/统计职业条/列表视图/我的卡组/禁卡表编辑tab) */
 .class-slot .icon,
 .class-bar .icon,
 .list-class .icon,
-.md-deck-row .icon {
+.md-deck-row .icon,
+.bl-cls-tab .icon {
   filter: none;
 }
 
@@ -1028,6 +1029,12 @@ dialog::backdrop {
 .bl-hit:hover { background: var(--bg-hover, rgba(127, 127, 127, 0.12)); }
 .bl-paste { display: flex; gap: 6px; }
 .bl-paste .bl-paste-input { flex: 1; }
+/* 8 职业 tab(下标=class id,默认中立);active 仅边框+浅底高亮 */
+.bl-cls-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.bl-cls-tab { padding: 2px; border: 1px solid transparent; border-radius: 6px; background: none; cursor: pointer; line-height: 0; }
+.bl-cls-tab .icon { width: 18px; height: 18px; object-fit: contain; }
+.bl-cls-tab.active { border-color: var(--accent, #3b82f6); background: rgba(59, 130, 246, 0.12); }
+.bl-row .bl-reclass { width: auto; }
 
 /* ---------- toast ---------- */
 

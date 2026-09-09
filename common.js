@@ -1099,6 +1099,13 @@
     /* 禁卡表编辑区事件委托(弹窗 DOM 建立后此处绑定) */
     settingsDialog.querySelector('#settings-banlists').addEventListener('click', (event) => {
       const t = event.target;
+      /* 职业 tab:纯 DOM 显隐过滤,只动工作副本内存字段,不改 draft 卡数据 */
+      const tab = t.closest('.bl-cls-tab');
+      if (tab) {
+        const bl2 = banlistDraft.find((x) => x.id === tab.closest('.bl-block').dataset.bl);
+        if (bl2) { bl2._activeCls = Number(tab.dataset.cls); renderBanlistsEditor(); }
+        return;
+      }
       const block = t.closest('.bl-block');
       if (!block) return;
       const bl = banlistDraft.find((x) => x.id === block.dataset.bl);
@@ -1147,6 +1154,20 @@
     });
     settingsDialog.querySelector('#settings-banlists').addEventListener('change', (event) => {
       const t = event.target;
+      /* 改职业:届内全表生效(同一卡所有表 c[5] 同步)+ classMap 记忆,保存时落 record.banListClassMap */
+      if (t.classList.contains('bl-reclass')) {
+        const row = t.closest('.bl-row');
+        if (!row) return;
+        const newCls = Number(t.value);
+        const cardId = Number(row.dataset.card);
+        banlistDraftClassMap[String(cardId)] = newCls;
+        for (const list of banlistDraft) {
+          const c = list.cards.find((r) => r[0] === cardId);
+          if (c) c[5] = newCls;
+        }
+        renderBanlistsEditor();
+        return;
+      }
       if (!t.classList.contains('bl-limit')) return;
       const block = t.closest('.bl-block');
       const bl = banlistDraft.find((x) => x.id === block.dataset.bl);
@@ -1240,22 +1261,37 @@
     }
     const isCloud = mode === 'cloud';
     wrap.innerHTML = banlistDraft.map((bl) => {
+      /* 当前职业 tab:工作副本内存字段 _activeCls(每表独立,默认 0=中立);r[5] null 与 0 同权算中立 */
+      const activeCls = bl._activeCls ?? 0;
+      const hasVisible = bl.cards.some((r) => (r[5] ?? 0) === activeCls);
       return (
         '<div class="bl-block" data-bl="' + escapeHtml(bl.id) + '">' +
         '<div class="bl-head">' +
         '<input type="text" class="bl-name" value="' + escapeHtml(bl.name) + '" maxlength="40" aria-label="表名">' +
         '<button type="button" class="btn btn-danger btn-sm bl-del" title="删除此表" aria-label="删除此表">' + iconMarkup('delete', '') + '</button>' +
         '</div>' +
-        '<div class="bl-cards">' + (bl.cards.map((r) =>
-          '<div class="bl-row" data-card="' + r[0] + '">' + blCostIcon(r[2]) +
+        '<div class="bl-cls-tabs" role="tablist" aria-label="职业筛选">' + window.CanvasModel.BANLIST_CLASSES.map((cls, i) =>
+          '<button type="button" class="bl-cls-tab' + (i === activeCls ? ' active' : '') +
+          '" data-cls="' + i + '" title="' + cls + '" aria-label="只显示' + cls + '禁卡" aria-pressed="' + (i === activeCls) + '">' +
+          '<img class="icon" src="icons/classes/' + cls + '.svg" alt="' + cls + '"></button>').join('') + '</div>' +
+        '<div class="bl-cards">' + (bl.cards.length
+          ? bl.cards.map((r) =>
+          '<div class="bl-row" data-card="' + r[0] + '" data-cls="' + (r[5] ?? 0) + '"' + ((r[5] ?? 0) === activeCls ? '' : ' hidden') + '>' + blCostIcon(r[2]) +
           '<span class="banlist-name deck-name-r' + r[3] + '" title="' + escapeHtml(r[1]) + '">' + escapeHtml(r[1]) + '</span>' +
           '<select class="bl-limit" aria-label="限档">' +
           '<option value="0"' + (r[4] === 0 ? ' selected' : '') + '>禁用</option>' +
           '<option value="1"' + (r[4] === 1 ? ' selected' : '') + '>限1</option>' +
           '<option value="2"' + (r[4] === 2 ? ' selected' : '') + '>限2</option>' +
           '</select>' +
+          (activeCls === 0 && (r[5] ?? 0) === 0
+            ? '<select class="bl-reclass" aria-label="改职业">' +
+            window.CanvasModel.BANLIST_CLASSES.map((cn, ci) => '<option value="' + ci + '"' + (ci === 0 ? ' selected' : '') + '>' + cn + '</option>').join('') +
+            '</select>'
+            : '') +
           '<button type="button" class="btn btn-ghost btn-sm bl-row-del" title="移除此卡" aria-label="移除此卡">' + iconMarkup('close', '') + '</button>' +
-          '</div>').join('') || '<p class="hint">尚未加卡。</p>') + '</div>' +
+          '</div>').join('') +
+          '<p class="hint bl-empty-cls"' + (hasVisible ? ' hidden' : '') + '>当前职业暂无禁卡</p>'
+          : '<p class="hint">尚未加卡。</p>') + '</div>' +
         '<div class="bl-add">' +
         '<input type="search" class="bl-search" placeholder="搜索卡名加入(站内卡池)" aria-label="搜索卡名">' +
         '<div class="bl-results"></div>' +
@@ -1305,7 +1341,7 @@
         if (BANLIST_PLACEHOLDER_IDS.has(row[0])) { skippedPlaceholder += 1; continue; }
         if (inList.has(row[0])) { skippedDup += 1; continue; }
         inList.add(row[0]);
-        /* row=[id,name,cost,rarity,type,copies],copies∈1..3:1→限1,2→限2,3→禁用 */
+        /* row=[id,name,cost,rarity,type,copies,class],copies∈1..3:1→限1,2→限2,3→禁用;class=职业0-7缺null */
         bl.cards.push([row[0], row[1], row[2], row[3], row[5] >= 3 ? 0 : row[5], banlistClassFor(row[0], row[6])]);
         added += 1;
       }
