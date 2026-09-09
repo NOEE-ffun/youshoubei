@@ -130,6 +130,60 @@ assert.strictEqual(r.workspace.tournaments[0].createdBy, 'uB');   /* 回填 curr
 assert.strictEqual(curWs.tournaments[1].createdBy, 'uB');         /* current 未被改 */
 assert.strictEqual(inWs.tournaments[0].createdBy, 'uS');          /* 调用方 incoming 未被改 */
 
+/* ---- 系列编辑模式语义(2026-09-09 批):重排=位置非内容;改挂=届内容变化 ---- */
+const curSeries = () => ({
+  series: [{ id: 's1', name: '一', createdBy: 'uA', createdAt: 't' },
+           { id: 's2', name: '二', createdBy: 'uB', createdAt: 't' },
+           { id: 's3', name: '三', createdBy: null, createdAt: 't' }],
+  tournaments: [{ id: 't1', name: 'A届', seriesId: 's1', createdBy: 'uA', updatedAt: 1 },
+                { id: 't2', name: 'B届', seriesId: 's2', createdBy: 'uB', updatedAt: 1 }],
+  players: [], activeId: 't1'
+});
+
+/* admin 纯重排系列(他人/系统系列仅换位,条目内容不变)→ 按 id 比对放行 */
+r = workspacePutGuard(U, curSeries(), {
+  series: [curSeries().series[2], curSeries().series[0], curSeries().series[1]],
+  tournaments: curSeries().tournaments, players: [], activeId: 't1'
+});
+assert.strictEqual(r.ok, true, '纯重排(含他人/系统系列)放行');
+assert.deepStrictEqual(r.workspace.series.map((s) => s.id), ['s3', 's1', 's2'], '重排顺序生效');
+
+/* admin 删自己的系列但属下含他人届:清 seriesId = 他人届内容变化 → 403 带届名 */
+const curDel = () => ({
+  series: [{ id: 's1', name: '一', createdBy: 'uA', createdAt: 't' }],
+  tournaments: [{ id: 't1', name: 'A届', seriesId: 's1', createdBy: 'uA', updatedAt: 1 },
+                { id: 't2', name: 'B届', seriesId: 's1', createdBy: 'uB', updatedAt: 1 }],
+  players: [], activeId: 't1'
+});
+const delIncoming = () => ({
+  series: [],
+  tournaments: [{ ...curDel().tournaments[0], seriesId: null, updatedAt: 9 },
+                { ...curDel().tournaments[1], seriesId: null, updatedAt: 9 }],
+  players: [], activeId: 't1'
+});
+r = workspacePutGuard(U, curDel(), delIncoming());
+assert.strictEqual(r.status, 403, 'admin 删含他人届的系列 → 403');
+assert.match(r.error, /B届/);
+r = workspacePutGuard(S, curDel(), delIncoming());
+assert.strictEqual(r.ok, true, 'super 删系列并清届归属 → 过');
+assert.strictEqual(r.workspace.tournaments[1].seriesId, null);
+
+/* 改挂边界:admin 把自己届挂进他人系列放行(守卫不校验目标系列归属,现状语义);
+ * admin 改他人届 seriesId → 403 带届名 */
+r = workspacePutGuard(U, curSeries(), {
+  series: curSeries().series,
+  tournaments: [{ ...curSeries().tournaments[0], seriesId: 's2', updatedAt: 9 }, curSeries().tournaments[1]],
+  players: [], activeId: 't1'
+});
+assert.strictEqual(r.ok, true, '自己届改挂他人系列放行');
+r = workspacePutGuard(U, curSeries(), {
+  series: curSeries().series,
+  tournaments: [curSeries().tournaments[0], { ...curSeries().tournaments[1], seriesId: 's1', updatedAt: 9 }],
+  players: [], activeId: 't1'
+});
+assert.strictEqual(r.status, 403, 'admin 改他人届所属系列 → 403');
+assert.match(r.error, /B届/);
+
 /* ---- 迁移脚本纯函数 planMigration:存量届挂默认系列「历届比赛」(幂等) ---- */
 const { planMigration } = require('../scripts/migrate-series');
 
