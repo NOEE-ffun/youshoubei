@@ -1107,7 +1107,7 @@
       if (hit) {
         const id = Number(hit.dataset.add);
         const c = banlistCandidatePool().get(id);
-        if (c) { bl.cards.push([c.id, c.name, c.cost, c.rarity, 0]); renderBanlistsEditor(); }
+        if (c) { bl.cards.push([c.id, c.name, c.cost, c.rarity, 0, banlistClassFor(c.id, c.cls)]); renderBanlistsEditor(); }
         return;
       }
       if (t.closest('.bl-row-del')) {
@@ -1167,6 +1167,7 @@
 
   /* ---- 禁卡表编辑(工作副本 banlistDraft,保存时整体落 record.banLists) ---- */
   let banlistDraft = [];
+  let banlistDraftClassMap = {};
   /* 中立-基本卡(官方 cls0/set10000 全 7 张):禁卡表粘码的填充占位,
    * 带多少张都忽略——仅用于把牌组凑满 40 张;按 card_id 过滤,跨语言稳 */
   const BANLIST_PLACEHOLDER_IDS = new Set([10001110, 10001120, 10001210, 10002110, 10002210, 10001130, 10002120]);
@@ -1199,7 +1200,8 @@
       const id = Number(row[0]);
       if (!(id > 0) || pool.has(id)) return;
       pool.set(id, { id, name: String(row[1] || '?'), cost: Number(row[2]) || 0,
-        rarity: Math.min(4, Math.max(1, Number(row[3]) || 1)) });
+        rarity: Math.min(4, Math.max(1, Number(row[3]) || 1)),
+        cls: (Number(row[6]) >= 0 && Number(row[6]) <= 7) ? Number(row[6]) : null });
     };
     for (const rec of banlistPoolRecords) {
       for (const card of (rec && rec.canvas && rec.canvas.cards) || []) {
@@ -1215,6 +1217,13 @@
       }
     }
     return pool;
+  }
+
+  /* 卡的职业:classMap(全局改职业的记忆)优先,其次入参兜底(快照 class),再 null=中立 */
+  function banlistClassFor(cardId, fallback) {
+    if (Object.prototype.hasOwnProperty.call(banlistDraftClassMap, String(cardId))) return banlistDraftClassMap[String(cardId)];
+    const n = Number(fallback);
+    return (n >= 0 && n <= 7) ? n : null;
   }
 
   function blCostIcon(cost) {
@@ -1297,7 +1306,7 @@
         if (inList.has(row[0])) { skippedDup += 1; continue; }
         inList.add(row[0]);
         /* row=[id,name,cost,rarity,type,copies],copies∈1..3:1→限1,2→限2,3→禁用 */
-        bl.cards.push([row[0], row[1], row[2], row[3], row[5] >= 3 ? 0 : row[5]]);
+        bl.cards.push([row[0], row[1], row[2], row[3], row[5] >= 3 ? 0 : row[5], banlistClassFor(row[0], row[6])]);
         added += 1;
       }
       notify('批量入表:' + added + ' 张(占位忽略 ' + skippedPlaceholder + ',已在表 ' + skippedDup + ')', 'success');
@@ -1328,6 +1337,9 @@
       const banlists = window.CanvasModel.normalizeBanLists(banlistDraft).filter((l) => l.cards.length);
       if (banlists.length) record.banLists = banlists;
       else delete record.banLists;
+      const clsMap = window.CanvasModel.normalizeBanListClassMap(banlistDraftClassMap);
+      if (Object.keys(clsMap).length) record.banListClassMap = clsMap;
+      else delete record.banListClassMap;
       record.status = statusInput ? statusInput.value : (record.status || 'upcoming');
       record.liveUrl = liveUrlInput ? liveUrlInput.value.trim() : (record.liveUrl || '');
       record.startTime = startTimeInput && startTimeInput.value
@@ -1699,6 +1711,7 @@
     banlistDraft = window.CanvasModel.normalizeBanLists(record.banLists).map((bl) => ({
       id: bl.id, name: bl.name, cards: bl.cards.map((r) => r.slice())
     }));
+    banlistDraftClassMap = window.CanvasModel.normalizeBanListClassMap(record.banListClassMap);
     refreshBanlistPoolRecords();
     renderBanlistsEditor();
     if (statusInput) statusInput.value = record.status || 'upcoming';
