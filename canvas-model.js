@@ -259,7 +259,9 @@ function edgePath(p1, n1, p2, n2) {
       /* 单卡染色(null = 不染色,跟随玻璃默认) */
       color: CARD_COLOR_RE.test(c.color || '') ? c.color : null,
       /* 职业卡组链接(按 A/B 选手位分组,各无上限,合理性截到 12 条) */
-      classLinks: normalizeClassLinks(c.classLinks)
+      classLinks: normalizeClassLinks(c.classLinks),
+      /* 生效禁卡表 id(届 banLists 内的表 id;悬空 id 渲染时过滤) */
+      banListIds: normalizeBanListIds(c.banListIds)
     };
   }
 
@@ -586,6 +588,86 @@ function arrowDefs(prefix) {
     return out;
   }
 
+  /* ========== 禁卡表(2026-09 设计:docs/superpowers/specs/2026-09-09-banlist-design.md) ========== */
+
+  const MAX_BAN_LISTS = 12;
+  const MAX_BAN_CARDS = 200;
+
+  function normalizeBanListIds(ids) {
+    if (!Array.isArray(ids)) return [];
+    const out = [];
+    for (const id of ids) {
+      if (typeof id !== 'string' || !id || out.includes(id)) continue;
+      out.push(id);
+      if (out.length >= 8) break;
+    }
+    return out;
+  }
+
+  /* 届级禁卡表归一化:cards 元组 [cardId, name, cost, rarity, limit],
+   * limit 三档 0=禁用 1|2=限 N;name/cost/rarity 录入时定格冗余,展示零依赖 */
+  function normalizeBanLists(value) {
+    if (!Array.isArray(value)) return [];
+    const out = [];
+    for (const bl of value.slice(0, MAX_BAN_LISTS)) {
+      if (!bl || typeof bl !== 'object') continue;
+      const id = typeof bl.id === 'string' ? bl.id : '';
+      const name = String(bl.name || '').trim().slice(0, 40);
+      if (!id || !name) continue;
+      const cards = [];
+      const seen = new Set();
+      for (const row of Array.isArray(bl.cards) ? bl.cards.slice(0, MAX_BAN_CARDS) : []) {
+        if (!Array.isArray(row) || row.length < 5) continue;
+        const cardId = Number(row[0]);
+        const limit = Number(row[4]);
+        if (!(cardId > 0) || seen.has(cardId)) continue;
+        if (limit !== 0 && limit !== 1 && limit !== 2) continue;
+        seen.add(cardId);
+        cards.push([cardId, String(row[1] || '?').slice(0, 60), Number(row[2]) || 0,
+          Math.min(4, Math.max(1, Number(row[3]) || 1)), limit]);
+      }
+      out.push({ id, name, cards });
+    }
+    return out;
+  }
+
+  /* 违规判定(纯展示用,不拦截提交):对该卡生效的各表 × 有效链接(含沿连线
+   * 继承)× 已解析快照逐一比对;copies 大于 limit 即违规(limit=0 出现即违规)。
+   * 同 side 同表同卡只留 copies 最大一条;无快照条目不判定(与统计页口径一致)。 */
+  function checkBanViolations(record, cardId) {
+    const lists = normalizeBanLists(record && record.banLists);
+    if (!lists.length || !(record && record.canvas)) return [];
+    const card = (record.canvas.cards || []).find((c) => c && c.id === cardId);
+    const bound = new Set(normalizeBanListIds(card && card.banListIds));
+    const active = lists.filter((l) => bound.has(l.id));
+    if (!active.length) return [];
+    const eff = resolveEffectiveClassLinks(record.canvas, record.scores || {});
+    const sides = eff.get(cardId) || { a: [], b: [] };
+    const out = [];
+    for (const side of ['a', 'b']) {
+      const worst = new Map(); /* key: listId:cardId -> violation */
+      for (const entry of Array.isArray(sides[side]) ? sides[side] : []) {
+        const deck = entry && entry.deck;
+        if (!deck || !Array.isArray(deck.cards)) continue;
+        for (const list of active) {
+          for (const row of list.cards) {
+            const found = deck.cards.find((r) => r[0] === row[0]);
+            if (!found) continue;
+            const copies = found[5];
+            if (!(copies > row[4])) continue;
+            const key = list.id + ':' + row[0];
+            const prev = worst.get(key);
+            if (prev && prev.copies >= copies) continue;
+            worst.set(key, { side, cls: String(entry.cls || ''), cardId: row[0], name: row[1],
+              cost: row[2], rarity: row[3], copies, limit: row[4], listId: list.id, listName: list.name });
+          }
+        }
+      }
+      out.push(...worst.values());
+    }
+    return out;
+  }
+
   /* ========== 自动排名 ========== */
 
   function usedExits(canvas) {
@@ -867,6 +949,9 @@ function arrowDefs(prefix) {
     getDeckCount,
     isWindowOpen,
     parseHHMM,
+    normalizeBanLists,
+    normalizeBanListIds,
+    checkBanViolations,
     resolveCanvas,
     resolveCardById,
     deriveStandings,
