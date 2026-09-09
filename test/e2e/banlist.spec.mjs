@@ -121,8 +121,11 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await page.locator('#settings-btn').click();
   await page.locator('#banlist-add-btn').click();
   await page.locator('.bl-name').fill('新表');
-  /* 粘码批量:fixture 牌组 40 张 = 2 占位(3+2)+禁卡甲×3+限卡乙×2+单卡丙×1+填充×29 */
-  await page.locator('.bl-paste-input').fill('https://shadowverse-wb.com/chs/deck/detail/?hash=1.2.bn01.bn01.bn01.bn02.bn02.bn03.bn03.bn03.bn04.bn04.bn05.bn06.bn06.bn06.bn07.bn07.bn07.bn08.bn08.bn08.bn09.bn09.bn09.bn10.bn10.bn10.bn11.bn11.bn11.bn12.bn12.bn12.bn13.bn13.bn13.bn14.bn14.bn14.bn15.bn15');
+  /* 粘码批量:粘国服牌组码整段 → 失焦就地转官网链接(与选手提交同款)→ 解析入表 */
+  const BATCH_HASH = '1.2.bn01.bn01.bn01.bn02.bn02.bn03.bn03.bn03.bn04.bn04.bn05.bn06.bn06.bn06.bn07.bn07.bn07.bn08.bn08.bn08.bn09.bn09.bn09.bn10.bn10.bn10.bn11.bn11.bn11.bn12.bn12.bn12.bn13.bn13.bn13.bn14.bn14.bn14.bn15.bn15';
+  await page.locator('.bl-paste-input').fill('#禁卡批量#\n#指定系列#\n' + BATCH_HASH + '\n#在游戏中点击【卡牌】-【新牌组】-【使用牌组码】进行粘贴');
+  await page.locator('.bl-name').click();
+  await expect(page.locator('.bl-paste-input')).toHaveValue('https://shadowverse-wb.com/chs/deck/detail/?hash=' + BATCH_HASH);
   await page.locator('.bl-paste-btn').click();
   await page.waitForTimeout(600);
   const rows = page.locator('.bl-row');

@@ -1137,6 +1137,14 @@
         block.querySelector('.bl-results').innerHTML = blSearchResults(bl, t.value);
       }
     });
+    /* 粘码框失焦就地转码:国服牌组码/裸 hash → 规范官网链接
+     * (与选手提交卡组的 cl-url focusout 同款;多行牌组码粘进单行框,分段正则两吃得通) */
+    settingsDialog.querySelector('#settings-banlists').addEventListener('focusout', (event) => {
+      const input = event.target.closest('.bl-paste-input');
+      if (!input) return;
+      const normalized = window.CanvasModel.normalizeDeckUrl(input.value);
+      if (normalized !== input.value) input.value = normalized;
+    });
     settingsDialog.querySelector('#settings-banlists').addEventListener('change', (event) => {
       const t = event.target;
       if (!t.classList.contains('bl-limit')) return;
