@@ -4212,6 +4212,36 @@ body.series-editing #ov-tournaments .ov-t-row.is-movable:hover {
   color: var(--text-muted);
 }
 
+/* 拖拽:复用 list-* 契约类名,扩展 ov-t 行/组为目标(与 schedule 页规则同语言) */
+.ov-t-row.dragging-origin,
+.ov-t-group.dragging-origin {
+  display: none;
+}
+
+.list-ghost .ov-t-row {
+  background: transparent; /* 幽灵容器自带 surface-float 底与投影(镜像 .list-ghost .list-row 契约) */
+}
+
+body.list-dragging .ov-t-row,
+body.list-dragging .ov-t-group,
+body.list-settling .ov-t-row,
+body.list-settling .ov-t-group {
+  transition: transform 170ms var(--ease-out);
+}
+
+body.list-dragging .ov-t-group.drop-target > h3 {
+  color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.list-dragging .ov-t-row,
+  body.list-dragging .ov-t-group,
+  body.list-settling .ov-t-row,
+  body.list-settling .ov-t-group {
+    transition: none;
+  }
+}
+
 /* 快捷入口:内联文字链接,无卡片盒 */
 .ov-links {
   display: flex;

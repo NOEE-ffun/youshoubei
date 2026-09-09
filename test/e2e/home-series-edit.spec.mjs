@@ -128,3 +128,74 @@ test('删除系列:确认后属下届归未分组', async ({ page }) => {
   expect(ws.tournaments.filter((t) => t.seriesId === 'sr-a')).toHaveLength(0);
   await page.request.post('/api/dev/reset');
 });
+
+test('拖届跨系列改挂:甲→乙改 seriesId,拖入未分组=解除挂系', async ({ page }) => {
+  const context = page.context();
+  await seedDefault(context);
+  /* 增补系列乙:必须 GET 现库再增补——seedWorkspace 的整库 PUT 会用 body
+   * 里的 series/tournaments 全量替换,直接给单条会把系列甲一并删掉 */
+  const ws = await (await context.request.get('/api/data')).json();
+  ws.series.push({ id: 'sr-b', name: '系列乙' });
+  ws.tournaments.push(makeTournament('t-b1', '乙一届', 'sr-b'));
+  const put = await context.request.put('/api/data', { data: ws });
+  expect(put.ok()).toBeTruthy();
+  await enterEdit(page);
+  /* 甲一届 → 系列乙(落点=组头下方,参考 list-edit 跨阶段手法) */
+  const s = await page.locator('.ov-t-row[data-id="t-a1"]').boundingBox();
+  const d = await page.locator('.ov-t-group[data-series="sr-b"] .ov-t-group-title').boundingBox();
+  await dragMouse(page,
+    { x: s.x + s.width * 0.5, y: s.y + s.height / 2 },
+    { x: d.x + 80, y: d.y + d.height + 8 });
+  await page.waitForFunction(() =>
+    document.querySelector('.ov-t-group[data-series="sr-b"]')?.querySelector('.ov-t-row[data-id="t-a1"]'));
+  let after = await (await page.request.get('/api/data')).json();
+  expect(after.tournaments.find((t) => t.id === 't-a1').seriesId).toBe('sr-b');
+  /* 再拖回未分组:seriesId 置 null */
+  const s2 = await page.locator('.ov-t-row[data-id="t-a1"]').boundingBox();
+  const d2 = await page.locator('.ov-t-group-ungrouped .ov-t-group-title').boundingBox();
+  await dragMouse(page,
+    { x: s2.x + s2.width * 0.5, y: s2.y + s2.height / 2 },
+    { x: d2.x + 80, y: d2.y + d2.height + 8 });
+  await page.waitForFunction(() =>
+    document.querySelector('.ov-t-group-ungrouped')?.querySelector('.ov-t-row[data-id="t-a1"]'));
+  after = await (await page.request.get('/api/data')).json();
+  expect(after.tournaments.find((t) => t.id === 't-a1').seriesId).toBeNull();
+  await page.request.post('/api/dev/reset');
+});
+
+test('拖系列整块重排:组序变化落库,未分组恒最后', async ({ page }) => {
+  const context = page.context();
+  await seedDefault(context);
+  await enterEdit(page);
+  /* 系列甲组头 → 空系列组中点以下(明确落在其后;贴中点会被让位动画亚像素漂移翻转) */
+  const s = await page.locator('.ov-t-group[data-series="sr-a"] .ov-t-group-title').boundingBox();
+  const d = await page.locator('.ov-t-group[data-series="sr-empty"]').boundingBox();
+  await dragMouse(page,
+    { x: s.x + 20, y: s.y + s.height / 2 },
+    { x: d.x + 60, y: d.y + d.height * 0.75 });
+  await page.waitForFunction(() =>
+    document.querySelectorAll('#ov-tournaments .ov-t-group')[0]?.dataset.series === 'sr-empty');
+  const ws = await (await page.request.get('/api/data')).json();
+  expect(ws.series.map((x) => x.id)).toEqual(['sr-empty', 'sr-a']);
+  const groups = await groupTitles(page);
+  expect(groups[groups.length - 1].series).toBe('');
+  await page.request.post('/api/dev/reset');
+});
+
+test('同组放下与原位放下均为无操作(不落盘不报错)', async ({ page }) => {
+  const context = page.context();
+  await seedDefault(context);
+  await enterEdit(page);
+  const before = await (await page.request.get('/api/data')).json();
+  /* 组内末行底缘 +4px 落在两组模糊带,会被「出界就近归属」吸走——那是有意行为;
+   * no-op 用例的落点必须明确在原组内:原行内下移 12px 松手(过阈值成拖拽,同组放下) */
+  const s = await page.locator('.ov-t-row[data-id="t-a1"]').boundingBox();
+  await dragMouse(page,
+    { x: s.x + s.width * 0.5, y: s.y + s.height / 2 },
+    { x: s.x + s.width * 0.5, y: s.y + s.height / 2 + 12 });
+  await page.waitForTimeout(300);
+  const after = await (await page.request.get('/api/data')).json();
+  expect(after.tournaments.find((x) => x.id === 't-a1').seriesId).toBe('sr-a');
+  expect(after.series).toHaveLength(before.series.length);
+  await page.request.post('/api/dev/reset');
+});
