@@ -1012,6 +1012,23 @@ dialog::backdrop {
   width: 7.5rem;
 }
 
+/* 禁卡表编辑(届设置弹窗) */
+.banlists-field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.settings-banlists { display: grid; gap: 10px; }
+.bl-block { border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: grid; gap: 8px; }
+.bl-head { display: flex; gap: 8px; }
+.bl-head .bl-name { flex: 1; }
+.bl-cards { display: grid; gap: 2px; }
+.bl-row { display: flex; align-items: center; gap: 6px; }
+.bl-row .bl-limit { width: auto; }
+.bl-add { display: grid; gap: 6px; }
+.bl-results { display: grid; gap: 2px; }
+.bl-hit { display: flex; align-items: center; gap: 6px; text-align: left; background: none; border: none;
+  padding: 2px 4px; border-radius: 6px; cursor: pointer; color: inherit; }
+.bl-hit:hover { background: var(--bg-hover, rgba(127, 127, 127, 0.12)); }
+.bl-paste { display: flex; gap: 6px; }
+.bl-paste .bl-paste-input { flex: 1; }
+
 /* ---------- toast ---------- */
 
 .toast-region {

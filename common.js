@@ -1031,6 +1031,14 @@
       '      <textarea id="settings-rules"></textarea>' +
       '    </div>' +
       '    <div class="form-field">' +
+      '      <div class="banlists-field-head">' +
+      '        <label for="settings-banlists">禁卡表</label>' +
+      '        <button type="button" id="banlist-add-btn" class="btn btn-secondary btn-sm">' + iconMarkup('add', '') + '新建禁卡表</button>' +
+      '      </div>' +
+      '      <div id="settings-banlists" class="settings-banlists"></div>' +
+      '      <p class="hint">每张表可对卡设置禁用或限 1/2 张;在画布卡片设置里勾选后对该卡的卡组生效。</p>' +
+      '    </div>' +
+      '    <div class="form-field">' +
       '      <span id="bg-label">背景图片</span>' +
       '      <div class="bg-controls">' +
       '        <div class="bg-preview" id="bg-preview" role="img" aria-label="背景图预览"></div>' +
@@ -1088,9 +1096,170 @@
       '<input type="file" id="bg-file-input" accept="image/*" hidden>';
     document.body.appendChild(settingsDialog);
 
+    /* 禁卡表编辑区事件委托(弹窗 DOM 建立后此处绑定) */
+    settingsDialog.querySelector('#settings-banlists').addEventListener('click', (event) => {
+      const t = event.target;
+      const block = t.closest('.bl-block');
+      if (!block) return;
+      const bl = banlistDraft.find((x) => x.id === block.dataset.bl);
+      if (!bl) return;
+      const hit = t.closest('.bl-hit');
+      if (hit) {
+        const id = Number(hit.dataset.add);
+        const c = banlistCandidatePool().get(id);
+        if (c) { bl.cards.push([c.id, c.name, c.cost, c.rarity, 0]); renderBanlistsEditor(); }
+        return;
+      }
+      if (t.closest('.bl-row-del')) {
+        const row = t.closest('.bl-row');
+        bl.cards = bl.cards.filter((r) => r[0] !== Number(row.dataset.card));
+        renderBanlistsEditor();
+        return;
+      }
+      if (t.closest('.bl-del')) {
+        if (!confirm('删除禁卡表「' + bl.name + '」?绑定了此表的卡片会自动解绑。')) return;
+        banlistDraft = banlistDraft.filter((x) => x.id !== bl.id);
+        renderBanlistsEditor();
+        return;
+      }
+      if (t.closest('.bl-paste-btn')) {
+        banlistPaste(block.querySelector('.bl-paste-input'));
+      }
+    });
+    settingsDialog.querySelector('#settings-banlists').addEventListener('input', (event) => {
+      const t = event.target;
+      const block = t.closest('.bl-block');
+      if (!block) return;
+      const bl = banlistDraft.find((x) => x.id === block.dataset.bl);
+      if (!bl) return;
+      if (t.classList.contains('bl-name')) { bl.name = t.value; return; }
+      if (t.classList.contains('bl-search')) {
+        block.querySelector('.bl-results').innerHTML = blSearchResults(bl, t.value);
+      }
+    });
+    settingsDialog.querySelector('#settings-banlists').addEventListener('change', (event) => {
+      const t = event.target;
+      if (!t.classList.contains('bl-limit')) return;
+      const block = t.closest('.bl-block');
+      const bl = banlistDraft.find((x) => x.id === block.dataset.bl);
+      const row = t.closest('.bl-row');
+      if (!bl || !row) return;
+      const card = bl.cards.find((r) => r[0] === Number(row.dataset.card));
+      if (card) card[4] = Number(t.value);
+    });
+    settingsDialog.querySelector('#banlist-add-btn').addEventListener('click', () => {
+      banlistDraft.push({ id: uid('bl'), name: '禁卡表' + (banlistDraft.length + 1), cards: [] });
+      renderBanlistsEditor();
+    });
+
     bindSettingsForm();
     bindBackgroundControls();
     bindMigrationButtons();
+  }
+
+  /* ---- 禁卡表编辑(工作副本 banlistDraft,保存时整体落 record.banLists) ---- */
+  let banlistDraft = [];
+  let banlistPoolExtra = []; /* 粘码解析并入的临时候选卡,仅本次会话 */
+
+  /* 候选池 = 历届快照聚合 distinct 卡 + 本次粘码补充 */
+  function banlistCandidatePool() {
+    const pool = new Map();
+    const add = (row) => {
+      const id = Number(row[0]);
+      if (!(id > 0) || pool.has(id)) return;
+      pool.set(id, { id, name: String(row[1] || '?'), cost: Number(row[2]) || 0,
+        rarity: Math.min(4, Math.max(1, Number(row[3]) || 1)) });
+    };
+    for (const rec of appInstance.list || []) {
+      for (const card of (rec && rec.canvas && rec.canvas.cards) || []) {
+        for (const side of ['a', 'b']) {
+          const links = card.classLinks && Array.isArray(card.classLinks[side]) ? card.classLinks[side] : [];
+          for (const entry of links) {
+            for (const row of (entry && entry.deck && Array.isArray(entry.deck.cards)) || []) add(row);
+          }
+        }
+      }
+    }
+    for (const c of banlistPoolExtra) add([c.id, c.name, c.cost, c.rarity]);
+    return pool;
+  }
+
+  function blCostIcon(cost) {
+    const n = Math.max(0, Math.min(10, Number(cost) || 0));
+    return '<img class="icon" src="icons/cost/cost-' + n + '.webp" alt="' + n + '费" width="20" height="20" loading="lazy">';
+  }
+
+  function renderBanlistsEditor() {
+    const wrap = settingsDialog.querySelector('#settings-banlists');
+    if (!wrap) return;
+    if (!banlistDraft.length) {
+      wrap.innerHTML = '<p class="hint">暂无禁卡表。</p>';
+      return;
+    }
+    const isCloud = mode === 'cloud';
+    wrap.innerHTML = banlistDraft.map((bl) => {
+      return (
+        '<div class="bl-block" data-bl="' + escapeHtml(bl.id) + '">' +
+        '<div class="bl-head">' +
+        '<input type="text" class="bl-name" value="' + escapeHtml(bl.name) + '" maxlength="40" aria-label="表名">' +
+        '<button type="button" class="btn btn-danger btn-sm bl-del" title="删除此表" aria-label="删除此表">' + iconMarkup('delete', '') + '</button>' +
+        '</div>' +
+        '<div class="bl-cards">' + (bl.cards.map((r) =>
+          '<div class="bl-row" data-card="' + r[0] + '">' + blCostIcon(r[2]) +
+          '<span class="banlist-name deck-name-r' + r[3] + '" title="' + escapeHtml(r[1]) + '">' + escapeHtml(r[1]) + '</span>' +
+          '<select class="bl-limit" aria-label="限档">' +
+          '<option value="0"' + (r[4] === 0 ? ' selected' : '') + '>禁用</option>' +
+          '<option value="1"' + (r[4] === 1 ? ' selected' : '') + '>限1</option>' +
+          '<option value="2"' + (r[4] === 2 ? ' selected' : '') + '>限2</option>' +
+          '</select>' +
+          '<button type="button" class="btn btn-ghost btn-sm bl-row-del" title="移除此卡" aria-label="移除此卡">' + iconMarkup('close', '') + '</button>' +
+          '</div>').join('') || '<p class="hint">尚未加卡。</p>') + '</div>' +
+        '<div class="bl-add">' +
+        '<input type="search" class="bl-search" placeholder="搜索卡名加入(站内卡池)" aria-label="搜索卡名">' +
+        '<div class="bl-results"></div>' +
+        (isCloud
+          ? '<div class="bl-paste"><input type="text" class="bl-paste-input" placeholder="粘贴卡组链接或码,解析出的卡并入卡池" aria-label="粘贴卡组码">' +
+            '<button type="button" class="btn btn-secondary btn-sm bl-paste-btn">' + iconMarkup('content_paste', '') + '解析</button></div>'
+          : '') +
+        '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function blSearchResults(bl, term) {
+    const t = String(term || '').trim().toLowerCase();
+    if (!t) return '';
+    const pool = banlistCandidatePool();
+    const inList = new Set(bl.cards.map((r) => r[0]));
+    const hits = [...pool.values()].filter((c) => !inList.has(c.id) && c.name.toLowerCase().includes(t)).slice(0, 8);
+    if (!hits.length) return '<p class="hint">无匹配' + (banlistPoolExtra.length ? '' : '(可粘贴卡组码补充卡池)') + '</p>';
+    return hits.map((c) =>
+      '<button type="button" class="bl-hit" data-add="' + c.id + '">' + blCostIcon(c.cost) +
+      '<span class="banlist-name deck-name-r' + c.rarity + '">' + escapeHtml(c.name) + '</span></button>').join('');
+  }
+
+  async function banlistPaste(input) {
+    const q = input.value.trim();
+    if (!q) return;
+    input.disabled = true;
+    try {
+      const res = await fetch('/api/admin/decks/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) { notify('解析失败:' + (data.error || res.status), 'danger'); return; }
+      for (const row of data.deck.cards) banlistPoolExtra.push({ id: row[0], name: row[1], cost: row[2], rarity: row[3] });
+      notify('已并入卡池:' + data.deck.cards.length + ' 张卡', 'success');
+      input.value = '';
+      renderBanlistsEditor();
+    } catch (error) {
+      notify('解析失败:' + errMsg(error), 'danger');
+    } finally {
+      input.disabled = false;
+    }
   }
 
   function bindSettingsForm() {
@@ -1108,6 +1277,9 @@
       const startTimeInput = settingsDialog.querySelector('#settings-start-time');
       record.name = nameInput.value.trim() || '我的赛事';
       record.rules = rulesInput.value;
+      const banlists = window.CanvasModel.normalizeBanLists(banlistDraft).filter((l) => l.cards.length);
+      if (banlists.length) record.banLists = banlists;
+      else delete record.banLists;
       record.status = statusInput ? statusInput.value : (record.status || 'upcoming');
       record.liveUrl = liveUrlInput ? liveUrlInput.value.trim() : (record.liveUrl || '');
       record.startTime = startTimeInput && startTimeInput.value
@@ -1476,6 +1648,11 @@
     const preview = settingsDialog.querySelector('#bg-preview');
     nameInput.value = record.name;
     rulesInput.value = record.rules || '';
+    banlistDraft = window.CanvasModel.normalizeBanLists(record.banLists).map((bl) => ({
+      id: bl.id, name: bl.name, cards: bl.cards.map((r) => r.slice())
+    }));
+    banlistPoolExtra = [];
+    renderBanlistsEditor();
     if (statusInput) statusInput.value = record.status || 'upcoming';
     if (liveUrlInput) liveUrlInput.value = record.liveUrl || '';
     if (startTimeInput) startTimeInput.value = toDateTimeLocal(record.startTime);
