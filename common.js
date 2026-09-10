@@ -2115,11 +2115,9 @@
     const items = [
       { page: 'home', href: 'index.html', icon: 'home', label: '主页' },
       { page: 'match', href: 'schedule.html', icon: 'emoji_events', label: '比赛' },
-      { page: 'players', href: 'players.html', icon: 'groups', label: '选手库' },
-      { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' },
       { page: 'stats', href: 'stats.html', icon: 'bar_chart', label: '数据统计' },
-      { page: 'docs', href: 'docs.html', icon: 'menu_book', label: '官方文档' },
-      { page: 'me', href: 'me.html', icon: 'person', label: '选手中心' }
+      { page: 'poster', href: 'poster.html', icon: 'vs_poster', label: '海报' },
+      { page: 'docs', href: 'docs.html', icon: 'menu_book', label: '官方文档' }
     ];
     const isActive = (page) => {
       if (page === 'match') return active === 'schedule' || active === 'match';
@@ -2391,12 +2389,6 @@
     /* 主题/管理按钮在侧栏底部,与页头是否存在无关 */
     const manageBtn = document.getElementById('manage-btn');
     if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
-
-    /* 选手中心导航项:云端+登录即显(注册即选手,账号必有档案) */
-    const playerPagesVisible = Boolean(mode === 'cloud' && sessionUser);
-    document.querySelectorAll('#app-sidebar .side-link[data-page="me"]').forEach((link) => {
-      link.hidden = !playerPagesVisible;
-    });
 
     /* 后台导航项:按需补建 + 仅超管可见(admin.html 独立轻量页,不引 common.js) */
     ensureAdminNavLink();
