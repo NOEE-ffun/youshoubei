@@ -3,6 +3,7 @@
 
   /* 赛程列表视图(比赛页内,与画布同页切换):resolveCanvas 后经 CanvasModel.listGroups
    * 按阶段分组,列序 = 赛制 | 标题 | 对阵(比分并入) | 状态 | 卡组(有效继承,图标可点);
+   * roll 池卡走 poolListRow 分流:format 列显示口数、vs 列显示池位选手摘要;
    * 编辑态由 body.list-editing 标记(置位/交互在 list-editor.js):行加 data-match、
    * 拖拽手柄格与组头手柄;染色行带 data-tint 与 --list-tint(与画布 card.color 同源)。
    * 视图显隐由 bracket.js 的 body[data-view] 管理,列表视图隐藏赛事背景图由 CSS 负责;
@@ -64,7 +65,51 @@
       '<span class="vs-name' + clsB + '">' + b + '</span>';
   }
 
+  /* roll 池行(resolved kind=rollPool):format 列 = 口数徽标(lr+tb 口)、
+   * vs 列 = 池位选手名摘要(名、分隔;未分配计数;空池显示「空池」)、
+   * status 列口径与画布 poolHtml 同源:连线成环 > 已 roll(含过期) > 待 roll;
+   * 卡组列平铺各池位 effLinks 图标(仅 http(s) 白名单可点,口径同 classGroupHtml);
+   * 行结构(data-match、tint、编辑态手柄)与比赛卡行同构,列表编辑器通用。 */
+  function poolListRow(m, eff, card, editing) {
+    const names = (m.seats || []).filter(Boolean).map(playerName);
+    const tint = card && card.color
+      ? ' data-tint style="--list-tint:' + escapeHtml(card.color) + '"'
+      : '';
+    const handle = editing
+      ? '<span class="list-handle" data-drag-handle title="拖拽排序" aria-hidden="true">' +
+        '<img class="icon" src="icons/drag_indicator.svg" alt=""></span>'
+      : '';
+    const assigned = Object.keys(m.outlets || {}).length;
+    const st = m.cycle ? '连线成环'
+      : assigned ? (m.staleOutlets.length ? '已 roll · 过期' : '已 roll')
+      : '待 roll';
+    /* eff.seats = 按池位分组的继承链数组,平铺逐条渲染(无对位分隔符,池位序即阅读序) */
+    const clsIcons = (((eff && eff.seats) || []).flat()).map((entry) => {
+      /* 协议白名单:仅 http(s) 可成为可点链接,阻断 javascript: 等注入 */
+      const url = /^https?:\/\//i.test(entry.url || '') ? entry.url : null;
+      return (
+      '<a class="list-class" href="' + escapeHtml(url || '#') + '"' +
+      (url ? ' target="_blank" rel="noopener"' : '') +
+      ' title="' + escapeHtml(entry.text || entry.cls) + '">' +
+      '<img class="icon" src="icons/classes/' + escapeHtml(entry.cls) + '.svg" alt=""></a>'
+      );
+    }).join('');
+    return (
+      '<div class="list-row" data-match="' + escapeHtml(m.id) + '"' + tint + '>' +
+      handle +
+      '<span class="list-format">' + m.ports.lr + '+' + m.ports.tb + ' 口</span>' +
+      '<span class="list-title">' + escapeHtml(m.label || m.id) + '</span>' +
+      '<span class="list-vs">' + (names.length
+        ? escapeHtml(names.join('、')) + (m.unassigned.length ? '(未分 ' + m.unassigned.length + ')' : '')
+        : '空池') + '</span>' +
+      '<span class="list-status">' + escapeHtml(st) + '</span>' +
+      '<div class="deck-class-row">' + clsIcons + '</div>' +
+      '</div>'
+    );
+  }
+
   function rowHtml(m, eff, card, editing) {
+    if (m.kind === 'rollPool') return poolListRow(m, eff, card, editing);
     const st = stateInfo(m);
     const clsA = classGroupHtml(eff, 'a');
     const clsB = classGroupHtml(eff, 'b');
