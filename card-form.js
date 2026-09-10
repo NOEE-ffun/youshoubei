@@ -323,9 +323,12 @@
   }
 
   /* 池位职业卡组单组:own(该池位已填过,含显式清空 null)回显自己的,未填过回显
-   * 继承(eff 池位组);签名口径与 renderClassLinkRows 相同(UI 可见三字段归一) */
-  function poolLinksGroupHtml(index, own, effRows) {
+   * 继承(eff 池位组);签名口径与 renderClassLinkRows 相同(UI 可见三字段归一)。
+   * origIndex=渲染时的池位下标:删中位槽后 DOM 组序左移,写回 prev 须按原下标
+   * 对位旧数组(cf-pool-add 新增组不传 → 无历史);index 只作显示序号 */
+  function poolLinksGroupHtml(index, own, effRows, origIndex) {
     const seats = effRows || [];
+    const orig = origIndex === undefined ? '' : ' data-orig-index="' + origIndex + '"';
     let dataset;
     let rows;
     if (own === null || (Array.isArray(own) && own.length)) {
@@ -339,7 +342,7 @@
       })))) + '"';
       rows = seats.map(clRowHtml).join('') + clRowHtml(null);
     }
-    return '<div class="form-field"><label>池位 ' + (index + 1) + '</label><div class="cl-list cf-cl-p"' + dataset + '>' + rows + '</div></div>';
+    return '<div class="form-field"><label>池位 ' + (index + 1) + '</label><div class="cl-list cf-cl-p"' + orig + dataset + '>' + rows + '</div></div>';
   }
 
   /* 池位增删:池位行容器与职业组容器按下标一一对应,两侧同步增删 */
@@ -378,7 +381,7 @@
     const effSeats = (eff && eff.seats) || [];
     const linksEl = container.querySelector('.cf-pool-links');
     linksEl.innerHTML = (card.slots || []).map((_, i) =>
-      poolLinksGroupHtml(i, (card.classLinks || [])[i], effSeats[i])).join('');
+      poolLinksGroupHtml(i, (card.classLinks || [])[i], effSeats[i], i)).join('');
   }
 
   /* roll 池读取:池位行(select 值;__flow 保留原槽不可换源)+ 每池位职业组。
@@ -405,7 +408,9 @@
       });
       const unchangedInherited = list.dataset.fill === 'inherited' &&
         JSON.stringify(rows) === list.dataset.effSig;
-      links.push({ rows, fill: list.dataset.fill, unchangedInherited });
+      const orig = list.dataset.origIndex;
+      links.push({ rows, fill: list.dataset.fill, unchangedInherited,
+        origIndex: orig === undefined ? undefined : Number(orig) });
     });
     const num = (sel) => Number(container.querySelector(sel).value);
     return {
@@ -435,8 +440,12 @@
     card.ports = { lr: shape.lr, tb: shape.tb };
     if (card.mode === 'auto') card.assignments = null; /* 切自动丢弃快照 */
     card.slots = data.slots;
-    card.classLinks = data.links.map((g, i) => {
-      const prev = (card.classLinks || [])[i];
+    /* 组序按 DOM 新序(新数组对齐新槽位序);prev 取历史值按组的 origIndex
+     * (渲染期原下标)对位旧数组——删中位槽后 DOM 左移一位,若按新序取 prev,
+     * 被删槽的 own 卡组会错挂到剩余槽(null 则错误阻断其继承,own 组 deck
+     * 快照也会因查错 prev 而静默丢失);cf-pool-add 新增组无 origIndex → undefined */
+    card.classLinks = data.links.map((g) => {
+      const prev = g.origIndex === undefined ? undefined : (card.classLinks || [])[g.origIndex];
       if (g.fill === 'own') {
         if (!g.rows.length) return null;
         return g.rows.map((entry) => {
