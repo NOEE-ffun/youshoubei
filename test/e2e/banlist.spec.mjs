@@ -215,7 +215,7 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await page.locator('.bl-block').first().locator('.bl-collapsed-head').click();
   await block1.locator('.bl-cls-tab[data-cls="0"]').click();
   await block1.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit').selectOption('2');
-  await page.locator('#settings-form button[type="submit"]').click();
+  await page.locator('#settings-save').click();
   await page.waitForTimeout(800);
   /* 重开:分节重置且手风琴全收起——切禁卡表节,展开第一张逐一断言 */
   await page.locator('#settings-btn').click();
@@ -228,7 +228,7 @@ test('设置弹窗录入:粘码批量加禁(张数=限档,占位忽略)+搜索�
   await expect(block1.locator('.bl-row', { hasText: '终焉之炎' }).locator('.bl-limit')).toHaveValue('2');
   await page.locator('.bl-block').nth(1).locator('.bl-collapsed-head').click();
   await expect(page.locator('.bl-block').nth(1).locator('.bl-row')).toHaveCount(13);
-  await page.locator('#settings-form button[type="submit"]').click();
+  await page.locator('#settings-save').click();
   await page.waitForTimeout(500);
   await page.locator('#header-banlist-btn').click();
   await expect(page.locator('.banlist-dropdown .banlist-row', { hasText: '终焉之炎' }).locator('.banlist-mark.lim')).toHaveText('限2');
@@ -266,7 +266,7 @@ test('禁卡表 JSON 导入/导出:同名替换保 id、新增追加、保存持
   await page.locator('.bl-block').first().locator('.bl-collapsed-head').click();
   const rowsFirst = await page.locator('.bl-block').first().locator('.bl-row .banlist-name').allInnerTexts();
   if (rowsFirst.sort().join(',') !== ['导入新增卡', '导入替换卡'].sort().join(',')) throw new Error('同名替换内容不对: ' + rowsFirst);
-  await page.locator('#settings-form button[type="submit"]').click();
+  await page.locator('#settings-save').click();
   await page.waitForTimeout(800);
   /* 保存持久:重开仍在,且原表 id 保留(表 id 不在 UI 暴露,以数据层为准) */
   const persisted = await page.evaluate(() => {

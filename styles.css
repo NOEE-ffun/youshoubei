@@ -5526,3 +5526,6 @@ body.list-dragging .ov-t-group.drop-target > h3 {
 .cf-section[data-open="0"] .cf-section-title .cf-chevron { transform: none; }
 .cf-section[data-open="0"] .cf-section-body { display: none; }
 .cf-banlists { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 14px; }
+
+/* 设置弹窗头部操作组:保存(primary)在关闭(ghost)左,风格同顶栏按钮 */
+.dialog-head-actions { display: flex; gap: 6px; align-items: center; }

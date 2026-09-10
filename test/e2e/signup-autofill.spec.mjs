@@ -77,9 +77,9 @@ test('报名:取前N编号展示 → 关闭留编号撤标记 → 自动填入',
   await expect(admin.locator('#signup-slots')).toHaveValue('4');
   await expect(admin.locator('#signup-slots-hint')).toContainText('当前入场空位 8 个');
   await admin.locator('#signup-slots').fill('9');
-  await admin.locator('#settings-form button[type="submit"]').click();
+  await admin.locator('#settings-save').click();
   await expect(admin.locator('.toast-danger')).toContainText('不能大于空位数');
-  await admin.locator('#settings-form [data-dialog-close]').click();
+  await admin.locator('#settings-dialog [data-dialog-close]').click();
   await admin.waitForTimeout(300);
 
   await admin.locator('#settings-btn').click();

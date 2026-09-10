@@ -59,7 +59,7 @@ test('卡组公示锁:开关手动开启后,未开始的卡显示锁占位', asy
     await page.locator('.settings-sec[data-sec=\"signup\"]').click();
   await page.waitForSelector('#settings-form');
   await page.locator('#deck-window-manual').selectOption('open');
-  await page.locator('#settings-form button[type="submit"]').click();
+  await page.locator('#settings-save').click();
   await page.waitForTimeout(600);
 
   /* 观看者视角:非 admin 选手会话(全新 context,缓存干净拿服务端剥离视图) */
@@ -79,7 +79,7 @@ test('卡组公示锁:开关手动开启后,未开始的卡显示锁占位', asy
     await page.locator('.settings-sec[data-sec=\"signup\"]').click();
   await page.waitForSelector('#settings-form');
   await page.locator('#deck-window-manual').selectOption('closed');
-  await page.locator('#settings-form button[type="submit"]').click();
+  await page.locator('#settings-save').click();
   await page.waitForTimeout(600);
   await viewer.evaluate(() => localStorage.clear());
   await viewer.reload();

@@ -540,89 +540,6 @@
     return Boolean(resource && resource.createdBy != null && resource.createdBy === sessionUser.id);
   }
 
-  async function migrateLocalToCloud() {
-    const local = await idbGetAll();
-    const localPlayers = (await idbGetMeta(META_PLAYERS)) || [];
-    const localSeries = (await idbGetMeta(META_SERIES)) || [];
-    const playerMap = new Map(localPlayers.map((p) => [p.id, p]));
-    const tournaments = [];
-    /* 头像与赛事无关,只上传一轮;放在赛事循环外,避免每条记录重复扫描全部选手 */
-    for (const player of playerMap.values()) {
-      if (player.avatar && typeof player.avatar !== 'string') {
-        player.avatar = await uploadCloudImage(player.avatar);
-      }
-    }
-    for (const record of local) {
-      const copy = structuredClone(record);
-      CanvasModel.migrateLegacyTournament(copy, playerMap);
-      if (copy.canvas) CanvasModel.migrateCanvasToDot(copy.canvas);
-      for (const matchId of Object.keys(copy.matchDecks || {})) {
-        for (const playerId of Object.keys(copy.matchDecks[matchId])) {
-          for (const deck of copy.matchDecks[matchId][playerId]) {
-            if (!Array.isArray(deck.images)) deck.images = [];
-            for (let i = 0; i < deck.images.length; i += 1) {
-              if (typeof deck.images[i] !== 'string') {
-                deck.images[i] = await uploadCloudImage(deck.images[i]);
-              }
-            }
-          }
-        }
-      }
-      if (copy.background && typeof copy.background !== 'string') {
-        copy.background = await uploadCloudImage(copy.background);
-      }
-      tournaments.push(copy);
-    }
-
-    let players = [...playerMap.values()];
-    if (!players.length) {
-      players = makeDefaultPlayers();
-      playerMap.clear();
-      for (const p of players) playerMap.set(p.id, p);
-    }
-    if (!tournaments.length) {
-      const fresh = makeDefaultTournament('我的赛事', players.map((p) => p.id));
-      tournaments.push(fresh);
-    }
-    /* 上传届序按本地 META_TOURNAMENT_ORDER(idb 键序≠用户排序) */
-    const localOrder = (await idbGetMeta(META_TOURNAMENT_ORDER)) || [];
-    if (localOrder.length) {
-      const rank = new Map(localOrder.map((id, i) => [String(id), i]));
-      tournaments.sort((a, b) => {
-        const ra = rank.get(String(a.id));
-        const rb = rank.get(String(b.id));
-        return (ra == null ? localOrder.length : ra) - (rb == null ? localOrder.length : rb);
-      });
-    }
-
-    const workspace = {
-      series: localSeries,
-      players,
-      tournaments,
-      activeId: localStorage.getItem(LS_ACTIVE) || (tournaments[0] || {}).id || null
-    };
-    if (!workspace.activeId) workspace.activeId = workspace.tournaments[0].id;
-
-    await cloudPutWorkspace(workspace);
-    setCloudWorkspace(workspace);
-    await refreshApp();
-    notify('已将 ' + workspace.tournaments.length + ' 场比赛上传到云端');
-  }
-
-  async function migrateCloudToLocal() {
-    const workspace = await cloudGetWorkspace();
-    await idbPutMeta(META_PLAYERS, workspace.players || []);
-    await idbPutMeta(META_SERIES, workspace.series || []);
-    await idbPutMeta(META_TOURNAMENT_ORDER,
-      (workspace.tournaments || []).map((t) => t && t.id).filter((x) => x != null));
-    for (const record of workspace.tournaments) {
-      await idbPut(record);
-    }
-    const activeId = workspace.activeId || (workspace.tournaments[0] || {}).id;
-    if (activeId) localStorage.setItem(LS_ACTIVE, activeId);
-    notify('已从云端拉取 ' + workspace.tournaments.length + ' 场比赛到本机');
-  }
-
   /* 压缩公共管线:加载文件 → canvas 重采样 → WebP 优先、JPEG 回退。
    * draw 负责设置画布尺寸并绘制(等比缩放 or 头像中心裁切)。 */
   function compressToBlob(file, draw, quality) {
@@ -1002,7 +919,9 @@
     settingsDialog.innerHTML =
       '<div class="dialog-head">' +
       '  <h2 id="settings-title">赛事设置</h2>' +
-      '  <button type="button" class="btn btn-ghost btn-sm" data-dialog-close>关闭</button>' +
+      '  <span class="dialog-head-actions">' +
+      '  <button type="submit" form="settings-form" id="settings-save" class="btn btn-primary btn-sm">' + iconMarkup('save', '保存') + '保存</button>' +
+      '  <button type="button" class="btn btn-ghost btn-sm" data-dialog-close>关闭</button></span>' +
       '</div>' +
       '<form id="settings-form">' +
       '  <div class="dialog-body" data-active-sec="basic">' +
@@ -1099,14 +1018,6 @@
 '        <span class="hint">报名关闭后可用:前 N 名随机填入无箭头指向的比赛,已指派选手会被覆盖。</span>' +
 '      </div>' +
 '    </div>' +
-      '    <div class="dialog-actions" id="migration-actions" hidden>' +
-    '      <button type="button" id="migrate-up" class="btn btn-secondary btn-sm">' + iconMarkup('cloud_upload', '将本机数据上传到云端') + '将本机数据上传到云端</button>' +
-    '      <button type="button" id="migrate-down" class="btn btn-secondary btn-sm">' + iconMarkup('cloud_download', '从云端拉取覆盖本机') + '从云端拉取覆盖本机</button>' +
-      '    </div>' +
-      '    <div class="dialog-actions">' +
-      '      <button type="button" class="btn btn-secondary" data-dialog-close>取消</button>' +
-      '      <button type="submit" class="btn btn-primary">' + iconMarkup('save', '保存') + '保存</button>' +
-      '    </div>' +
       '  </div>' +
       '</form>' +
       '<input type="file" id="bg-file-input" accept="image/*" hidden>';
@@ -1301,7 +1212,6 @@
 
     bindSettingsForm();
     bindBackgroundControls();
-    bindMigrationButtons();
   }
 
   /* ---- 禁卡表编辑(工作副本 banlistDraft,保存时整体落 record.banLists) ---- */
@@ -1678,25 +1588,6 @@
     });
   }
 
-  function bindMigrationButtons() {
-    settingsDialog.querySelector('#migrate-up').addEventListener('click', async () => {
-      try {
-        await migrateLocalToCloud();
-        syncSettingsAdminState();
-      } catch (error) {
-        notify(errMsg(error), 'danger');
-      }
-    });
-
-    settingsDialog.querySelector('#migrate-down').addEventListener('click', async () => {
-      try {
-        await migrateCloudToLocal();
-      } catch (error) {
-        notify(errMsg(error), 'danger');
-      }
-    });
-  }
-
   function buildDialogs() {
     if (manageDialog) return;
     buildManageDialog();
@@ -1712,7 +1603,6 @@
   function syncSettingsAdminState() {
     if (!settingsDialog) return;
     const admin = mode !== 'cloud' || appInstance.isAdmin();
-    const migration = settingsDialog.querySelector('#migration-actions');
     const fields = [
       settingsDialog.querySelector('#settings-name'),
       settingsDialog.querySelector('#settings-status'),
@@ -1725,10 +1615,9 @@
       settingsDialog.querySelector('#deck-window-close'),
       settingsDialog.querySelector('#deck-window-manual'),
       settingsDialog.querySelector('#signup-open'),
-      settingsDialog.querySelector('#settings-form').querySelector('button[type="submit"]')
+      settingsDialog.querySelector('#settings-save')
     ];
 
-    if (migration) migration.hidden = !admin;
     for (const field of fields) field.disabled = !admin;
   }
 

@@ -38,7 +38,7 @@ test('报名:开窗→报名→退报→关闭只读', async ({ browser, request
     await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#signup-open').selectOption('open');
-  await admin.locator('#settings-form button[type="submit"]').click();
+  await admin.locator('#settings-save').click();
   await admin.waitForTimeout(800);
 
   /* 2. 选手进入我的比赛(会话已由换绑通道就绪) */
@@ -69,7 +69,7 @@ test('报名:开窗→报名→退报→关闭只读', async ({ browser, request
     await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#signup-open').selectOption('closed');
-  await admin.locator('#settings-form button[type="submit"]').click();
+  await admin.locator('#settings-save').click();
   await admin.waitForTimeout(800);
 
   await player.goto('/me.html#tourneys');
@@ -114,7 +114,7 @@ test('注册即选手:新手机登录无需兑码直接报名', async ({ browser
     await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#signup-open').selectOption('open');
-  await admin.locator('#settings-form button[type="submit"]').click();
+  await admin.locator('#settings-save').click();
   await admin.waitForTimeout(800);
 
   await player.goto('/me.html#tourneys');

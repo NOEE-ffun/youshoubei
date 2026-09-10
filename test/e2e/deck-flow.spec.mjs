@@ -56,7 +56,7 @@ test('国服牌组码提交:粘贴自动转官网链接入库', async ({ browser
     await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#deck-window-manual').selectOption('open');
-  await admin.locator('#settings-form button[type="submit"]').click();
+  await admin.locator('#settings-save').click();
   await admin.waitForTimeout(800);
 
   /* 选手粘贴国服牌组码(单行 input 剥换行为真实路径,fill 后点名称框触发失焦) */
@@ -128,7 +128,7 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
     await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#deck-window-manual').selectOption('open');
-  await admin.locator('#settings-form button[type="submit"]').click();
+  await admin.locator('#settings-save').click();
   await admin.waitForTimeout(800);
 
   /* ---- 5. 选手在我的对局提交卡组 ---- */
@@ -169,7 +169,7 @@ test('卡组自助提交全链路:布置→提交→隐藏→公示', async ({ b
     await admin.locator('.settings-sec[data-sec=\"signup\"]').click();
   await admin.waitForSelector('#settings-form');
   await admin.locator('#deck-window-manual').selectOption('closed');
-  await admin.locator('#settings-form button[type="submit"]').click();
+  await admin.locator('#settings-save').click();
   await admin.waitForTimeout(800);
 
   /* 公示语义对"新访客"立即生效;老页面受 60s SWR 缓存影响最多晚一分钟(已知取舍) */
