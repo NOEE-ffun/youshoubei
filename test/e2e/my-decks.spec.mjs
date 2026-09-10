@@ -18,8 +18,9 @@ test('选手中心:注册即选手,登录即见对局 tab,发码中心仍隐藏'
   /* 注册即选手:无需兑码,对局/比赛 tab 直接可见 */
   await expect(page.locator('#me-tab-decks')).toBeVisible();
   await expect(page.locator('#me-tab-codes')).toBeHidden();
-  /* 云模式 + 登录即显:侧栏「选手中心」入口可见 */
-  await expect(page.locator('#app-sidebar .side-link[data-page="me"]')).toBeVisible();
+  /* 侧栏选手中心入口已下线:个人入口收敛到侧栏底部头像钮 */
+  await expect(page.locator('#app-sidebar .side-link[data-page="me"]')).toHaveCount(0);
+  await expect(page.locator('#header-login-btn')).toBeVisible();
 });
 
 test('我的对局 API:未登录提交 401', async ({ request }) => {

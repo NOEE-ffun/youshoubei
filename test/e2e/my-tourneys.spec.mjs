@@ -79,8 +79,9 @@ test('报名:开窗→报名→退报→关闭只读', async ({ browser, request
   await expect(card3).toBeVisible();
   await expect(card3).toContainText('已报名');
   await expect(card3.locator('[data-signup]')).toHaveCount(0);
-  /* 侧栏选手中心入口可见(云模式 + 已绑选手) */
-  await expect(player.locator('#app-sidebar .side-link[data-page="me"]')).toBeVisible();
+  /* 侧栏选手中心入口已下线:个人入口收敛到侧栏底部头像钮 */
+  await expect(player.locator('#app-sidebar .side-link[data-page="me"]')).toHaveCount(0);
+  await expect(player.locator('#header-login-btn')).toBeVisible();
 
   await adminCtx.close();
   await playerCtx.close();

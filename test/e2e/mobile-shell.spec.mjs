@@ -5,7 +5,7 @@ import { ADMIN_PHONE, smsLogin, seedWorkspace, makePlayer, resetStore } from './
  * ①底栏「更多」收纳:登录/主题/管理收进弹出层,底栏不再溢出裁切(原 super 11 项宽 515px)
  * ②me#profile:.visually-hidden file 输入不得撑宽布局视口(原 409px 事故),底栏贴底
  * ③stats:分布列窄屏换行,表格回到视口内不再横溢(原 dist-pt 右缘 409 被裁)
- * ④触控目标:行内删除/职业链接 ≥44px,搜索框/职业页签 ≥37px */
+ * ④触控目标:职业链接 ≥44px,职业页签 ≥37px */
 
 test.setTimeout(60_000);
 
@@ -160,14 +160,4 @@ test('stats:分布列窄屏换行,表格不横溢,职业页签触控达标', asy
   expect(m.wsw).toBeLessThanOrEqual(m.wcw + 1);
   expect(m.maxPtRight).toBeLessThanOrEqual(m.wrapRight + 1);
   expect(m.tabH).toBeGreaterThanOrEqual(37);
-});
-
-test('触控:选手库行内删除/头像 ≥44px,搜索框 ≥37px', async ({ page }) => {
-  await page.goto('/players.html');
-  await page.waitForSelector('.row-del');
-
-  expect((await page.locator('.row-del').first().boundingBox()).height).toBeGreaterThanOrEqual(44);
-  const av = await page.locator('.avatar-btn').first().boundingBox();
-  expect(Math.min(av.width, av.height)).toBeGreaterThanOrEqual(44);
-  expect((await page.locator('.header-search input').first().boundingBox()).height).toBeGreaterThanOrEqual(37);
 });

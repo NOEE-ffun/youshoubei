@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { ADMIN_PHONE, smsLogin, seedWorkspace, resetStore, makeAdmin } from './helpers.mjs';
 
 /* 超管后台页(admin.html)E2E:
- * 1) 权限门:匿名跳登录、非 super 管理员无权提示、super 见四 tab。
+ * 1) 权限门:匿名跳登录、非 super 管理员无权提示、super 见五 tab。
  * 2) 封禁降级:封禁 → 该账号短信登录 403;解封恢复;admin 降 player 后失去码表权;
  *    账号表手机号全程脱敏,码表 usedBy(兑码者 username=手机号)渲染侧同款脱敏,
  *    整页可见文本不见完整手机号。
@@ -14,7 +14,7 @@ test.setTimeout(60_000);
 const PHONE_ADMIN = '13800002222';
 const PHONE_USER = '13800003333';
 
-test('权限门:匿名跳登录,非超管无权提示,超管四 tab 可见', async ({ page, context, browser }) => {
+test('权限门:匿名跳登录,非超管无权提示,超管五 tab 可见', async ({ page, context, browser }) => {
   await resetStore(context);
 
   /* 匿名 → 跳登录页并带 returnTo */
@@ -34,11 +34,11 @@ test('权限门:匿名跳登录,非超管无权提示,超管四 tab 可见', asy
   await pageA.close();
   await contextA.close();
 
-  /* super → 后台壳 + 四个 tab,默认审计面板可见 */
+  /* super → 后台壳 + 五个 tab,默认审计面板可见 */
   await smsLogin(context, ADMIN_PHONE);
   await page.goto('/admin.html');
   await expect(page.locator('#admin-shell')).toBeVisible();
-  for (const id of ['admin-tab-audit', 'admin-tab-users', 'admin-tab-tourneys', 'admin-tab-health']) {
+  for (const id of ['admin-tab-audit', 'admin-tab-users', 'admin-tab-tourneys', 'admin-tab-players', 'admin-tab-health']) {
     await expect(page.locator('#' + id)).toBeVisible();
   }
   await expect(page.locator('#admin-panel-audit')).toBeVisible();
@@ -173,6 +173,50 @@ test('健康与备份:健康块渲染计数,无 OSS 环境备份降级提示,非
   const restoreStatus = page.locator('#admin-restore-status');
   await expect(restoreStatus).toContainText('恢复失败');
   await expect(restoreStatus).toHaveClass(/is-danger/);
+
+  await resetStore(context);
+});
+
+test('选手面板:渲染/行内改名/无主删除 + 被绑选手删除 409 守卫', async ({ page, context, browser }) => {
+  await resetStore(context);
+  /* 第二账号:登录即自动建绑定档案(删它会被服务端 409 守卫拒) */
+  const boundCtx = await browser.newContext();
+  await smsLogin(boundCtx, '13800007777');
+  await boundCtx.close();
+
+  await smsLogin(context, ADMIN_PHONE);
+  await seedWorkspace(context, {
+    tournaments: [], series: [], activeId: null,
+    players: [{ id: 'p-e2e-free', name: 'E2E无主选手', title: '垃圾话E2E', tag: 'TAG1', tagImg: null, color: '#123456', avatar: null, createdAt: Date.now(), updatedAt: Date.now() }]
+  });
+
+  await page.goto('/admin.html#players');
+  await page.waitForSelector('#admin-players-tbody tr');
+  const row = page.locator('#admin-players-tbody tr', { hasText: 'E2E无主选手' });
+  await expect(row).toContainText('TAG1');
+  await expect(row.locator('[data-player-color]')).toHaveValue('#123456');
+
+  /* 行内改名:填新值失焦 → 状态行报已保存,API 落库 */
+  const nameInput = row.locator('[data-player-name]');
+  await nameInput.fill('E2E改名后');
+  await nameInput.blur();
+  await expect(page.locator('#admin-players-status')).toContainText('已保存');
+  const after = await (await context.request.get('/api/data')).json();
+  expect(after.players.find((p) => p.id === 'p-e2e-free').name).toBe('E2E改名后');
+
+  /* 删除被绑选手:confirm 接受 → 服务端 409,红字透出守卫文案,行仍在 */
+  const bound = (after.players || []).find((p) => p.id !== 'p-e2e-free');
+  expect(bound).toBeTruthy();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('[data-delete-player="' + bound.id + '"]').click();
+  await expect(page.locator('#admin-players-status')).toContainText('仍被账号绑定');
+  await expect(page.locator('#admin-players-tbody tr', { hasText: bound.name })).toHaveCount(1);
+
+  /* 删除无主选手:行消失 */
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('[data-delete-player="p-e2e-free"]').click();
+  await expect(page.locator('#admin-players-status')).toContainText('已删除');
+  await expect(page.locator('#admin-players-tbody tr', { hasText: 'E2E改名后' })).toHaveCount(0);
 
   await resetStore(context);
 });
