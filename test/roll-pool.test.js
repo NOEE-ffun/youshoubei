@@ -93,3 +93,66 @@ assert.equal(Object.keys(rm.outlets).length, 3, '手动同构');
 const r5 = M.autoAssign(seats, { lr: 2, tb: 1 }, new Set(), 'S1');
 assert.equal(r5.unassigned.length, 4, '无已连接口全留池');
 console.log('roll-pool task2 ok');
+
+/* ---- Task 3: resolveCanvas ---- */
+// 上游比赛卡 m0(P1 胜)败者线 → 池位;池 outlets → 下游 m1/m2
+const flowCanvas = { cards: [
+  { id: 'm0', label: 'A', format: 'BO3', x: 0, y: 0, slots: [{ type: 'player', playerId: 'P1' }, { type: 'player', playerId: 'P2' }] },
+  { kind: 'rollPool', id: 'p1', label: '池', x: 2, y: 0, ports: { lr: 2, tb: 0 }, mode: 'auto', seed: 'S1',
+    slots: [
+      { type: 'flow', cardId: 'm0', outcome: 'loser', inlet: 'L1' },
+      { type: 'player', playerId: 'P9' }
+    ] },
+  { id: 'm1', slots: [{ type: 'flow', cardId: 'p1', outlet: 'R1' }, { type: 'empty' }] },
+  { id: 'm2', slots: [{ type: 'flow', cardId: 'p1', outlet: 'R2' }, { type: 'empty' }] }
+] };
+const scores = { m0: { a: 2, b: 0 } };
+const res = M.resolveCanvas(flowCanvas, [], scores);
+const rp = res.cards.find((c) => c.id === 'p1');
+assert.equal(rp.kind, 'rollPool');
+assert.deepEqual(rp.seats, ['P2', 'P9'], '池位解析:上游败者+手动位');
+assert.equal(Object.keys(rp.outlets).length, 2, '两个已连接口各发 1 人');
+assert.equal(new Set(Object.values(rp.outlets)).size, 2, '发出去的人不重复');
+assert.ok(['P2', 'P9'].includes(rp.outlets.R1) && ['P2', 'P9'].includes(rp.outlets.R2), '口上的人来自池内');
+const rm1 = res.cards.find((c) => c.id === 'm1');
+assert.ok(['P2', 'P9'].includes(rm1.a), '下游 outlet 解析拿到池发的人');
+assert.equal(res.cards.find((c) => c.id === 'm0').kind, 'match', '比赛卡 resolved 带 kind');
+
+// 确定性重放
+const res2 = M.resolveCanvas(flowCanvas, [], scores);
+assert.deepEqual(res2.cards.find((c) => c.id === 'p1').outlets, rp.outlets, '自动模式解析可重放');
+
+// 手动模式快照定格:上游换人(改分)不重算
+flowCanvas.cards[1].mode = 'manual';
+flowCanvas.cards[1].assignments = { R1: 'P2', R2: 'P9' };
+const res3 = M.resolveCanvas(flowCanvas, [], { m0: { a: 0, b: 2 } });
+const rp3 = res3.cards.find((c) => c.id === 'p1');
+assert.deepEqual(rp3.seats, ['P1', 'P9'], '上游换人后池位变化');
+assert.equal(rp3.outlets.R1, 'P2', '手动快照不重算');
+assert.deepEqual(rp3.staleOutlets, ['R1'], '快照中不在池内的人标过期');
+assert.equal(res3.cards.find((c) => c.id === 'm1').a, 'P2', '下游按快照取人');
+
+// deriveRoster/entryCards
+const roster = M.deriveRoster(flowCanvas);
+assert.ok(roster.includes('P9'), 'roll 池 player 槽进名单');
+
+// autoFillEntries:roll 池按空池位填
+const fillCanvas = { cards: [
+  { kind: 'rollPool', id: 'p2', slots: [{ type: 'player', playerId: 'PX' }, { type: 'empty' }, { type: 'empty' }] }
+] };
+const filled = M.autoFillEntries(fillCanvas, ['P1', 'P2', 'P3'], () => 0.5);
+assert.equal(filled, 2, '只填 2 个空池位');
+assert.equal(fillCanvas.cards[0].slots[0].playerId, 'PX', '手动位不动');
+
+// 环:池位引用下游、下游引用池出口 → cycle 标记不崩
+// (现有 visiting 机制只标被重入的卡,比赛卡 2 环同语义:m8:true m9:false)
+const cycCanvas = { cards: [
+  { kind: 'rollPool', id: 'p3', ports: { lr: 1, tb: 0 }, seed: 'S', mode: 'auto',
+    slots: [{ type: 'flow', cardId: 'm9', outlet: 'R1' }] },
+  { id: 'm9', slots: [{ type: 'flow', cardId: 'p3', outlet: 'R1' }, { type: 'empty' }] }
+] };
+const cyc = M.resolveCanvas(cycCanvas, [], {});
+assert.equal(cyc.cards.length, 2, '环不崩:两卡 resolved 对象齐全');
+assert.ok(cyc.cards.some((c) => c.cycle === true), '环被检测标记');
+assert.equal(cyc.cards.find((c) => c.id === 'p3').cycle, true, '池卡在环上被标记');
+console.log('roll-pool task3 ok');

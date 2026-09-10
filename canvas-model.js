@@ -470,21 +470,35 @@ function rollManual(seats, ports, connectedOutlets, rng) {
   }
 
   /* 报名自动填入:ids 为入选名单(调用方已按报名顺序截取),
-   * Fisher-Yates 洗牌后覆盖所有入场卡的两个槽,人数不足留空、多余清空。
+   * Fisher-Yates 洗牌后按入场卡容量填入——比赛卡固定 2 槽整体覆盖
+   * (人数不足留空、多余清空),roll 池按空池位逐个补、手动位不动。
    * rng 可注入(测试确定性)。返回实际填入人数。 */
   function autoFillEntries(canvas, ids, rng) {
     const rand = typeof rng === 'function' ? rng : Math.random;
     const list = (Array.isArray(ids) ? ids : []).filter((id) => typeof id === 'string');
-    for (let i = list.length - 1; i > 0; i--) {
+    for (let i = list.length - 1; i > 0; i -= 1) {
       const j = Math.floor(rand() * (i + 1));
       const t = list[i]; list[i] = list[j]; list[j] = t;
     }
-    const capacity = entryCards(canvas).length * 2;
+    const entries = entryCards(canvas);
+    let capacity = 0;
+    for (const card of entries) {
+      capacity += card.kind === 'rollPool'
+        ? (card.slots || []).filter((s) => !s || s.type === 'empty').length
+        : 2;
+    }
     let k = 0;
-    for (const card of entryCards(canvas)) {
-      card.slots = [0, 1].map(() => (k < list.length
-        ? { type: 'player', playerId: list[k++] }
-        : { type: 'empty' }));
+    for (const card of entries) {
+      if (card.kind === 'rollPool') {
+        card.slots = (card.slots || []).map((s) =>
+          ((!s || s.type === 'empty') && k < list.length)
+            ? { type: 'player', playerId: list[k++] }
+            : (s || { type: 'empty' }));
+      } else {
+        card.slots = [0, 1].map(() => (k < list.length
+          ? { type: 'player', playerId: list[k++] }
+          : { type: 'empty' }));
+      }
     }
     return Math.min(k, capacity);
   }
@@ -623,6 +637,7 @@ function arrowDefs(prefix) {
     if (played) state = 'finished';
     if (!a || !b) state = 'waiting';
     return {
+      kind: 'match',
       id: card.id,
       label: card.label,
       phase: card.phase,
@@ -645,8 +660,52 @@ function arrowDefs(prefix) {
     };
   }
 
+  /* roll 池 resolved:手动模式 assignments 快照优先(快照中不在池内的人标
+   * staleOutlets 只提醒不重排),auto 或无快照走 autoAssign 确定性分配。 */
+  function buildResolvedPool(card, seats, connected) {
+    let outlets = {};
+    let unassigned = seats.filter(Boolean);
+    const staleOutlets = [];
+    if (card.mode === 'manual' && card.assignments && typeof card.assignments === 'object') {
+      const inPool = new Set(seats.filter(Boolean));
+      for (const entry of Object.entries(card.assignments)) {
+        outlets[entry[0]] = entry[1];
+        if (!inPool.has(entry[1])) staleOutlets.push(entry[0]);
+      }
+      const assigned = new Set(Object.values(card.assignments));
+      unassigned = seats.filter((p) => p && !assigned.has(p));
+    } else {
+      const r = autoAssign(seats, card.ports, connected, card.seed);
+      outlets = r.outlets;
+      unassigned = r.unassigned;
+    }
+    return {
+      kind: 'rollPool',
+      id: card.id,
+      label: card.label,
+      phase: card.phase,
+      x: card.x,
+      y: card.y,
+      w: card.w,
+      h: card.h,
+      ports: card.ports,
+      mode: card.mode,
+      seats,
+      outlets,
+      unassigned,
+      staleOutlets,
+      state: Object.keys(outlets).length ? 'rolled' : 'waiting',
+      cycle: false
+    };
+  }
+
   function resolveCanvas(canvas, roster, scores) {
     const norm = normalizeCanvas(canvas);
+    /* roll 池已连接出口预收集(分配候选 = 出口全序 ∩ 已连接) */
+    const connectedByPool = new Map();
+    for (const card of norm.cards) {
+      if (card.kind === 'rollPool') connectedByPool.set(card.id, collectConnectedOutlets(norm, card.id));
+    }
     const byId = new Map(norm.cards.map((c) => [c.id, c]));
     const resolvedMap = new Map();
     const visiting = new Set();
@@ -660,6 +719,7 @@ function arrowDefs(prefix) {
         const source = resolveCard(slot.cardId);
         if (!source) return null;
         if (source.cycle) cycleIds.add(source.id);
+        if (source.kind === 'rollPool') return (slot.outlet && source.outlets[slot.outlet]) || null;
         if (slot.outcome === 'winner') return source.winner;
         if (slot.outcome === 'loser') return source.loser;
         return null;
@@ -677,6 +737,13 @@ function arrowDefs(prefix) {
         return null;
       }
       visiting.add(id);
+      if (card.kind === 'rollPool') {
+        const seats = (card.slots || []).map(resolveSlot);
+        visiting.delete(id);
+        const resolvedPool = buildResolvedPool(card, seats, connectedByPool.get(id) || new Set());
+        resolvedMap.set(id, resolvedPool);
+        return resolvedPool;
+      }
       const a = resolveSlot(card.slots[0]);
       const b = resolveSlot(card.slots[1]);
       const result = getResult(scores && scores[id]);
