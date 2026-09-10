@@ -5579,3 +5579,17 @@ body.list-dragging .ov-t-group.drop-target > h3 {
   border-color: var(--accent);
   box-shadow: var(--focus-ring);
 }
+
+/* ---------- 批量编辑(多选抽屉批量表单 bf-* / 列表组头「编辑本组」) ---------- */
+/* 四区块以细分隔线隔开(口径同 .cf-section + .cf-section);「应用」勾选行 = 区块开关,未勾不动该字段 */
+.bf-section { padding: 10px 0; border-bottom: 1px solid var(--border, #e5e7eb); }
+.bf-apply { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 6px; }
+.bf-actions { padding: 12px 0 4px; }
+.bf-actions .bf-apply-btn { width: 100%; }
+.bf-title-preview { min-height: 1.2em; }
+/* 禁卡表勾选容器:布局同 .cf-banlists 的自动换列网格(面板窄,常为单列) */
+.bf-banlists { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 14px; }
+
+/* 组头「编辑本组」按钮右对齐:编辑态组头 h2 已是 flex(body.list-editing .list-group h2),
+ * auto margin 推至行尾不挤组名;flex:none 防超长组名把按钮压扁换行 */
+.list-group-edit { margin-inline-start: auto; flex: none; }
