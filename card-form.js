@@ -200,7 +200,7 @@
     renderClassLinkRows(container, card, eff || {});
   }
 
-  function readClassLinkGroup(container, listCls) {
+  function readClassLinkGroup(container, listCls, lenient) {
     const list = container.querySelector(listCls);
     const out = [];
     let invalid = 0;
@@ -211,8 +211,9 @@
       const text = row.querySelector('.cl-text').value.trim().slice(0, 60);
       if (cls && (url || text)) {
         out.push({ cls, url, text });
-      } else if (cls || url || text) {
-        /* 选了职业没内容,或填了内容没选职业:不完整行 */
+      } else if ((cls || url || text) && !lenient) {
+        /* 选了职业没内容,或填了内容没选职业:不完整行。宽容读取(lenient,
+         * 抽屉收口用)按行级丢弃不计 invalid,一行中间态不整体拒绝其余字段 */
         invalid += 1;
       }
     });
@@ -224,10 +225,13 @@
   /* 读取校验:有不完整职业行时返回 {invalid:N>0, data:null};否则
    * data={label,phase,format,deckCount,slotAValue,slotBValue,flowOutcomeA,
    *       flowOutcomeB,rankWinner,rankLoser,groupA,groupB}
-   * groupX={links:[{cls,url,text}], fill:'own'|'inherited', unchangedInherited:bool} */
-  function read(container) {
-    const ga = readClassLinkGroup(container, '.cf-cl-a');
-    const gb = readClassLinkGroup(container, '.cf-cl-b');
+   * groupX={links:[{cls,url,text}], fill:'own'|'inherited', unchangedInherited:bool}
+   * opts.lenient(抽屉收口路径专用):不完整职业行按行级丢弃、恒返回 data——
+   * 换卡/收抽屉/防抖到点时宽容落盘已完整字段;弹窗保存仍走严格模式拦下提示 */
+  function read(container, opts) {
+    const lenient = Boolean(opts && opts.lenient);
+    const ga = readClassLinkGroup(container, '.cf-cl-a', lenient);
+    const gb = readClassLinkGroup(container, '.cf-cl-b', lenient);
     const invalid = ga.invalid + gb.invalid;
     if (invalid > 0) return { invalid, data: null };
     const deckCount = Number(container.querySelector('.cf-deck-count').value);

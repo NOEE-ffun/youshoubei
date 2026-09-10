@@ -130,12 +130,20 @@ let listActive = false;
      * 永不落盘(幽灵编辑,重载即丢);只有撤销/重做真正发生才取消 */
     if (!snap) return false;
     cancelPanelCommit();
-    applySnapshot(snap);
-    /* 还原后的卡片集可能不含当前选择:先清选择再重绘 */
-    batchSelected.clear();
-    selectedCardId = null;
-    dirty = true;
-    refreshToolbarUI();
+    /* 还原期间的清选择会经 refreshToolbarUI→syncPanel→hidePanel 走收口:此刻
+     * 面板表单还是还原前的旧值,宽容收口若回写会把刚还原的状态又改回去(撤销
+     * 看似失效)并再入一步空历史。表单随抽屉收起作废,重开时按还原后数据重填 */
+    panelRestoring = true;
+    try {
+      applySnapshot(snap);
+      /* 还原后的卡片集可能不含当前选择:先清选择再重绘 */
+      batchSelected.clear();
+      selectedCardId = null;
+      dirty = true;
+      refreshToolbarUI();
+    } finally {
+      panelRestoring = false;
+    }
     saveCanvas().then(() => {
       requestRender();
       refreshToolbarUI();
@@ -1354,6 +1362,9 @@ let listActive = false;
   let panelCardId = null;
   let panelBeforeSnapshot = null;
   let panelCommitTimer = null;
+  /* 撤销/重做还原进行中(restoreHistory 同步段):面板表单停在还原前旧值,
+   * 收口不得把它宽容回写到刚还原的数据上 */
+  let panelRestoring = false;
   /* 防重入守卫:syncPanel→flushPanelCommit→commitHistory→refreshToolbarUI→syncPanel
    * 链路里嵌套的 syncPanel 一律跳过(外层那一帧会完成完整同步) */
   let panelSyncing = false;
@@ -1461,21 +1472,38 @@ let listActive = false;
     }, PANEL_CLOSE_MS);
   }
 
+  /* 收口提交:防抖到点/换卡/收抽屉三路共用。收口全程置 panelFlushing:收口内的
+   * 宽容应用与 commitHistory 都会经 refreshToolbarUI→syncPanel 同步重入本函数
+   * (hidePanel 分支),若不拦,重入的宽容应用会重置刚清掉的待提交快照,
+   * commitHistory 再触发下一层重入——无限递归;重入时外层收口已完成全部工作 */
+  let panelFlushing = false;
+
   function flushPanelCommit() {
+    if (panelFlushing) return;
+    if (panelRestoring) return;
     if (panelCommitTimer) {
       clearTimeout(panelCommitTimer);
       panelCommitTimer = null;
     }
-    const pre = panelBeforeSnapshot;
-    if (!pre) return;
-    /* 先清再提交:commitHistory 会经 refreshToolbarUI 重入 syncPanel,
-     * 重入路径(flushPanelCommit/hidePanel)须看到"无待提交"才不会二次入栈 */
-    panelBeforeSnapshot = null;
-    commitHistory(pre);
-    saveCanvas().then(() => {
-      requestRender();
-      highlightSelected();
-    });
+    panelFlushing = true;
+    try {
+      /* 宽容收口:实时应用被职业行中间态整体跳过期间,已完成编辑只存在于表单
+       * (panelBeforeSnapshot 未置位,直接提交会静默全丢)。收口前按 lenient 读
+       * 取补一次应用:不完整职业行按行级丢弃,其余已完整字段照常写回落盘 */
+      applyPanelEdits({ flush: true });
+      const pre = panelBeforeSnapshot;
+      if (!pre) return;
+      /* 先清再提交:commitHistory 会经 refreshToolbarUI 重入 syncPanel,
+       * 重入路径(flushPanelCommit/hidePanel)须看到"无待提交"才不会二次入栈 */
+      panelBeforeSnapshot = null;
+      commitHistory(pre);
+      saveCanvas().then(() => {
+        requestRender();
+        highlightSelected();
+      });
+    } finally {
+      panelFlushing = false;
+    }
   }
 
   /* 撤销/重做不 flush 面板待提交项:restoreHistory 自带整体快照交换,
@@ -1488,8 +1516,12 @@ let listActive = false;
     panelBeforeSnapshot = null;
   }
 
-  /* 实时应用:读→写回→重绘;防抖落盘,首改快照合并撤销步;按卡型分流读写 */
-  function applyPanelEdits() {
+  /* 实时应用:读→写回→重绘;防抖落盘,首改快照合并撤销步;按卡型分流读写。
+   * opts.flush(收口专用,事件监听器传入的 Event 无此字段恒为 false):读取走
+   * lenient——不完整职业行按行级丢弃而非整体拒绝,且不再排防抖(收口马上提交,
+   * 再排会变成收口后的二次提交循环) */
+  function applyPanelEdits(opts) {
+    const flush = Boolean(opts && opts.flush);
     const card = panelCardId && findCard(panelCardId);
     const body = document.getElementById('card-panel-body');
     if (!card || !body) return;
@@ -1505,7 +1537,7 @@ let listActive = false;
         return;
       }
     } else {
-      const read = CardForm.read(body);
+      const read = CardForm.read(body, { lenient: flush });
       if (read.invalid > 0 || !read.data) return; /* 输入中间态:跳过,不弹提示 */
       if (!panelBeforeSnapshot) panelBeforeSnapshot = snapshotState();
       CardForm.applyToCard(card, read.data);
@@ -1516,8 +1548,10 @@ let listActive = false;
     highlightSelected();
     const tag = document.getElementById('card-panel-label');
     if (tag) tag.textContent = card.label || card.id;
-    if (panelCommitTimer) clearTimeout(panelCommitTimer);
-    panelCommitTimer = setTimeout(flushPanelCommit, 500);
+    if (!flush) {
+      if (panelCommitTimer) clearTimeout(panelCommitTimer);
+      panelCommitTimer = setTimeout(flushPanelCommit, 500);
+    }
   }
 
   function bindPanelEvents(body) {
