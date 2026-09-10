@@ -1221,6 +1221,8 @@
       if (!kind) {
         if (btn.id === 'edit-delete-selected-btn') {
           CanvasEditor.deleteSelected();
+        } else if (btn.id === 'edit-add-pool-btn') {
+          CanvasEditor.addPoolCard();
         }
         return;
       }

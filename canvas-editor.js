@@ -3,7 +3,7 @@
 
   const { save, notify, uiConfirm, debounce } = window.TournamentUtils;
   /* 画布几何唯一真源在 canvas-model.js */
-  const { DOT, PORT_NORMALS, edgePath, arrowDefs } = window.CanvasModel;
+  const { DOT, edgePath, arrowDefs } = window.CanvasModel;
 
   const MIN_SCALE = 0.05;
   const FIT_MIN_SCALE = 0.28;
@@ -732,11 +732,14 @@ let listActive = false;
     if (!active) return;
     const node = event.target.closest('.port-node');
     if (node && tool !== 'delete') {
-      /* 白板连接点:上排拖出=胜者,下排拖出=败者;入侧落点再定 A/B 位 */
+      /* 白板连接点:比赛卡上排拖出=胜者、下排=败者(入侧落点再定 A/B 位);
+       * roll 池口拖出=出口引用,源记 sourceOutlet、不再定 outcome */
       event.preventDefault();
+      const poolPort = node.dataset.kind === 'pool' ? node.dataset.port : null;
       connectState = {
         sourceCardId: node.dataset.card,
-        outcome: node.dataset.band === 'lower' ? 'loser' : 'winner',
+        outcome: poolPort ? null : (node.dataset.band === 'lower' ? 'loser' : 'winner'),
+        sourceOutlet: poolPort,
         sourcePortEl: node
       };
       ensureTempLine();
@@ -864,14 +867,20 @@ let listActive = false;
       if (node && node.dataset.card) {
         const targetCard = findCard(node.dataset.card);
         if (targetCard) {
-          /* 落点上排 → A 位(slot0),下排 → B 位(slot1) */
-          const slotIndex = node.dataset.band === 'lower' ? 1 : 0;
+          const fromPool = Boolean(connectState.sourceOutlet);
           commitHistory();
-          targetCard.slots[slotIndex] = {
-            type: 'flow',
-            cardId: connectState.sourceCardId,
-            outcome: connectState.outcome
-          };
+          if (targetCard.kind === 'rollPool') {
+            /* 落点是 roll 池口:追加一个池位,inlet 记录线落在哪个口(渲染锚点) */
+            targetCard.slots.push(fromPool
+              ? { type: 'flow', cardId: connectState.sourceCardId, outlet: connectState.sourceOutlet, inlet: node.dataset.port }
+              : { type: 'flow', cardId: connectState.sourceCardId, outcome: connectState.outcome, inlet: node.dataset.port });
+          } else {
+            /* 比赛卡落点:上排 → A 位(slot0),下排 → B 位(slot1);源是池口则记出口引用 */
+            const slotIndex = node.dataset.band === 'lower' ? 1 : 0;
+            targetCard.slots[slotIndex] = fromPool
+              ? { type: 'flow', cardId: connectState.sourceCardId, outlet: connectState.sourceOutlet }
+              : { type: 'flow', cardId: connectState.sourceCardId, outcome: connectState.outcome };
+          }
           saveCanvas().then(() => {
             requestRender();
           });
@@ -1136,6 +1145,22 @@ let listActive = false;
     saveCanvas().then(() => {
       requestRender();
       highlightSelected();
+    });
+  }
+
+  /* 工具栏「添加 roll 池」:视口中心落卡。世界坐标 = DOM 中心按缩放换算 + 渲染原点 */
+  function addPoolCard() {
+    const rec = currentRecord();
+    if (!rec || !rec.canvas) return;
+    const rect = board().getBoundingClientRect();
+    const x = Math.round(rect.width / 2 / (DOT * scale)) + renderOrigin.x;
+    const y = Math.round(rect.height / 2 / (DOT * scale)) + renderOrigin.y;
+    const card = CanvasModel.createRollPoolCard(x, y);
+    commitHistory();
+    rec.canvas.cards.push(card);
+    setSelection([card.id]);
+    saveCanvas().then(() => {
+      requestRender();
     });
   }
 
@@ -1537,8 +1562,10 @@ let listActive = false;
     const r = el.getBoundingClientRect();
     const p1 = { x: r.left - rect.left + r.width / 2, y: r.top - rect.top + r.height / 2 };
     const p2 = { x: x - rect.left, y: y - rect.top };
-    /* 源端法线 = 出发连接点方位;末端尚无连接点,取 start→end 主轴方向作进入方向 */
-    const n1 = PORT_NORMALS[el.dataset.port] || [1, 0];
+    /* 源端法线 = 出发连接点方位:roll 池口按卡形状取四侧外法线,比赛卡回八点法线表
+     * (卡对象拿不到时 portNormalForCard 内部同旧回落 PORT_NORMALS);末端尚无
+     * 连接点,取 start→end 主轴方向作进入方向 */
+    const n1 = CanvasModel.portNormalForCard(findCard(el.dataset.card), el.dataset.port);
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
     const n2 = Math.abs(dx) >= Math.abs(dy) ? [Math.sign(dx) || 1, 0] : [0, Math.sign(dy) || 1];
@@ -1588,6 +1615,7 @@ let listActive = false;
     exitList,
     enterCanvas,
     addCard,
+    addPoolCard,
     deleteSelected,
     getSelectedIds: selectedIds,
     editCard: openCardDialog,
