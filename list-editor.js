@@ -2,7 +2,8 @@
   'use strict';
 
   /* 列表视图编辑器:编辑态生命周期(body.list-editing)、行选择与卡片设置抽屉、
-   * 拖拽排序(阶段整块 / 单场重排与跨阶段)。数据与编辑核心(选择/历史/面板/删除)
+   * 拖拽排序(阶段整块 / 单场重排与跨阶段)、组头「编辑本组」批量入口(置画布
+   * 选中集,抽屉自动切批量形态)。数据与编辑核心(选择/历史/面板/删除)
    * 全部经 CanvasEditor 共享——本模块只做列表侧 DOM 交互,不直接改 record:
    * 排序经 CanvasModel.listGroups/applyListOrder + CanvasEditor.commitListChange。 */
 
@@ -22,6 +23,7 @@
 
   function enter() {
     document.body.classList.add('list-editing');
+    bindGroupEdit();
     window.ListView.render();
     syncSelection();
   }
@@ -132,6 +134,36 @@
     } else if (!row && !event.target.closest('.list-group h2')) {
       window.CanvasEditor.setSelection([]);
     }
+  }
+
+  /* ---------- 组级批量编辑入口 ---------- */
+
+  /* 组头「编辑本组」按钮:选中集 = 组内全部卡,复用画布选中集——抽屉双形态自然切
+   * 批量表单(选中 ≥2 张);组内不足 2 张提示不开抽屉(单卡组点行走单卡更自然)。
+   * 容器级委托挂 enter(bound 防重,重复 enter 不叠加):渲染只重建 innerHTML,
+   * 挂在 #list-body 自身的监听不受影响;按钮在 pointerdown 与既有 click 委托中
+   * 均被 button 早退排除,不与拖拽/点空白清选择打架 */
+  let groupEditBound = false;
+
+  function onGroupEditClick(event) {
+    if (!isEditing()) return;
+    const btn = event.target.closest('.list-group-edit');
+    if (!btn) return;
+    const record = window.TournamentApp.current;
+    const group = record && record.canvas
+      ? CanvasModel.listGroups(record.canvas.cards).find((g) => g.key === btn.dataset.editGroup)
+      : null;
+    const ids = ((group && group.cards) || []).map((c) => c.id);
+    if (ids.length >= 2) window.CanvasEditor.setSelection(ids);
+    else window.TournamentUtils.notify('组内不足 2 张卡片', 'danger');
+  }
+
+  function bindGroupEdit() {
+    if (groupEditBound) return;
+    const el = body();
+    if (!el) return;
+    groupEditBound = true;
+    el.addEventListener('click', onGroupEditClick);
   }
 
   /* ---------- 拖拽排序 ----------

@@ -5,7 +5,8 @@
    * 按阶段分组,列序 = 赛制 | 标题 | 对阵(比分并入) | 状态 | 卡组(有效继承,图标可点);
    * roll 池卡走 poolListRow 分流:format 列显示口数、vs 列显示池位选手摘要;
    * 编辑态由 body.list-editing 标记(置位/交互在 list-editor.js):行加 data-match、
-   * 拖拽手柄格与组头手柄;染色行带 data-tint 与 --list-tint(与画布 card.color 同源)。
+   * 拖拽手柄格与组头手柄、组头「编辑本组」按钮(组级批量入口,绑定在 list-editor.js);
+   * 染色行带 data-tint 与 --list-tint(与画布 card.color 同源)。
    * 视图显隐由 bracket.js 的 body[data-view] 管理,列表视图隐藏赛事背景图由 CSS 负责;
    * 本模块只渲染 #list-body,渲染结束派发 ts:list-render(list-editor 借此重挂编辑态)。 */
 
@@ -150,6 +151,9 @@
       (editing ? '<span class="list-handle" data-drag-handle aria-hidden="true">' +
         '<img class="icon" src="icons/drag_indicator.svg" alt=""></span>' : '') +
       escapeHtml(g.key === '__other__' ? '其他' : g.phase) +
+      (editing ? '<button type="button" class="btn btn-ghost btn-sm list-group-edit" data-edit-group="' +
+        escapeHtml(g.key) + '" title="批量编辑本组全部卡片">' +
+        '<img class="icon" src="icons/edit.svg" alt="">编辑本组</button>' : '') +
       '</h2>' +
       g.cards.map((card) => {
         const m = resolvedById.get(card.id);
