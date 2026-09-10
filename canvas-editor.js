@@ -1242,6 +1242,10 @@ let listActive = false;
 
   /* ---------- 卡片属性弹窗 ---------- */
 
+  /* 弹窗底部的连线提示按卡型切换(比赛卡原文;roll 池讲口拖出与口数守卫) */
+  const MATCH_DIALOG_HINT = '连线:从连接点拖出箭头,拖到目标卡片连接点松手。上排连接点默认输出胜者、接入 A 位,下排默认输出败者、接入 B 位,均可在上面下拉中自定义。';
+  const POOL_DIALOG_HINT = '连线:从池口拖出箭头接到目标卡片或另一池;池位里的「来自 ×××」为连线位,换源请在画布上重连。缩减口数不得拆掉已连线的出口(先拆线再缩口)。';
+
   function buildCardDialog() {
     if (cardDialog) return;
     cardDialog = document.createElement('dialog');
@@ -1253,8 +1257,10 @@ let listActive = false;
       '  <button type="button" class="btn btn-ghost btn-sm" data-card-close>关闭</button>' +
       '</div>' +
       '<div class="dialog-body">' +
-      CardForm.fieldsHtml() +
-      '  <p class="hint">连线:从连接点拖出箭头,拖到目标卡片连接点松手。上排连接点默认输出胜者、接入 A 位,下排默认输出败者、接入 B 位,均可在上面下拉中自定义。</p>' +
+      /* 表单字段挂载点:openCardDialog 按卡型(比赛卡 / roll 池)注入 fieldsHtml 系 */
+      '<div class="cf-fields"></div>' +
+      /* 专用类名区别于表单内的 banlist hint(同样是 hint 样式),按卡型切换文案 */
+      '  <p class="hint cf-dialog-hint"></p>' +
       '  <div class="dialog-actions">' +
       '    <button type="button" class="btn btn-secondary" data-card-close>取消</button>' +
       '    <button type="button" class="btn btn-primary" data-card-save>' + (window.TournamentUtils ? window.TournamentUtils.iconMarkup('save', '保存') : '') + '保存</button>' +
@@ -1288,24 +1294,43 @@ let listActive = false;
     dialogBeforeSnapshot = snapshotState();
     const record = currentRecord();
     const effOf = (c) => (record && CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {}).get(c.id)) || {};
-    const flowSourceLabels = { a: '', b: '' };
-    const slotA = card.slots && card.slots[0];
-    const slotB = card.slots && card.slots[1];
-    if (slotA && slotA.type === 'flow') flowSourceLabels.a = flowSourceLabel(slotA.cardId);
-    if (slotB && slotB.type === 'flow') flowSourceLabels.b = flowSourceLabel(slotB.cardId);
-    CardForm.fill(cardDialog, card, effOf(card), flowSourceLabels);
+    /* 表单按卡型分流:roll 池走池专属表单(形状/口数/模式/池位/池位职业组) */
+    const isPool = card.kind === 'rollPool';
+    const fields = cardDialog.querySelector('.cf-fields');
+    if (fields) fields.innerHTML = isPool ? CardForm.fieldsHtmlPool() : CardForm.fieldsHtml();
+    const hint = cardDialog.querySelector('.cf-dialog-hint');
+    if (hint) hint.textContent = isPool ? POOL_DIALOG_HINT : MATCH_DIALOG_HINT;
+    if (isPool) {
+      CardForm.fillPool(cardDialog, card, effOf(card), flowLabelsPool(card));
+    } else {
+      const flowSourceLabels = { a: '', b: '' };
+      const slotA = card.slots && card.slots[0];
+      const slotB = card.slots && card.slots[1];
+      if (slotA && slotA.type === 'flow') flowSourceLabels.a = flowSourceLabel(slotA.cardId);
+      if (slotB && slotB.type === 'flow') flowSourceLabels.b = flowSourceLabel(slotB.cardId);
+      CardForm.fill(cardDialog, card, effOf(card), flowSourceLabels);
+    }
     cardDialog.showModal();
   }
 
   function saveCardDialog() {
     const card = findCard(editingCardId);
     if (!card) return;
-    const { invalid, data } = CardForm.read(cardDialog);
-    if (invalid > 0) {
-      notify('有 ' + invalid + ' 行职业链接不完整(职业与链接/悬停文字需成对填写),请补全或清空该行', 'danger');
-      return;
+    if (card.kind === 'rollPool') {
+      const poolData = CardForm.readPool(cardDialog);
+      /* 守卫不过:提示并保持弹窗打开,数据不动不落盘 */
+      if (!CardForm.applyToCardPool(card, poolData, currentRecord().canvas)) {
+        notify('该口数会拆掉已连线的出口,先拆线', 'danger');
+        return;
+      }
+    } else {
+      const { invalid, data } = CardForm.read(cardDialog);
+      if (invalid > 0) {
+        notify('有 ' + invalid + ' 行职业链接不完整(职业与链接/悬停文字需成对填写),请补全或清空该行', 'danger');
+        return;
+      }
+      CardForm.applyToCard(card, data);
     }
-    CardForm.applyToCard(card, data);
     /* 真有改动才入历史(打开又原样保存不产生空撤销步) */
     if (dialogBeforeSnapshot) {
       if (JSON.stringify(snapshotState()) !== JSON.stringify(dialogBeforeSnapshot)) {
@@ -1352,6 +1377,15 @@ let listActive = false;
     return labels;
   }
 
+  /* roll 池连线来源可读名:按池位下标 {s0,s1,...}(fillPool 的取法,池位数不定) */
+  function flowLabelsPool(card) {
+    const labels = {};
+    (card.slots || []).forEach((slot, i) => {
+      if (slot && slot.type === 'flow') labels['s' + i] = flowSourceLabel(slot.cardId);
+    });
+    return labels;
+  }
+
   /* 唯一显隐同步点:refreshToolbarUI 每次选择变化后调用 */
   function syncPanel() {
     if (panelSyncing) return;
@@ -1374,12 +1408,20 @@ let listActive = false;
         el.hidden = false;
         document.body.classList.add('card-panel-open');
         const body = document.getElementById('card-panel-body');
-        if (!body.dataset.built) {
-          body.innerHTML = CardForm.fieldsHtml();
+        /* 表单按卡型分流:换型(比赛卡 ↔ roll 池)时重建;事件绑定只挂一次
+         * (bindRowDeletion/bindPanelEvents 均为容器级委托,重建 innerHTML 不失效) */
+        const isPool = card.kind === 'rollPool';
+        if (!body.dataset.built || body.dataset.pool !== (isPool ? '1' : '0')) {
+          body.innerHTML = isPool ? CardForm.fieldsHtmlPool() : CardForm.fieldsHtml();
           body.dataset.built = '1';
-          bindPanelEvents(body);
+          body.dataset.pool = isPool ? '1' : '0';
+          if (!body.dataset.bound) {
+            body.dataset.bound = '1';
+            bindPanelEvents(body);
+          }
         }
-        CardForm.fill(body, card, effLinksOf(card), flowLabelsOf(card));
+        if (isPool) CardForm.fillPool(body, card, effLinksOf(card), flowLabelsPool(card));
+        else CardForm.fill(body, card, effLinksOf(card), flowLabelsOf(card));
       }
     } finally {
       panelSyncing = false;
@@ -1446,15 +1488,27 @@ let listActive = false;
     panelBeforeSnapshot = null;
   }
 
-  /* 实时应用:读→写回→重绘;防抖落盘,首改快照合并撤销步 */
+  /* 实时应用:读→写回→重绘;防抖落盘,首改快照合并撤销步;按卡型分流读写 */
   function applyPanelEdits() {
     const card = panelCardId && findCard(panelCardId);
     const body = document.getElementById('card-panel-body');
     if (!card || !body) return;
-    const read = CardForm.read(body);
-    if (read.invalid > 0 || !read.data) return; /* 输入中间态:跳过,不弹提示 */
-    if (!panelBeforeSnapshot) panelBeforeSnapshot = snapshotState();
-    CardForm.applyToCard(card, read.data);
+    if (card.kind === 'rollPool') {
+      const poolData = CardForm.readPool(body);
+      /* 先抓快照再写回;守卫不过时还原快照位(无改动不入空历史步),提示且不写 */
+      const hadSnapshot = panelBeforeSnapshot;
+      if (!panelBeforeSnapshot) panelBeforeSnapshot = snapshotState();
+      if (!CardForm.applyToCardPool(card, poolData, currentRecord().canvas)) {
+        panelBeforeSnapshot = hadSnapshot;
+        notify('该口数会拆掉已连线的出口,先拆线', 'danger');
+        return;
+      }
+    } else {
+      const read = CardForm.read(body);
+      if (read.invalid > 0 || !read.data) return; /* 输入中间态:跳过,不弹提示 */
+      if (!panelBeforeSnapshot) panelBeforeSnapshot = snapshotState();
+      CardForm.applyToCard(card, read.data);
+    }
     CardForm.ensureTrailingRow(body);
     requestRender();
     /* 重绘会重建 board DOM:补一次选中高亮(同拖拽/微调落盘先例) */
@@ -1466,16 +1520,16 @@ let listActive = false;
   }
 
   function bindPanelEvents(body) {
-    /* 行删除委托与弹窗共用同一绑定(card-form.js) */
+    /* 行删除/池位增删委托与弹窗共用同一绑定(card-form.js,容器级只挂一次) */
     CardForm.bindRowDeletion(body);
     body.addEventListener('input', (event) => {
       if (event.target.matches('.cl-url, .cl-text')) CardForm.ensureTrailingRow(body);
       applyPanelEdits();
     });
     body.addEventListener('change', applyPanelEdits);
-    /* 删行本身由 CardForm.bindRowDeletion 完成,这里只负责删后实时应用 */
+    /* 删行/池位增删本身由 CardForm.bindRowDeletion 完成,这里只负责其后实时应用 */
     body.addEventListener('click', (event) => {
-      if (event.target.closest('[data-cl-del]')) applyPanelEdits();
+      if (event.target.closest('[data-cl-del], .cf-pool-del, .cf-pool-add')) applyPanelEdits();
     });
   }
 

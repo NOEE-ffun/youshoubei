@@ -65,6 +65,36 @@
     );
   }
 
+  /* roll 池专属表单(弹窗与抽屉共用,同 fieldsHtml 口径):基本信息(标题/阶段/模式/
+   * 形状宽高/四侧口数)+ 池位列表(动态增删)+ 池位职业卡组(每池位一组);
+   * 比赛卡字段一个不出现,池位行与链接组由 fillPool 渲染、cf-pool-add 追加空行 */
+  function fieldsHtmlPool() {
+    return (
+      '<div class="cf-section" data-open="1">' +
+      '  <div class="cf-section-title" role="button" tabindex="0" aria-expanded="true">基本信息<img class="icon cf-chevron" src="icons/chevron_right.svg" alt="" aria-hidden="true"></div>' +
+      '  <div class="cf-section-body"><div class="cf-grid">' +
+      '    <div class="form-field span-2"><label>标题</label><input type="text" class="cf-label" aria-label="标题"></div>' +
+      '    <div class="form-field"><label>阶段</label><input type="text" class="cf-phase" aria-label="阶段"></div>' +
+      '    <div class="form-field"><label>模式</label><select class="cf-mode" aria-label="roll 模式">' +
+      '      <option value="manual">手动 Roll</option><option value="auto">自动(逐人随机)</option></select></div>' +
+      '    <div class="form-field"><label>宽(格)</label><input type="number" class="cf-w" min="2" max="40" step="1" aria-label="宽"></div>' +
+      '    <div class="form-field"><label>高(格)</label><input type="number" class="cf-h" min="2" max="40" step="1" aria-label="高"></div>' +
+      '    <div class="form-field"><label>左右口数(每侧)</label><input type="number" class="cf-lr" min="0" step="1" aria-label="左右口数"></div>' +
+      '    <div class="form-field"><label>上下口数(每侧)</label><input type="number" class="cf-tb" min="0" step="1" aria-label="上下口数"></div>' +
+      '  </div></div>' +
+      '</div>' +
+      '<div class="cf-section" data-open="1">' +
+      '  <div class="cf-section-title" role="button" tabindex="0" aria-expanded="true">池位<img class="icon cf-chevron" src="icons/chevron_right.svg" alt="" aria-hidden="true"></div>' +
+      '  <div class="cf-section-body"><div class="cf-pool-slots"></div>' +
+      '  <button type="button" class="btn btn-ghost btn-sm cf-pool-add">添加池位</button></div>' +
+      '</div>' +
+      '<div class="cf-section" data-open="1">' +
+      '  <div class="cf-section-title" role="button" tabindex="0" aria-expanded="true">池位职业卡组<img class="icon cf-chevron" src="icons/chevron_right.svg" alt="" aria-hidden="true"></div>' +
+      '  <div class="cf-section-body"><div class="cf-pool-links"></div></div>' +
+      '</div>'
+    );
+  }
+
   function classOptions(selected) {
     let html = '<option value="">未选择</option>';
     for (const cls of window.CanvasModel.CLASS_LIST) {
@@ -274,11 +304,155 @@
     };
   }
 
-  /* live 模式:末行非空时补一行空行(保持焦点不整体重绘) */
+  /* ========== roll 池表单(池位行/池位职业组/读写/口数守卫) ========== */
+
+  /* 池位行:选手 select / 连线位只读(__flow)/ 删行。
+   * data-prev-slot 存原槽 JSON:连线位不可在表单换源,readPool 读回时还原原槽
+   * (含 outlet 与 inlet,删改别的池位不影响它的连线) */
+  function poolSlotRowHtml(slot, flowLabel) {
+    const isFlow = slot && slot.type === 'flow';
+    const selected = !isFlow && slot && slot.type === 'player' ? slot.playerId : '';
+    return (
+      '<div class="cf-pool-row" data-prev-slot="' + escapeHtml(JSON.stringify(slot || null)) + '">' +
+      '<select class="cf-pool-player" aria-label="池位选手">' + playerOptions(selected) +
+      (isFlow ? '<option value="__flow" selected>来自 ' + escapeHtml(flowLabel || '连线') + '</option>' : '') +
+      '</select>' +
+      '<button type="button" class="btn btn-ghost btn-sm cf-pool-del" title="删除此池位" aria-label="删除此池位"><img class="icon" src="icons/close.svg" alt=""></button>' +
+      '</div>'
+    );
+  }
+
+  /* 池位职业卡组单组:own(该池位已填过,含显式清空 null)回显自己的,未填过回显
+   * 继承(eff 池位组);签名口径与 renderClassLinkRows 相同(UI 可见三字段归一) */
+  function poolLinksGroupHtml(index, own, effRows) {
+    const seats = effRows || [];
+    let dataset;
+    let rows;
+    if (own === null || (Array.isArray(own) && own.length)) {
+      dataset = ' data-fill="own"';
+      rows = (own || []).map(clRowHtml).join('') + clRowHtml(null);
+    } else {
+      dataset = ' data-fill="inherited" data-eff-sig="' + escapeHtml(JSON.stringify(seats.map((e) => ({
+        cls: e.cls || '',
+        url: window.CanvasModel.normalizeDeckUrl(e.url || ''),
+        text: String(e.text || '').trim().slice(0, 60)
+      })))) + '"';
+      rows = seats.map(clRowHtml).join('') + clRowHtml(null);
+    }
+    return '<div class="form-field"><label>池位 ' + (index + 1) + '</label><div class="cl-list cf-cl-p"' + dataset + '>' + rows + '</div></div>';
+  }
+
+  /* 池位增删:池位行容器与职业组容器按下标一一对应,两侧同步增删 */
+  function appendPoolSlot(container) {
+    const slotsEl = container.querySelector('.cf-pool-slots');
+    const linksEl = container.querySelector('.cf-pool-links');
+    if (!slotsEl || !linksEl) return;
+    slotsEl.insertAdjacentHTML('beforeend', poolSlotRowHtml(null, ''));
+    linksEl.insertAdjacentHTML('beforeend', poolLinksGroupHtml(linksEl.children.length, undefined, []));
+  }
+
+  function removePoolSlot(container, delBtn) {
+    const row = delBtn.closest('.cf-pool-row');
+    if (!row) return;
+    const siblings = row.parentElement ? row.parentElement.children : [];
+    const index = Array.prototype.indexOf.call(siblings, row);
+    row.remove();
+    const linksEl = container.querySelector('.cf-pool-links');
+    if (linksEl && index >= 0 && linksEl.children[index]) linksEl.children[index].remove();
+  }
+
+  /* roll 池回填:card=池卡数据;eff 是 resolveEffectiveClassLinks 的池形态
+   * {seats:[[],...]};flowSourceLabels 按池位下标传 {s0,s1,...}(调用方算好) */
+  function fillPool(container, card, eff, flowSourceLabels) {
+    const labels = flowSourceLabels || {};
+    container.querySelector('.cf-label').value = card.label || '';
+    container.querySelector('.cf-phase').value = card.phase || '';
+    container.querySelector('.cf-mode').value = card.mode === 'auto' ? 'auto' : 'manual';
+    container.querySelector('.cf-w').value = card.w;
+    container.querySelector('.cf-h').value = card.h;
+    container.querySelector('.cf-lr').value = card.ports ? card.ports.lr : '';
+    container.querySelector('.cf-tb').value = card.ports ? card.ports.tb : '';
+    const slotsEl = container.querySelector('.cf-pool-slots');
+    slotsEl.innerHTML = (card.slots || []).map((s, i) =>
+      poolSlotRowHtml(s, labels['s' + i])).join('');
+    const effSeats = (eff && eff.seats) || [];
+    const linksEl = container.querySelector('.cf-pool-links');
+    linksEl.innerHTML = (card.slots || []).map((_, i) =>
+      poolLinksGroupHtml(i, (card.classLinks || [])[i], effSeats[i])).join('');
+  }
+
+  /* roll 池读取:池位行(select 值;__flow 保留原槽不可换源)+ 每池位职业组。
+   * 不完整职业行静默跳过(与 a/b 口径不同:池位多、逐组弹提示过于打断) */
+  function readPool(container) {
+    const slots = [];
+    container.querySelectorAll('.cf-pool-row').forEach((row) => {
+      const v = row.querySelector('.cf-pool-player').value;
+      const prev = row.dataset.prevSlot ? JSON.parse(row.dataset.prevSlot) : null;
+      if (v === '') slots.push({ type: 'empty' });
+      else if (v === '__flow') {
+        /* 连线位不可在表单换源:保留原槽 */
+        slots.push(prev && prev.type === 'flow' ? prev : { type: 'empty' });
+      } else slots.push({ type: 'player', playerId: v });
+    });
+    const links = [];
+    container.querySelectorAll('.cf-cl-p').forEach((list) => {
+      const rows = [];
+      list.querySelectorAll('.cl-row').forEach((row) => {
+        const cls = row.querySelector('.cl-cls').value;
+        const url = window.CanvasModel.normalizeDeckUrl(row.querySelector('.cl-url').value);
+        const text = row.querySelector('.cl-text').value.trim().slice(0, 60);
+        if (cls && (url || text)) rows.push({ cls, url, text });
+      });
+      const unchangedInherited = list.dataset.fill === 'inherited' &&
+        JSON.stringify(rows) === list.dataset.effSig;
+      links.push({ rows, fill: list.dataset.fill, unchangedInherited });
+    });
+    const num = (sel) => Number(container.querySelector(sel).value);
+    return {
+      label: container.querySelector('.cf-label').value.trim() || 'Roll 池',
+      phase: container.querySelector('.cf-phase').value.trim(),
+      mode: container.querySelector('.cf-mode').value === 'auto' ? 'auto' : 'manual',
+      w: num('.cf-w'), h: num('.cf-h'), lr: num('.cf-lr'), tb: num('.cf-tb'),
+      slots, links
+    };
+  }
+
+  /* roll 池写回;canvas 传入做口数悬空守卫:钳制后的新口列表不含任何被引用出口
+   * (他卡 flow 槽 {cardId 本卡, outlet 非空})即拒绝,返回 false 数据不动 */
+  function applyToCardPool(card, data, canvas) {
+    const shape = window.CanvasModel.clampPoolShape(data.w, data.h, data.lr, data.tb);
+    const kept = new Set(window.CanvasModel.outletList({ lr: shape.lr, tb: shape.tb }));
+    for (const c of (canvas && canvas.cards) || []) {
+      for (const s of c.slots || []) {
+        if (s && s.type === 'flow' && s.cardId === card.id && s.outlet && !kept.has(s.outlet)) return false;
+      }
+    }
+    card.label = data.label;
+    card.phase = data.phase;
+    card.mode = data.mode;
+    card.w = shape.w;
+    card.h = shape.h;
+    card.ports = { lr: shape.lr, tb: shape.tb };
+    if (card.mode === 'auto') card.assignments = null; /* 切自动丢弃快照 */
+    card.slots = data.slots;
+    card.classLinks = data.links.map((g, i) => {
+      const prev = (card.classLinks || [])[i];
+      if (g.fill === 'own') {
+        if (!g.rows.length) return null;
+        return g.rows.map((entry) => {
+          const old = prev && Array.isArray(prev) ? prev.find((e) => e && e.deck && e.cls === entry.cls && e.url === entry.url) : null;
+          return old ? Object.assign({ deck: old.deck }, entry) : entry;
+        });
+      }
+      if (g.unchangedInherited) return prev !== undefined ? prev : [];
+      return g.rows;
+    });
+    return true;
+  }
+
+  /* live 模式:末行非空时补一行空行(保持焦点不整体重绘);roll 池逐组同口径 */
   function ensureTrailingRow(container) {
-    for (const listCls of ['.cf-cl-a', '.cf-cl-b']) {
-      const list = container.querySelector(listCls);
-      if (!list) continue;
+    for (const list of container.querySelectorAll('.cf-cl-a, .cf-cl-b, .cf-cl-p')) {
       const rows = list.querySelectorAll('.cl-row');
       const last = rows[rows.length - 1];
       if (!last) continue;
@@ -292,17 +466,34 @@
   }
 
   /* 行级事件委托:renderClassLinkRows/ensureTrailingRow 重建行不需要重复绑定;
-   * 弹窗与抽屉两容器各自挂一次。删除行 + 国服牌组码失焦转官网链接(canvas-model 同一规则源) */
+   * 弹窗与抽屉两容器各自挂一次。删除行 + 国服牌组码失焦转官网链接(canvas-model
+   * 同一规则源)+ roll 池池位增删。全部委托在容器上:比赛卡两组与池位组共用同一
+   * 监听,表单按卡型重建 innerHTML 或池位组动态增删都不需要重绑 */
   function bindRowDeletion(container) {
     /* 分区折叠(P4):标题行点按切换 cf-section data-open,内容 DOM 恒在不丢输入态 */
     container.addEventListener('click', (event) => {
       const title = event.target.closest('.cf-section-title');
-      if (!title) return;
-      const sec = title.closest('.cf-section');
-      if (!sec) return;
-      const open = sec.dataset.open !== '0';
-      sec.dataset.open = open ? '0' : '1';
-      title.setAttribute('aria-expanded', String(!open));
+      if (title) {
+        const sec = title.closest('.cf-section');
+        if (!sec) return;
+        const open = sec.dataset.open !== '0';
+        sec.dataset.open = open ? '0' : '1';
+        title.setAttribute('aria-expanded', String(!open));
+        return;
+      }
+      const del = event.target.closest('[data-cl-del]');
+      if (del) {
+        const row = del.closest('.cl-row');
+        if (row) row.remove();
+        return;
+      }
+      const poolDel = event.target.closest('.cf-pool-del');
+      if (poolDel) {
+        removePoolSlot(container, poolDel);
+        return;
+      }
+      const poolAdd = event.target.closest('.cf-pool-add');
+      if (poolAdd) appendPoolSlot(container);
     });
     container.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -311,27 +502,24 @@
       event.preventDefault();
       title.click();
     });
-    for (const listCls of ['.cf-cl-a', '.cf-cl-b']) {
-      const list = container.querySelector(listCls);
-      if (!list) continue;
-      list.addEventListener('click', (event) => {
-        const del = event.target.closest('[data-cl-del]');
-        if (del) del.closest('.cl-row').remove();
-      });
-      list.addEventListener('focusout', (event) => {
-        const input = event.target.closest('.cl-url');
-        if (!input) return;
-        const normalized = window.CanvasModel.normalizeDeckUrl(input.value);
-        if (normalized !== input.value) input.value = normalized;
-      });
-    }
+    /* focusout 冒泡,容器级委托对动态增删的池位组同样生效 */
+    container.addEventListener('focusout', (event) => {
+      const input = event.target.closest ? event.target.closest('.cl-url') : null;
+      if (!input) return;
+      const normalized = window.CanvasModel.normalizeDeckUrl(input.value);
+      if (normalized !== input.value) input.value = normalized;
+    });
   }
 
   return {
     fieldsHtml,
+    fieldsHtmlPool,
     fill,
+    fillPool,
     read,
+    readPool,
     applyToCard,
+    applyToCardPool,
     ensureTrailingRow,
     bindRowDeletion
   };
