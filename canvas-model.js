@@ -158,6 +158,64 @@ function edgePath(p1, n1, p2, n2) {
     ', ' + p2.x + ' ' + p2.y;
 }
 
+/* ========== roll 分配(Task 2 纯函数) ========== */
+
+/* 座位制分配核心:seats 按索引序逐人认领候选口;pick(k, m) 返回 [0,1) 决定第 k 人
+ * 在 m 个剩余候选中取第几个。候选集不变时前 k 人结果恒不变(流式推进)。 */
+function assignSeats(seats, candidates, pick) {
+  const remaining = candidates.slice();
+  const outlets = {};
+  const unassigned = [];
+  let k = 0;
+  for (const pid of seats) {
+    if (!pid) continue;
+    if (!remaining.length) { unassigned.push(pid); continue; }
+    const idx = Math.min(remaining.length - 1, Math.floor(pick(k) * remaining.length));
+    outlets[remaining[idx]] = pid;
+    remaining.splice(idx, 1);
+    k += 1;
+  }
+  return { outlets, unassigned };
+}
+
+/* FNV-1a + murmur 混合(seed:step)→ [0,1),无依赖可重放的确定性随机源 */
+function hashStep(seed, step) {
+  let h = 2166136261;
+  const s = String(seed) + ':' + step;
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  h ^= h >>> 13;
+  h = Math.imul(h, 0x5bd1e995);
+  h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+}
+
+/* 收集画布中所有引用 poolId 出口的 flow 槽出口标识(含序号越界的口) */
+function collectConnectedOutlets(canvas, poolId) {
+  const used = new Set();
+  for (const card of (canvas && canvas.cards) || []) {
+    for (const slot of (card && card.slots) || []) {
+      if (slot && slot.type === 'flow' && slot.cardId === poolId && slot.outlet) used.add(slot.outlet);
+    }
+  }
+  return used;
+}
+
+/* 自动分配(纯):候选 = 已连接口按出口全序过滤,seed 逐人路由确定性分配 */
+function autoAssign(seats, ports, connectedOutlets, seed) {
+  const candidates = outletList(ports).filter((o) => connectedOutlets.has(o));
+  return assignSeats(seats, candidates, (k) => hashStep(seed, k));
+}
+
+/* 手动 roll(与自动同构):真随机,可注入 rng 供测试/重放 */
+function rollManual(seats, ports, connectedOutlets, rng) {
+  const rand = typeof rng === 'function' ? rng : Math.random;
+  const candidates = outletList(ports).filter((o) => connectedOutlets.has(o));
+  return assignSeats(seats, candidates, () => rand());
+}
+
   function clampCanvasSize(cols, rows) {
     const c = Number(cols);
     const r = Number(rows);
@@ -1052,6 +1110,9 @@ function arrowDefs(prefix) {
     portOffset,
     clampPoolShape,
     outletList,
+    collectConnectedOutlets,
+    autoAssign,
+    rollManual,
     cardSize,
     portOffsetForCard,
     portNormalForCard,

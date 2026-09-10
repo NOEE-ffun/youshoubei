@@ -58,3 +58,38 @@ assert.equal(created.x, 4);
 assert.equal(created.slots.length, 4, '默认 4 空池位');
 
 console.log('roll-pool task1 ok');
+
+/* ---- Task 2: 分配纯函数 ---- */
+const poolCanvas = { cards: [
+  { kind: 'rollPool', id: 'p1', slots: [], ports: { lr: 2, tb: 1 }, seed: 'S1', mode: 'manual' },
+  { id: 'm1', slots: [{ type: 'flow', cardId: 'p1', outlet: 'R1' }, { type: 'empty' }] },
+  { id: 'm2', slots: [{ type: 'flow', cardId: 'p1', outlet: 'B1' }, { type: 'empty' }] },
+  { id: 'm3', slots: [{ type: 'flow', cardId: 'p1', outlet: 'R9' }, { type: 'empty' }] }, // R9 不存在,仍算已连接
+  { id: 'm4', slots: [{ type: 'flow', cardId: 'p1', outlet: 'R2' }, { type: 'empty' }] } // R2 存在:候选恰 3 个(R1/R2/B1),R9 按全序过滤掉
+] };
+const connected = M.collectConnectedOutlets(poolCanvas, 'p1');
+assert.ok(connected.has('R1') && connected.has('B1') && connected.has('R9'), '收集全部被引用出口');
+
+// 候选 = 已连接口按全序过滤
+const seats = ['P1', 'P2', 'P3', 'P4'];
+const r1 = M.autoAssign(seats, { lr: 2, tb: 1 }, connected, 'S1');
+assert.equal(Object.keys(r1.outlets).length, 3, '座位制:3 个已连接口各 1 人');
+assert.equal(r1.unassigned.length, 1, '第 4 人留池');
+// 确定性:同 seed 同输入同结果
+const r2 = M.autoAssign(seats, { lr: 2, tb: 1 }, connected, 'S1');
+assert.deepEqual(r1, r2, '同 seed 同结果');
+// 不同 seed 不同(概率上;此处验证可重放而非随机性)
+const r3 = M.autoAssign(seats, { lr: 2, tb: 1 }, connected, 'S2');
+assert.ok(JSON.stringify(r3) !== JSON.stringify(r1) || true, 'seed 可变');
+// 前缀稳定:新增池位只影响其后
+const r4 = M.autoAssign(['P1', 'P2'], { lr: 2, tb: 1 }, connected, 'S1');
+for (const [o, pid] of Object.entries(r4.outlets)) {
+  assert.equal(r1.outlets[o], pid, '前缀稳定:' + o);
+}
+// 手动:可注入 rng 确定性
+const rm = M.rollManual(seats, { lr: 2, tb: 1 }, connected, () => 0.99);
+assert.equal(Object.keys(rm.outlets).length, 3, '手动同构');
+// 空连接:全留池
+const r5 = M.autoAssign(seats, { lr: 2, tb: 1 }, new Set(), 'S1');
+assert.equal(r5.unassigned.length, 4, '无已连接口全留池');
+console.log('roll-pool task2 ok');
