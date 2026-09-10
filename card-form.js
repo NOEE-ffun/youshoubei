@@ -277,7 +277,7 @@
     return result.links;
   }
 
-  /* 把 read().data 写回 card(与旧 saveCardDialog 写回语义逐行等价) */
+  /* 把 read().data 写回 card(写回语义与弹窗时代逐行等价,弹窗已下线) */
   function applyToCard(card, data) {
     card.label = data.label;
     card.phase = data.phase;
