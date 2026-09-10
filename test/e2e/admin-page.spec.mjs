@@ -192,8 +192,10 @@ test('选手面板:渲染/行内改名/无主删除 + 被绑选手删除 409 守
 
   await page.goto('/admin.html#players');
   await page.waitForSelector('#admin-players-tbody tr');
-  const row = page.locator('#admin-players-tbody tr', { hasText: 'E2E无主选手' });
-  await expect(row).toContainText('TAG1');
+  /* 行内名称/队伍 ID 是 input 值而非文本,hasText 匹配不到——按 [data-player-name] 属性(值=选手 id)定位行,取值断言走 toHaveValue */
+  const row = page.locator('#admin-players-tbody tr').filter({ has: page.locator('[data-player-name="p-e2e-free"]') });
+  await expect(row).toHaveCount(1);
+  await expect(row.locator('[data-player-tag]')).toHaveValue('TAG1');
   await expect(row.locator('[data-player-color]')).toHaveValue('#123456');
 
   /* 行内改名:填新值失焦 → 状态行报已保存,API 落库 */
@@ -210,13 +212,13 @@ test('选手面板:渲染/行内改名/无主删除 + 被绑选手删除 409 守
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('[data-delete-player="' + bound.id + '"]').click();
   await expect(page.locator('#admin-players-status')).toContainText('仍被账号绑定');
-  await expect(page.locator('#admin-players-tbody tr', { hasText: bound.name })).toHaveCount(1);
+  await expect(page.locator('#admin-players-tbody tr').filter({ has: page.locator('[data-player-name="' + bound.id + '"]') })).toHaveCount(1);
 
   /* 删除无主选手:行消失 */
   page.once('dialog', (dialog) => dialog.accept());
   await page.locator('[data-delete-player="p-e2e-free"]').click();
   await expect(page.locator('#admin-players-status')).toContainText('已删除');
-  await expect(page.locator('#admin-players-tbody tr', { hasText: 'E2E改名后' })).toHaveCount(0);
+  await expect(page.locator('#admin-players-tbody tr').filter({ has: page.locator('[data-player-name="p-e2e-free"]') })).toHaveCount(0);
 
   await resetStore(context);
 });

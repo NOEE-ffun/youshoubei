@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="右手杯超管后台:审计流水、账号与邀请码、比赛状态、健康与备份、通知与官方文档。">
+  <meta name="description" content="右手杯超管后台:审计流水、账号与邀请码、选手管理、比赛状态、健康与备份、通知与官方文档。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>超管后台 - 右手杯</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
@@ -36,6 +36,7 @@
         <nav class="me-tabs" role="tablist" aria-label="后台功能区">
           <button type="button" class="me-tab" id="admin-tab-audit" role="tab" aria-controls="admin-panel-audit">审计流水</button>
           <button type="button" class="me-tab" id="admin-tab-users" role="tab" aria-controls="admin-panel-users">账号与邀请码</button>
+          <button type="button" class="me-tab" id="admin-tab-players" role="tab" aria-controls="admin-panel-players">选手</button>
           <button type="button" class="me-tab" id="admin-tab-tourneys" role="tab" aria-controls="admin-panel-tourneys">比赛状态</button>
           <button type="button" class="me-tab" id="admin-tab-health" role="tab" aria-controls="admin-panel-health">健康与备份</button>
           <button type="button" class="me-tab" id="admin-tab-notices" role="tab" aria-controls="admin-panel-notices">通知</button>
@@ -78,6 +79,30 @@
                 <tbody id="admin-codes-tbody"></tbody>
               </table>
             </div>
+          </section>
+        </section>
+
+        <section class="me-panel" id="admin-panel-players" role="tabpanel" aria-labelledby="admin-tab-players" hidden>
+          <section class="me-subsection">
+            <h2 class="subsection-title">选手</h2>
+            <p class="hint admin-status" id="admin-players-status" role="status" aria-live="polite"></p>
+            <div class="admin-toolbar">
+              <label class="visually-hidden" for="admin-players-search">选手过滤</label>
+              <input type="search" id="admin-players-search" placeholder="按名称 / 队伍 ID 过滤" autocomplete="off" aria-label="选手过滤">
+            </div>
+            <div class="players-table-wrap"><table class="players-table">
+              <thead><tr>
+                <th class="col-avatar" scope="col">头像</th>
+                <th class="col-name" scope="col">名称</th>
+                <th class="col-tag" scope="col">队伍 ID</th>
+                <th class="col-title" scope="col">垃圾话</th>
+                <th class="col-color" scope="col">颜色</th>
+                <th class="col-joined" scope="col">加入</th>
+                <th class="col-actions" scope="col">操作</th>
+              </tr></thead>
+              <tbody id="admin-players-tbody"></tbody>
+            </table></div>
+            <p class="hint">选手头像/垃圾话/颜色的展示入口在各前台页;此处为超管纠错通道。删除被账号绑定的选手会被服务端拒绝,需先在「账号与邀请码」换绑或删除账号。</p>
           </section>
         </section>
 
@@ -258,6 +283,6 @@
   <script src="vendor/purify.min.js?v=2026090051" defer></script>
   <script src="docs-meta.js?v=2026090051" defer></script>
   <script src="md-render.js?v=2026090051" defer></script>
-  <script src="admin.js?v=2026090051" defer></script>
+  <script src="admin.js?v=2026090083" defer></script>
 </body>
 </html>

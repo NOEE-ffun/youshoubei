@@ -102,6 +102,7 @@
   const TABS = [
     { id: 'audit', btn: 'admin-tab-audit', load: loadAudit },
     { id: 'users', btn: 'admin-tab-users', load: loadUsersPanel },
+    { id: 'players', btn: 'admin-tab-players', load: loadPlayersPanel },
     { id: 'tourneys', btn: 'admin-tab-tourneys', load: loadTourneys },
     { id: 'health', btn: 'admin-tab-health', load: loadHealth },
     { id: 'notices', btn: 'admin-tab-notices', load: loadNotices },
@@ -337,6 +338,214 @@
       loadUsers();
     }
   });
+
+  /* ---------- 选手管理(2026-09-10 选手库页面下线,管理能力收进后台) ---------- */
+
+  let playersList = [];
+  let playersFilterText = '';
+  let playersPanelBound = false;
+  let playersSearchBound = false;
+  let playersFileInput = null;
+  let playersAvatarId = null;
+
+  /* 选手头像:云模式头像恒为上传 URL;无头像 → 首字母占位(底色走 .avatar 默认面) */
+  function playersAvatarMarkup(p) {
+    if (p && p.avatar) {
+      return '<img class="avatar avatar-td" loading="lazy" src="' + escapeHtml(String(p.avatar)) +
+        '" alt="' + escapeHtml(p.name || '') + ' 的头像">';
+    }
+    const initial = String((p && p.name) || '?').trim().charAt(0) || '?';
+    return '<span class="avatar avatar-td avatar-fallback">' + escapeHtml(initial) + '</span>';
+  }
+
+  /* 精确流整库写:GET 服务端最新 → 仅改 players → 整库 PUT(与前台 storageDeletePlayer
+   * 云端分支同语义;merge 流对 players 只增不删,删除/纠错会被合并抹回,必须直写)。
+   * 服务端守卫:删被账号绑定的选手 → 409,文案原样透出到状态行 */
+  async function savePlayersEdit(mutator) {
+    const latest = await api('/api/data');
+    if (!latest.ok) throw new Error(latest.data.error || '读取云端数据失败');
+    const ws = latest.data || {};
+    const players = Array.isArray(ws.players) ? ws.players.filter(Boolean) : [];
+    const next = mutator(players);
+    const finalPlayers = Array.isArray(next) ? next : players;
+    const saved = await api('/api/data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({}, ws, { players: finalPlayers }))
+    });
+    if (saved.status === 401) throw new Error('登录已过期,请重新登录');
+    if (!saved.ok) throw new Error(saved.data.error || '保存选手失败');
+    playersList = finalPlayers;
+  }
+
+  function applyPlayersFilter() {
+    const tbody = $('admin-players-tbody');
+    if (!tbody || !playersFilterText) return;
+    tbody.querySelectorAll('tr').forEach((tr) => {
+      const name = (tr.querySelector('[data-player-name]') || {}).value || '';
+      const tag = (tr.querySelector('[data-player-tag]') || {}).value || '';
+      tr.hidden = !(name.toLowerCase().includes(playersFilterText) || tag.toLowerCase().includes(playersFilterText));
+    });
+  }
+
+  function renderPlayersPanel() {
+    const tbody = $('admin-players-tbody');
+    const status = $('admin-players-status');
+    if (!tbody) return;
+    if (!playersList.length) {
+      tbody.innerHTML = '';
+      setStatus(status, '暂无选手。', false);
+      return;
+    }
+    const rows = playersList.map((p) => {
+      const hex = /^#[0-9a-fA-F]{6}$/.test(String(p.color)) ? p.color : '#4a5568';
+      return '<tr>' +
+        '<td class="col-avatar"><button type="button" class="avatar-btn" data-avatar-upload="' + p.id + '" title="' + (p.avatar ? '更换' : '上传') + '头像" aria-label="' + (p.avatar ? '更换' : '上传') + escapeHtml(p.name) + '的头像">' +
+        playersAvatarMarkup(p) + '<img class="icon avatar-edit" src="icons/upload.svg" alt="" aria-hidden="true"></button></td>' +
+        '<td class="col-name"><input data-player-name="' + p.id + '" value="' + escapeHtml(p.name) + '" aria-label="' + escapeHtml(p.name) + ' 的名称" autocomplete="off"></td>' +
+        '<td class="col-tag"><input data-player-tag="' + p.id + '" value="' + escapeHtml(p.tag || '') + '" aria-label="' + escapeHtml(p.name) + ' 的队伍 ID" autocomplete="off" placeholder="—"></td>' +
+        '<td class="col-title"><input data-player-title="' + p.id + '" value="' + escapeHtml(p.title || '') + '" aria-label="' + escapeHtml(p.name) + ' 的垃圾话" autocomplete="off" placeholder="—"></td>' +
+        '<td class="col-color"><input type="color" data-player-color="' + p.id + '" value="' + hex + '" title="海报颜色" aria-label="' + escapeHtml(p.name) + ' 的海报颜色">' +
+        (p.color ? '<button type="button" class="btn btn-ghost btn-sm" data-player-color-clear="' + p.id + '" title="清除颜色(跟随主题)" aria-label="清除 ' + escapeHtml(p.name) + ' 的颜色"><img class="icon" src="icons/format_color_reset.svg" alt="" aria-hidden="true"></button>' : '') +
+        '</td>' +
+        '<td class="col-joined">' + (p.createdAt ? fmtDateTime(p.createdAt) : '—') + '</td>' +
+        '<td class="col-actions"><button type="button" class="row-del" data-delete-player="' + p.id + '" title="删除选手" aria-label="删除选手 ' + escapeHtml(p.name) + '"><img class="icon" src="icons/delete.svg" alt="" aria-hidden="true"></button></td>' +
+        '</tr>';
+    }).join('');
+    tbody.innerHTML = rows;
+    setStatus(status, '共 ' + playersList.length + ' 位选手。', false);
+    applyPlayersFilter();
+  }
+
+  function bindPlayersPanel() {
+    if (playersPanelBound) return;
+    playersPanelBound = true;
+    const tbody = $('admin-players-tbody');
+
+    /* 行内编辑:change 统一落库;名称空值回退不改 */
+    tbody.addEventListener('change', async (event) => {
+      const input = event.target;
+      const map = { playerName: 'name', playerTag: 'tag', playerTitle: 'title', playerColor: 'color' };
+      const key = Object.keys(map).find((k) => input.dataset[k]);
+      if (!key) return;
+      const id = input.dataset[key];
+      const field = map[key];
+      const before = (playersList.find((x) => x.id === id) || {})[field];
+      const value = field === 'color' ? input.value : input.value.trim();
+      if (field === 'name' && !value) { input.value = before || ''; return; }
+      try {
+        await savePlayersEdit((players) => {
+          const p = players.find((x) => x.id === id);
+          if (!p) throw new Error('选手已不存在,请刷新重试');
+          p[field] = value;
+          p.updatedAt = Date.now();
+        });
+        setStatus($('admin-players-status'), '已保存。', false);
+      } catch (error) {
+        setStatus($('admin-players-status'), '保存失败:' + (error.message || error), true);
+      }
+    });
+
+    /* 点击类:删除 / 清颜色 / 头像上传入口 */
+    tbody.addEventListener('click', (event) => {
+      const btn = event.target.closest('button');
+      if (!btn) return;
+      const status = $('admin-players-status');
+      if (btn.dataset.deletePlayer) {
+        const id = btn.dataset.deletePlayer;
+        if (!window.confirm('确定从选手库删除该选手吗?历史比赛记录不会被删除,但该选手会显示为“待定”。若该选手绑定了账号,需先在「账号与邀请码」换绑或删除账号。')) return;
+        savePlayersEdit((players) => players.filter((x) => x.id !== id))
+          .then(() => {
+            renderPlayersPanel();
+            setStatus(status, '已删除。', false);
+          })
+          .catch((error) => setStatus(status, '删除失败:' + (error.message || error), true));
+        return;
+      }
+      if (btn.dataset.playerColorClear) {
+        const id = btn.dataset.playerColorClear;
+        savePlayersEdit((players) => {
+          const p = players.find((x) => x.id === id);
+          if (!p) throw new Error('选手已不存在,请刷新重试');
+          p.color = null;
+          p.updatedAt = Date.now();
+        })
+          .then(() => {
+            renderPlayersPanel();
+            setStatus(status, '已清除颜色(跟随主题)。', false);
+          })
+          .catch((error) => setStatus(status, '清除失败:' + (error.message || error), true));
+        return;
+      }
+      if (btn.dataset.avatarUpload) {
+        playersAvatarId = btn.dataset.avatarUpload;
+        ensurePlayersFileInput().click();
+      }
+    });
+  }
+
+  /* 头像直传 /api/upload(裸字节体,魔数嗅探拒 SVG、5MB 上限;超管低频场景不做客户端压缩) */
+  function ensurePlayersFileInput() {
+    if (playersFileInput) return playersFileInput;
+    playersFileInput = document.createElement('input');
+    playersFileInput.type = 'file';
+    playersFileInput.accept = 'image/*';
+    playersFileInput.hidden = true;
+    document.body.appendChild(playersFileInput);
+    playersFileInput.addEventListener('change', async () => {
+      const file = playersFileInput.files && playersFileInput.files[0];
+      playersFileInput.value = '';
+      const id = playersAvatarId;
+      playersAvatarId = null;
+      if (!file || !id) return;
+      const status = $('admin-players-status');
+      setStatus(status, '头像上传中…', false);
+      try {
+        const resp = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          body: file
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || resp.status);
+        await savePlayersEdit((players) => {
+          const p = players.find((x) => x.id === id);
+          if (!p) throw new Error('选手已不存在,请刷新重试');
+          p.avatar = data.url;
+          p.updatedAt = Date.now();
+        });
+        renderPlayersPanel();
+        setStatus(status, '头像已更新。', false);
+      } catch (error) {
+        setStatus(status, '头像上传失败:' + (error.message || error), true);
+      }
+    });
+    return playersFileInput;
+  }
+
+  function bindPlayersSearch() {
+    if (playersSearchBound) return;
+    playersSearchBound = true;
+    $('admin-players-search').addEventListener('input', () => {
+      playersFilterText = $('admin-players-search').value.trim().toLowerCase();
+      $('admin-players-tbody').querySelectorAll('tr').forEach((tr) => { tr.hidden = false; });
+      applyPlayersFilter();
+    });
+  }
+
+  async function loadPlayersPanel() {
+    const status = $('admin-players-status');
+    setStatus(status, '加载中…', false);
+    bindPlayersSearch();
+    bindPlayersPanel();
+    const result = await api('/api/data');
+    if (!result.ok) {
+      setStatus(status, '选手数据加载失败:' + (result.data.error || result.status), true);
+      return;
+    }
+    playersList = Array.isArray(result.data.players) ? result.data.players.filter(Boolean) : [];
+    renderPlayersPanel();
+  }
 
   /* ---------- 比赛状态 ---------- */
 
