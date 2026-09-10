@@ -778,6 +778,8 @@ function arrowDefs(prefix) {
   /* ========== 卡组继承(读取时派生) ==========
    * 卡片某侧自己填了 classLinks 用自己的;没填且该侧是连线槽,则沿连线
    * 继承来源卡中该选手所在一侧的卡组(递归多跳)。
+   * 比赛卡输出 {a,b};roll 池按池位输出 {seats:[[],…]}——own 读池位组,
+   * 下游经 出口→选手→seats.indexOf 定位池位继承其组。
    * 与未来的选手端"提交/更新卡组"互补:写自己、读时派生,互不冲突。 */
   function resolveEffectiveClassLinks(canvas, scores) {
     const norm = normalizeCanvas(canvas);
@@ -792,7 +794,9 @@ function arrowDefs(prefix) {
       memo.set(key, []);
       const card = byId.get(cardId);
       if (!card) return [];
-      const own = (card.classLinks || {})[sideIdx === 0 ? 'a' : 'b'];
+      const own = card.kind === 'rollPool'
+        ? (card.classLinks || [])[sideIdx]
+        : (card.classLinks || {})[sideIdx === 0 ? 'a' : 'b'];
       /* null = 显式清空,阻断继承 */
       if (own === null) return [];
       if (Array.isArray(own) && own.length) {
@@ -803,9 +807,15 @@ function arrowDefs(prefix) {
       if (!slot || slot.type !== 'flow' || !byId.has(slot.cardId)) return [];
       const src = resolvedById.get(slot.cardId);
       if (!src) return [];
-      const player = slot.outcome === 'winner' ? src.winner : src.loser;
-      if (!player) return [];
-      const srcSide = src.a === player ? 0 : src.b === player ? 1 : -1;
+      let srcSide = -1;
+      if (src.kind === 'rollPool') {
+        const pid = slot.outlet ? src.outlets[slot.outlet] : null;
+        srcSide = pid ? src.seats.indexOf(pid) : -1;
+      } else {
+        const player = slot.outcome === 'winner' ? src.winner : src.loser;
+        if (!player) return [];
+        srcSide = src.a === player ? 0 : src.b === player ? 1 : -1;
+      }
       if (srcSide < 0) return [];
       const links = sideLinks(slot.cardId, srcSide);
       memo.set(key, links);
@@ -814,7 +824,11 @@ function arrowDefs(prefix) {
 
     const out = new Map();
     for (const card of norm.cards) {
-      out.set(card.id, { a: sideLinks(card.id, 0), b: sideLinks(card.id, 1) });
+      if (card.kind === 'rollPool') {
+        out.set(card.id, { seats: (card.slots || []).map((_, i) => sideLinks(card.id, i)) });
+      } else {
+        out.set(card.id, { a: sideLinks(card.id, 0), b: sideLinks(card.id, 1) });
+      }
     }
     return out;
   }
@@ -888,11 +902,16 @@ function arrowDefs(prefix) {
     const active = lists.filter((l) => bound.has(l.id));
     if (!active.length) return [];
     const eff = resolveEffectiveClassLinks(record.canvas, record.scores || {});
-    const sides = eff.get(cardId) || { a: [], b: [] };
+    const effCard = eff.get(cardId) || {};
+    const src = resolveCanvas(record.canvas, [], record.scores || {}).cards.find((c) => c.id === cardId);
+    /* 违规 side 标识:比赛卡 a/b;roll 池 s+池位索引 */
+    const sideList = (src && src.kind === 'rollPool')
+      ? effCard.seats.map((links, i) => ({ key: 's' + i, links }))
+      : [{ key: 'a', links: effCard.a }, { key: 'b', links: effCard.b }];
     const out = [];
-    for (const side of ['a', 'b']) {
+    for (const side of sideList) {
       const worst = new Map(); /* key: listId:cardId -> violation */
-      for (const entry of Array.isArray(sides[side]) ? sides[side] : []) {
+      for (const entry of Array.isArray(side.links) ? side.links : []) {
         const deck = entry && entry.deck;
         if (!deck || !Array.isArray(deck.cards)) continue;
         for (const list of active) {
@@ -904,7 +923,7 @@ function arrowDefs(prefix) {
             const key = list.id + ':' + row[0];
             const prev = worst.get(key);
             if (prev && prev.copies >= copies) continue;
-            worst.set(key, { side, cls: String(entry.cls || ''), cardId: row[0], name: row[1],
+            worst.set(key, { side: side.key, cls: String(entry.cls || ''), cardId: row[0], name: row[1],
               cost: row[2], rarity: row[3], copies, limit: row[4], listId: list.id, listName: list.name });
           }
         }

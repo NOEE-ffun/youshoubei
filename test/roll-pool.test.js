@@ -156,3 +156,37 @@ assert.equal(cyc.cards.length, 2, '环不崩:两卡 resolved 对象齐全');
 assert.ok(cyc.cards.some((c) => c.cycle === true), '环被检测标记');
 assert.equal(cyc.cards.find((c) => c.id === 'p3').cycle, true, '池卡在环上被标记');
 console.log('roll-pool task3 ok');
+
+/* ---- Task 4: 卡组链路 ---- */
+const clCanvas = { cards: [
+  { kind: 'rollPool', id: 'p1', ports: { lr: 1, tb: 0 }, mode: 'auto', seed: 'S', classLinks: [
+    [{ cls: '精灵', url: 'https://x.example/d1', text: '' }], []
+  ],
+    slots: [{ type: 'player', playerId: 'P1' }, { type: 'player', playerId: 'P2' }] },
+  { id: 'm1', slots: [{ type: 'flow', cardId: 'p1', outlet: 'R1' }, { type: 'empty' }] }
+] };
+const eff = M.resolveEffectiveClassLinks(clCanvas, {});
+const effPool = eff.get('p1');
+assert.ok(Array.isArray(effPool.seats), 'roll 池 eff 形态 = seats 数组');
+assert.equal(effPool.seats[0].length, 1, 'own 池位 0 有一条');
+assert.equal(effPool.seats[1].length, 0, 'own 池位 1 空');
+// 下游继承:P1 分到 R1(autoAssign seed 'S' 下重算取人)→ m1.a 继承其池位组
+const resCl = M.resolveCanvas(clCanvas, [], {});
+const winner = resCl.cards.find((c) => c.id === 'p1').outlets.R1;
+const idx = winner === 'P1' ? 0 : 1;
+const effM1 = eff.get('m1');
+assert.equal(effM1.a.length, winner ? 1 : 0, '下游 a 位沿出口继承池位组');
+
+// 禁卡违规按池位:池位 0 卡组带超限卡
+const banRec = {
+  banLists: [{ id: 'bl1', name: '表1', cards: [[101, '卡A', 2, 1, 1]] }],
+  canvas: { cards: [
+    { kind: 'rollPool', id: 'p1', banListIds: ['bl1'],
+      classLinks: [[{ cls: '精灵', url: '', text: 't', deck: { v: 1, classId: 1, cards: [[101, '卡A', 2, 1, 1, 3, 1]] } }]],
+      slots: [{ type: 'player', playerId: 'P1' }] }
+  ] }
+};
+const viols = M.checkBanViolations(banRec, 'p1');
+assert.equal(viols.length, 1, '池位卡组违规命中');
+assert.equal(viols[0].side, 's0', 'side 为池位索引 s0');
+console.log('roll-pool task4 ok');
