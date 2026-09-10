@@ -5529,3 +5529,53 @@ body.list-dragging .ov-t-group.drop-target > h3 {
 
 /* 设置弹窗头部操作组:保存(primary)在关闭(ghost)左,风格同顶栏按钮 */
 .dialog-head-actions { display: flex; gap: 6px; align-items: center; }
+
+/* ---------- roll 池卡片(卡片本体玻璃样式/尺寸复用 .match-card + inline,此处只补池位行/口节点/表单) ---------- */
+/* 左边条 accent 区分卡型;暗色下 var(--accent) 自动换亮蓝,无需豁免。
+ * 口节点定位基准是卡 padding-box,左边框加粗会整体内缩——下方 .card-ports 补偿对齐 */
+.pool-card { border-left: 3px solid var(--accent, #3563e9); }
+.pool-card > .card-ports { inset-inline-start: -3px; }
+
+/* 池位行纵向堆叠;宽卡(w≥14,pool-wide)横向 wrap 省高 */
+.pool-rows { display: flex; flex-direction: column; gap: 2px; }
+.pool-card.pool-wide .pool-rows { flex-direction: row; flex-wrap: wrap; gap: 2px 10px; }
+
+/* 单行 = 头像 + 名字 + 职业图标行:长名 ellipsis 由名字吸收,图标行不收缩不被挤爆 */
+.pool-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pool-row.tbd { opacity: 0.55; }
+.pool-row .player-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pool-cl { display: inline-flex; gap: 2px; flex: none; }
+
+/* 未分配遗留提示条(仅有人没落位时渲染) */
+.pool-unassigned { opacity: 0.7; font-size: 0.75rem; padding: 2px 4px; }
+
+/* roll 池出口节点:位置由 JS inline 现算(几何随口数变),CSS 只钉基础态;
+ * 12px 圆点/表面底/crosshair/命中扩区由 .card-ports .port 公共规则复用 */
+.card-ports .port-node.port-pool { position: absolute; translate: -50% -50%; border-color: var(--accent, #3563e9); }
+
+/* 头部 Roll 按钮不参与收缩(窄卡标题挤压时保形) */
+.pool-card .roll-open { flex: none; }
+
+/* 表单池位行:选手下拉占满(可缩,长名不把删钮挤出行)+ 删钮固定宽 */
+.cf-pool-row { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+.cf-pool-row select { flex: 1; min-width: 0; }
+.cf-pool-row .cf-pool-del { flex: none; }
+
+/* 面板内池位下拉不在 .form-field/.cl-row 之列,收编同款紧凑控件主题(弹窗侧 .dialog-body select 已覆盖) */
+.card-panel .cf-pool-row select {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.5rem;
+  min-block-size: 2rem;
+  box-sizing: border-box;
+}
+
+.card-panel .cf-pool-row select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
