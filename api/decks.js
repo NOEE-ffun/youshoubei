@@ -55,7 +55,9 @@ function createHandler(storage, options) {
     const body = await readJsonBody(req, res, MAX_BODY);
     if (body === undefined) return;
     const { tournamentId, cardId } = body;
-    const side = body.side === 'a' ? 'a' : body.side === 'b' ? 'b' : null;
+    /* 侧位:比赛卡 'a'/'b',roll 池 's<N>'(N=池位下标) */
+    const poolSide = /^s(\d+)$/.exec(String(body.side || ''));
+    const side = body.side === 'a' ? 'a' : body.side === 'b' ? 'b' : (poolSide ? String(body.side) : null);
     if (!tournamentId || !cardId || !side) {
       sendJson(res, 400, { error: '缺少 tournamentId / cardId / side' });
       return;
@@ -126,16 +128,23 @@ function createHandler(storage, options) {
         return;
       }
 
-      /* 归属判定:resolveCanvas 解析该侧选手(含 flow 继承)必须 === 登录选手 */
+      /* 归属判定:resolveCanvas 解析该侧选手(含 flow 继承)必须 === 登录选手;
+       * roll 池 side='s<N>' 按池位归属(seats[N]),比赛卡仅接受 a/b(拒收 s<N> 防误写) */
       const resolved = resolveCanvas(record.canvas, record.roster || [], record.scores || {});
       const resolvedCard = resolved.cards.find((c) => c.id === cardId);
-      const sidePlayer = resolvedCard ? (side === 'a' ? resolvedCard.a : resolvedCard.b) : null;
+      const poolIdx = poolSide ? Number(poolSide[1]) : -1;
+      let sidePlayer = null;
+      if (resolvedCard && poolIdx >= 0 && resolvedCard.kind === 'rollPool') {
+        sidePlayer = resolvedCard.seats[poolIdx] || null;
+      } else if (resolvedCard && poolIdx < 0) {
+        sidePlayer = side === 'a' ? resolvedCard.a : resolvedCard.b;
+      }
       if (sidePlayer !== user.playerId) {
         sendJson(res, 403, { error: '该场次这一侧不是你的比赛' });
         return;
       }
 
-      /* 比赛已开始(有合法比分)即锁定 */
+      /* 比赛已开始(有合法比分)即锁定;roll 池无比分域,无 score 条目永不锁,天然开放 */
       const result = getResult((record.scores || {})[cardId]);
       if (result && result.valid && !result.draw) {
         sendJson(res, 423, { error: '比赛已开始,卡组已锁定' });
@@ -146,8 +155,15 @@ function createHandler(storage, options) {
         return;
       }
 
-      if (!card.classLinks || typeof card.classLinks !== 'object') card.classLinks = { a: [], b: [] };
-      card.classLinks[side] = links;
+      if (poolIdx >= 0) {
+        /* roll 池:classLinks 数组按池位写回,不足位补空组 */
+        if (!Array.isArray(card.classLinks)) card.classLinks = (card.slots || []).map(() => []);
+        while (card.classLinks.length <= poolIdx) card.classLinks.push([]);
+        card.classLinks[poolIdx] = links;
+      } else {
+        if (!card.classLinks || typeof card.classLinks !== 'object') card.classLinks = { a: [], b: [] };
+        card.classLinks[side] = links;
+      }
       record.updatedAt = now();
       await backup();
       await write(DATA_PATH, workspace);

@@ -101,10 +101,14 @@
   }
 
   function cardBlockHtml(record, card, side, names, editable, effEntries) {
-    const oppId = side === 'a' ? card.b : card.a;
-    const opp = oppId ? (names.get(oppId) || '?') : '待定';
+    /* 池位侧 's<N>':roll 池无对手,own 读 classLinks 数组下标 N */
+    const poolIdx = /^s(\d+)$/.test(String(side)) ? Number(side.slice(1)) : -1;
+    const oppId = poolIdx >= 0 ? null : (side === 'a' ? card.b : card.a);
+    const opp = poolIdx >= 0 ? '—' : (oppId ? (names.get(oppId) || '?') : '待定');
     const started = isStarted(record, card.id);
-    const own = (card.classLinks && card.classLinks[side]) || [];
+    const own = (poolIdx >= 0
+      ? (Array.isArray(card.classLinks) ? card.classLinks[poolIdx] : null)
+      : (card.classLinks && card.classLinks[side])) || [];
     const inherited = !own.length && effEntries.length > 0;
 
     let statusChip;
@@ -159,10 +163,21 @@
     const mine = [];
     const others = [];
     for (const rc of resolved.cards) {
-      const side = rc.a === state.myId ? 'a' : rc.b === state.myId ? 'b' : null;
+      /* 侧位枚举:比赛卡 a/b;roll 池按池位 's<N>'(seats 内含我即拿到池位侧) */
+      let side = rc.a === state.myId ? 'a' : rc.b === state.myId ? 'b' : null;
+      if (!side && rc.kind === 'rollPool' && Array.isArray(rc.seats)) {
+        const idx = rc.seats.indexOf(state.myId);
+        if (idx >= 0) side = 's' + idx;
+      }
       if (!side) continue;
       const raw = (record.canvas.cards || []).find((c) => c.id === rc.id) || rc;
-      (isStarted(record, rc.id) ? others : mine).push([raw, side, ((eff.get(rc.id) || {})[side] || [])]);
+      /* eff 形态随卡种:roll 池 {seats:[...]},比赛卡 {a,b} */
+      const effObj = eff.get(rc.id) || {};
+      const poolIdx = side.charAt(0) === 's' ? Number(side.slice(1)) : -1;
+      const effEntries = poolIdx >= 0
+        ? ((effObj.seats || [])[poolIdx] || [])
+        : (effObj[side] || []);
+      (isStarted(record, rc.id) ? others : mine).push([raw, side, effEntries]);
     }
     if (!mine.length && !others.length) {
       listEl.innerHTML = '<p class="hint">你在本届还没有已确定的对局(晋级产生的场次会随比分推进自动出现)。</p>';
@@ -210,12 +225,23 @@
         if (resp.status === 423) render(); /* 状态变了,重绘刷新锁定态 */
         return;
       }
-      /* 乐观更新本地 record,立即重绘;用响应里的 links(含解析快照与纠错后的 cls) */
+      /* 乐观更新本地 record,立即重绘;用响应里的 links(含解析快照与纠错后的 cls)。
+       * 写回与 api/decks.js 同构:池位侧走数组下标分支,比赛侧走 {a,b} */
       const record = findRecord(state.tournamentId);
       const card = record && (record.canvas.cards || []).find((c) => c.id === form.dataset.card);
       if (card) {
-        if (!card.classLinks) card.classLinks = { a: [], b: [] };
-        card.classLinks[form.dataset.side] = Array.isArray(data.links) ? data.links : links;
+        const side = form.dataset.side;
+        const poolM = /^s(\d+)$/.exec(String(side || ''));
+        const poolIdx = poolM ? Number(poolM[1]) : -1;
+        const saved = Array.isArray(data.links) ? data.links : links;
+        if (poolIdx >= 0) {
+          if (!Array.isArray(card.classLinks)) card.classLinks = (card.slots || []).map(() => []);
+          while (card.classLinks.length <= poolIdx) card.classLinks.push([]);
+          card.classLinks[poolIdx] = saved;
+        } else {
+          if (!card.classLinks || typeof card.classLinks !== 'object') card.classLinks = { a: [], b: [] };
+          card.classLinks[side] = saved;
+        }
       }
       /* 无感提交:成功不提示,静默拉服务器最新回写缓存 */
       if (typeof window.TournamentApp.revalidateWorkspace === 'function') {

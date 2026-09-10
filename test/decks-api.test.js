@@ -2,7 +2,9 @@
 
 /* 卡组提交窗口行为测试(内存存储注入,不联网):
  * isWindowOpen 三态/跨零点、links 归一化、归属/锁定/窗口校验、
- * GET 未公示剥离(admin 全见/本人可见/对手被剥)。 */
+ * GET 未公示剥离(admin 全见/本人可见/对手被剥)。
+ * roll 池泛化:side='s<N>' 池位归属/越权 403/数组形态写回、
+ * 比赛卡拒收 s<N> 侧、stripHiddenDecks 未公示 own 按池位剥离。 */
 
 const assert = require('node:assert');
 const session = require('../api/session');
@@ -57,6 +59,15 @@ const json = (obj) => JSON.stringify(obj);
 const P1 = 'p_1', P2 = 'p_2';
 const PASS = 'scrypt:00112233445566778899aabb';
 
+const USER_U1 = {
+  id: 'u1', username: 'alice', usernameLower: 'alice',
+  passHash: PASS, role: 'player', playerId: P1, createdAt: '2026-01-01T00:00:00Z'
+};
+const USER_U2 = {
+  id: 'u2', username: 'bob', usernameLower: 'bob',
+  passHash: PASS, role: 'player', playerId: P2, createdAt: '2026-01-01T00:00:00Z'
+};
+
 function seedWorld(deckWindow) {
   return {
     'users.json': [{
@@ -76,6 +87,31 @@ function seedWorld(deckWindow) {
           ]
         },
         scores: { c2: { a: 2, b: 0 } },
+        deckWindow,
+        updatedAt: 1
+      }]
+    }
+  };
+}
+
+/* roll 池世界:一张 rollPool 卡(seats=P1/P2)+ 一张双人比赛卡,双选手账号齐备 */
+function seedPoolWorld(deckWindow) {
+  return {
+    'users.json': [USER_U1, USER_U2],
+    'data.json': {
+      activeId: 't1',
+      players: [{ id: P1, name: '甲' }, { id: P2, name: '乙' }],
+      tournaments: [{
+        id: 't1', name: '测试届',
+        roster: [P1, P2],
+        canvas: {
+          cards: [
+            { kind: 'rollPool', id: 'p1', label: '复活池', ports: { lr: 1, tb: 0 }, mode: 'manual', seed: 'S1',
+              slots: [{ type: 'player', playerId: P1 }, { type: 'player', playerId: P2 }],
+              classLinks: [[], []] }
+          ]
+        },
+        scores: {},
         deckWindow,
         updatedAt: 1
       }]
@@ -412,6 +448,103 @@ async function main() {
     const nullView = stripHiddenDecks(JSON.parse(JSON.stringify(nullWs)), P2);
     assert.strictEqual(nullView.tournaments[0].canvas.cards[0].classLinks.a, null, 'null 阻断语义保留');
     console.log('✓ stripHiddenDecks:本人/对手/已赛/关闭/null');
+  }
+
+  /* ---- roll 池池位提交:side='s<N>' 归属命中/越权 403/写回数组形态 ---- */
+  {
+    const storage = memoryStorage(seedPoolWorld({ manual: 'open' }));
+    const h = createHandler(storage, { appendAudit: () => {}, currentUser: makeFindUser(storage) });
+    const cookie2 = 'sess=' + session.issueFor('u2', pv, Date.now);
+
+    /* 池位 0 归属 P1(甲):提交 200 且写回数组下标 0 */
+    const ok = await call(h.submit, mockReq('PUT', {
+      headers: auth,
+      body: json({ tournamentId: 't1', cardId: 'p1', side: 's0', links: [{ cls: '皇家', text: '池位卡组', url: 'https://deck' }] })
+    }));
+    assert.strictEqual(ok.status, 200, '池位归属命中(seats[0]=P1) → 200');
+    const card = storage._map.get('data.json').tournaments[0].canvas.cards[0];
+    assert.ok(Array.isArray(card.classLinks), 'roll 池 classLinks 保持数组形态');
+    assert.deepStrictEqual(card.classLinks[0], [{ cls: '皇家', url: 'https://deck', text: '池位卡组' }], '写回 classLinks[0]');
+    assert.deepStrictEqual(card.classLinks[1], [], '邻池位不受影响');
+
+    /* 池位 1 归属 P2(乙):同样 200,各写各的池位组 */
+    const ok2 = await call(h.submit, mockReq('PUT', {
+      headers: { cookie: cookie2 },
+      body: json({ tournamentId: 't1', cardId: 'p1', side: 's1', links: [{ cls: '精灵', text: '乙的池位' }] })
+    }));
+    assert.strictEqual(ok2.status, 200, '池位 1 归属乙 → 200');
+    assert.deepStrictEqual(
+      storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks[1],
+      [{ cls: '精灵', url: '', text: '乙的池位' }],
+      '写回 classLinks[1]'
+    );
+
+    /* 越权:乙提交甲的池位 0 → 403 */
+    const wrong = await call(h.submit, mockReq('PUT', {
+      headers: { cookie: cookie2 },
+      body: json({ tournamentId: 't1', cardId: 'p1', side: 's0', links: [{ cls: '皇家', text: 'x' }] })
+    }));
+    assert.strictEqual(wrong.status, 403, '他人池位提交 → 403');
+
+    /* 越界:池位 9 无主 → 403 */
+    const outOfRange = await call(h.submit, mockReq('PUT', {
+      headers: auth,
+      body: json({ tournamentId: 't1', cardId: 'p1', side: 's9', links: [] })
+    }));
+    assert.strictEqual(outOfRange.status, 403, '池位越界(无主) → 403');
+    console.log('✓ submit roll 池:池位归属/各自写回/越权/越界');
+  }
+
+  /* roll 池无比分域:比分锁路径天然不锁(scores 无该卡条目);窗口判定照常生效 */
+  {
+    const storage = memoryStorage(seedPoolWorld({ manual: 'closed' }));
+    const h = createHandler(storage, { currentUser: makeFindUser(storage) });
+    const closed = await call(h.submit, mockReq('PUT', {
+      headers: auth,
+      body: json({ tournamentId: 't1', cardId: 'p1', side: 's0', links: [{ cls: '皇家', text: 'x' }] })
+    }));
+    assert.strictEqual(closed.status, 423, '窗口关 → 423(roll 池同样受窗口约束)');
+  }
+
+  /* 比赛卡拒收 s<N> 侧:防池位写回分支误改比赛卡 {a,b} 结构(b 侧选手也不行) */
+  {
+    const seed = seedWorld({ manual: 'open' });
+    seed['users.json'].push(USER_U2);
+    const storage = memoryStorage(seed);
+    const h = createHandler(storage, { currentUser: makeFindUser(storage) });
+    const cookie2 = 'sess=' + session.issueFor('u2', pv, Date.now);
+    const badSide = await call(h.submit, mockReq('PUT', {
+      headers: { cookie: cookie2 },
+      body: json({ tournamentId: 't1', cardId: 'c1', side: 's0', links: [{ cls: '皇家', text: 'x' }] })
+    }));
+    assert.strictEqual(badSide.status, 403, '比赛卡 side=s0 → 403');
+    const cl = storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks;
+    assert.ok(cl && !Array.isArray(cl) && typeof cl === 'object', '比赛卡 classLinks 结构未被池位写回破坏');
+  }
+  console.log('✓ submit roll 池:窗口关 423/比赛卡拒收 s<N>');
+
+  /* ---- stripHiddenDecks:roll 池未公示 own 按池位剥离(数组形态 map) ---- */
+  {
+    const ws = seedPoolWorld({ manual: 'open' })['data.json'];
+    ws.tournaments[0].canvas.cards[0].classLinks[0] = [{ cls: '精灵', url: 'https://s', text: '秘密' }];
+    /* 本人(P1,池位 0 所属):保留 */
+    const mine = stripHiddenDecks(JSON.parse(JSON.stringify(ws)), P1);
+    assert.strictEqual(mine.tournaments[0].canvas.cards[0].classLinks[0].length, 1, '本人池位保留');
+    /* 池内他人(P2):池位 0 被剥为 [],自己池位(空)原样 */
+    const other = stripHiddenDecks(JSON.parse(JSON.stringify(ws)), P2);
+    const cl = other.tournaments[0].canvas.cards[0].classLinks;
+    assert.ok(Array.isArray(cl), '剥离后仍为数组形态');
+    assert.deepStrictEqual(cl[0], [], '他人池位被剥为 []');
+    assert.deepStrictEqual(cl[1], [], '自己池位空组原样');
+    /* 游客(未登录)同样被剥 */
+    const guest = stripHiddenDecks(JSON.parse(JSON.stringify(ws)), null);
+    assert.deepStrictEqual(guest.tournaments[0].canvas.cards[0].classLinks[0], [], '游客视角被剥');
+    /* 窗口关=公示:不剥 */
+    const closedWs = seedPoolWorld({ manual: 'closed' })['data.json'];
+    closedWs.tournaments[0].canvas.cards[0].classLinks[0] = [{ cls: '精灵', url: 'https://s', text: '公开' }];
+    const closedView = stripHiddenDecks(JSON.parse(JSON.stringify(closedWs)), null);
+    assert.strictEqual(closedView.tournaments[0].canvas.cards[0].classLinks[0].length, 1, '窗口关全员可见');
+    console.log('✓ stripHiddenDecks roll 池:本人/池内他人/游客/关闭');
   }
 
   delete process.env.SESSION_SECRET;

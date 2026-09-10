@@ -17,7 +17,8 @@ const storage = createStorage();
 
 /* 未公示卡组剥离:开关开启期间,该届未录比分的卡,某侧已提交的 own classLinks
  * 对"非该侧所属选手"的请求者置 [](继承链自动回退到已公示数据,不泄露)。
- * 管理员角色(admin/super)原样;仅作用于响应,不落盘。viewerPlayerId 为会话选手 id 或 null。 */
+ * roll 池卡按池位剥离(classLinks 数组逐位 map);管理员角色(admin/super)原样;
+ * 仅作用于响应,不落盘。viewerPlayerId 为会话选手 id 或 null。 */
 function stripHiddenDecks(workspace, viewerPlayerId) {
   for (const record of (workspace.tournaments || [])) {
     if (!record || !record.canvas) continue;
@@ -42,15 +43,23 @@ function stripHiddenDecks(workspace, viewerPlayerId) {
       if (!unscored.has(card.id) || !card.classLinks) continue;
       const rc = resolved.cards.find((c) => c.id === card.id);
       if (!rc) continue;
+      /* roll 池逐池位判隐藏,比赛卡按 a/b 侧(roll 池无比分,恒在 unscored) */
+      const isPool = rc.kind === 'rollPool';
       const hidden = {};
-      for (const [side, pid] of [['a', rc.a], ['b', rc.b]]) {
-        hidden[side] = pid && pid !== viewerPlayerId && Array.isArray(card.classLinks[side]) && card.classLinks[side].length > 0;
+      if (isPool) {
+        rc.seats.forEach((pid, i) => {
+          hidden['s' + i] = pid && pid !== viewerPlayerId && Array.isArray(card.classLinks[i]) && card.classLinks[i].length > 0;
+        });
+      } else {
+        for (const [side, pid] of [['a', rc.a], ['b', rc.b]]) {
+          hidden[side] = pid && pid !== viewerPlayerId && Array.isArray(card.classLinks[side]) && card.classLinks[side].length > 0;
+        }
       }
-      if (hidden.a || hidden.b) {
-        card.classLinks = {
-          a: hidden.a ? [] : card.classLinks.a,
-          b: hidden.b ? [] : card.classLinks.b
-        };
+      const anyHidden = isPool ? Object.values(hidden).some(Boolean) : (hidden.a || hidden.b);
+      if (anyHidden) {
+        card.classLinks = isPool
+          ? card.classLinks.map((g, i) => hidden['s' + i] ? [] : g)
+          : { a: hidden.a ? [] : card.classLinks.a, b: hidden.b ? [] : card.classLinks.b };
       }
     }
   }
