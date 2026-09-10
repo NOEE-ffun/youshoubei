@@ -69,8 +69,9 @@
     formatStartTime, bindZoomDock: bindZoomDockControls, bindZoomFitOnResize
   } = window.TournamentUtils;
   const {
-    DOT, CARD_WIDTH, CARD_HEIGHT, PORT_NORMALS, portOffset, pickPort, edgePath, arrowDefs,
-    DEFAULT_CANVAS_COLS, DEFAULT_CANVAS_ROWS, canvasOrigin
+    DOT, pickPort, edgePath, arrowDefs,
+    DEFAULT_CANVAS_COLS, DEFAULT_CANVAS_ROWS, canvasOrigin,
+    cardSize, portOffsetForCard, portNormalForCard, outletList, collectConnectedOutlets, rollManual
   } = window.CanvasModel;
 
   let scoreDialog = null;
@@ -179,7 +180,10 @@
       const phase = String(m.phase || '').toLowerCase();
       const aName = m.a ? (names.get(m.a) || '') : '';
       const bName = m.b ? (names.get(m.b) || '') : '';
-      if (label.includes(q) || phase.includes(q) || aName.includes(q) || bName.includes(q)) ids.push(m.id);
+      /* roll 池无 a/b,按池位选手名匹配(比赛卡 seats 为空数组,不影响原判定) */
+      const seatNames = m.kind === 'rollPool' ? (m.seats || []).map((pid) => names.get(pid) || '') : [];
+      if (label.includes(q) || phase.includes(q) || aName.includes(q) || bName.includes(q) ||
+        seatNames.some((n) => n.includes(q))) ids.push(m.id);
     }
     return ids;
   }
@@ -431,6 +435,8 @@
   }
 
   function cardHtml(match, card, effLinksMap) {
+    /* roll 池卡走独立模板:无比分按钮/无 format 文本,头部徽标显示口数 */
+    if (match.kind === 'rollPool') return poolHtml(card, match, effLinksMap);
     const played = match.played;
     const ready = Boolean(match.a && match.b);
     const current = (currentRecord().scores || {})[match.id];
@@ -470,6 +476,66 @@
     );
   }
 
+  /* roll 池池位行:池位即"座位",行内 = 头像 + 名字 + 该池位职业卡组槽;
+   * 卡组槽复用 classSlotHtml(组名 s+池位索引),空池位打 tbd 弱化;
+   * 空池位或该位无卡组条目时不渲染占位,仅编辑态追加"+"空槽 */
+  function poolRowHtml(card, m, i, eff, violations, editing) {
+    const pid = m.seats[i];
+    const p = pid ? playerById(pid) : null;
+    const links = (eff.seats && eff.seats[i]) || [];
+    const viol = violations.filter((v) => v.side === 's' + i);
+    let clsHtml = links.map((entry, idx) => classSlotHtml(card, 's' + i, entry, idx)).join('');
+    if (viol.length) {
+      clsHtml += '<button type="button" class="class-slot ban-violated" data-ban-card="' + card.id +
+        '" data-ban-side="s' + i + '" title="禁卡违规 ' + viol.length + ' 项"><img class="icon" src="icons/block.svg" alt="" aria-hidden="true"><em class="ban-count">' + viol.length + '</em></button>';
+    }
+    if (editing) {
+      clsHtml += '<button type="button" class="class-slot empty" data-cl-card="' + card.id + '" data-cl-group="s' + i + '" data-cl-idx="new" title="添加职业卡组"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true"></button>';
+    }
+    return (
+      '<div class="pool-row' + (pid ? '' : ' tbd') + '">' +
+      avatarMarkup(p, 'avatar-sm') +
+      '<span class="player-name">' + escapeHtml(pid ? playerName(pid) : '待定') + '</span>' +
+      '<span class="pool-cl">' + clsHtml + '</span>' +
+      '</div>'
+    );
+  }
+
+  /* roll 池卡模板:头部 = 标题 + 口数徽标(lr+tb 口)+ 状态 + Roll 按钮;
+   * Roll 按钮仅编辑态 manual 模式渲染(图标词表无 shuffle,走内联 img);
+   * 宽 ≥14 点加 pool-wide;未分配人数提示条仅在有遗留时出现 */
+  function poolHtml(card, m, effLinksMap) {
+    const editing = editMode;
+    let violations = [];
+    try { violations = CanvasModel.checkBanViolations(currentRecord(), card.id); } catch (e) { violations = []; }
+    const eff = (effLinksMap && effLinksMap.get(card.id)) || { seats: [] };
+    const stateText = m.cycle ? '连线成环'
+      : Object.keys(m.outlets).length ? (m.staleOutlets.length ? '已 roll · 过期' : '已 roll')
+      : '待 roll';
+    const rollBtn = (editing && m.mode === 'manual')
+      ? '<button type="button" class="btn btn-secondary btn-sm icon-btn roll-open" data-roll-open="' + card.id +
+        '" title="Roll 随机分配" aria-label="Roll 随机分配"><img class="icon" src="icons/shuffle.svg" alt="" aria-hidden="true">Roll</button>'
+      : '';
+    const rows = (card.slots || []).map((_, i) => poolRowHtml(card, m, i, eff, violations, editing)).join('');
+    const wide = Number(card.w) >= 14 ? ' pool-wide' : '';
+    return (
+      '<article class="match-card canvas-card pool-card' + wide + '"' +
+      ' data-match="' + card.id + '"' + (card.color ? ' data-tint' : '') +
+      ' style="left:' + cardLeft(card) + 'px;top:' + cardTop(card) + 'px;width:' + cardSize(card).width + 'px;min-height:' + cardSize(card).height + 'px' +
+      (card.color ? ';--card-tint:' + card.color : '') + '">' +
+      '<header class="match-head">' +
+      '<h2 class="match-title">' + escapeHtml(card.label || card.id) + '</h2>' +
+      '<span class="match-format">' + card.ports.lr + '+' + card.ports.tb + ' 口</span>' +
+      '<span class="match-state">' + stateText + '</span>' +
+      rollBtn +
+      '</header>' +
+      (card.phase ? '<div class="match-phase">' + escapeHtml(card.phase) + '</div>' : '') +
+      '<div class="pool-rows">' + rows + '</div>' +
+      (m.unassigned.length ? '<div class="pool-unassigned">未分配 ' + m.unassigned.length + ' 人</div>' : '') +
+      '</article>'
+    );
+  }
+
   /* 连线箭头 marker(与编辑器临时线共用同一模板,canvas-model.js 唯一真源) */
   const EDGE_ARROW_DEFS = arrowDefs('edge');
 
@@ -501,17 +567,25 @@
         const source = resolvedById.get(slot.cardId);
         const target = resolvedById.get(card.id);
         if (!source || !target) continue;
-        /* 端点按两卡方位自动选连接点:胜者线从源卡上排出,A 位入上排;败者/B 位走下排 */
+        /* 端点锚点按卡 kind 泛化:源端引用池出口(slot.outlet)时直接用出口标识
+         * 几何(band 对 outlet 槽无意义),否则按两卡方位自动选连接点——
+         * 胜者线从源卡上排出,A 位入上排;败者/B 位走下排;
+         * 目标为 roll 池时入口取 slot.inlet,缺省落卡中心 */
         const band = slot.outcome === 'winner' ? 'upper' : 'lower';
-        const srcPort = pickPort(source, target, band);
-        const dstPort = pickPort(target, source, slotIndex === 0 ? 'upper' : 'lower');
-        const o1 = portOffset(srcPort);
-        const o2 = portOffset(dstPort);
+        const srcPort = slot.outlet ? slot.outlet : pickPort(source, target, band);
+        let dstPort = null;
+        if (target.kind === 'rollPool') dstPort = slot.inlet || null;
+        else dstPort = pickPort(target, source, slotIndex === 0 ? 'upper' : 'lower');
+        const o1 = portOffsetForCard(source, srcPort);
+        const size2 = cardSize(target);
+        const o2 = dstPort ? portOffsetForCard(target, dstPort) : { x: size2.width / 2, y: size2.height / 2 };
         const p1 = { x: cardLeft(source) + o1.x, y: cardTop(source) + o1.y };
         const p2 = { x: cardLeft(target) + o2.x, y: cardTop(target) + o2.y };
-        const cls = slot.outcome === 'loser' ? 'loser' : 'winner';
+        const n1 = portNormalForCard(source, srcPort);
+        const n2 = dstPort ? portNormalForCard(target, dstPort) : [0, 1];
+        const cls = slot.outlet ? 'winner' : (slot.outcome === 'loser' ? 'loser' : 'winner');
         paths.push(
-          '<path d="' + edgePath(p1, PORT_NORMALS[srcPort], p2, PORT_NORMALS[dstPort]) +
+          '<path d="' + edgePath(p1, n1, p2, n2) +
           '" class="canvas-edge ' + cls + '" marker-end="url(#edge-arrow-' + cls + ')"></path>'
         );
       }
@@ -536,9 +610,10 @@
     const names = new Map((window.TournamentApp.players || []).map((p) => [p.id, p.name]));
     const effLinksMap = CanvasModel.resolveEffectiveClassLinks(canvas, record.scores || {});
     const cardsHtml = resolved.cards.map((match) => cardHtml(match, canvas.cards.find((c) => c.id === match.id) || match, effLinksMap)).join('');
-    /* 无限画布:board 尺寸纯由卡片范围决定(负象限经原点归一),无边界框;无卡时保留最小底 */
-    const cardMaxX = Math.max(600, ...(canvas.cards || []).map((c) => cardLeft(c) + CARD_WIDTH + 40));
-    const cardMaxY = Math.max(400, ...(canvas.cards || []).map((c) => cardTop(c) + CARD_HEIGHT + 40));
+    /* 无限画布:board 尺寸纯由卡片范围决定(负象限经原点归一),无边界框;
+     * 按卡实际尺寸取宽高(roll 池 w×h 点,比赛卡 10×7 点),无卡时保留最小底 */
+    const cardMaxX = Math.max(600, ...(canvas.cards || []).map((c) => cardLeft(c) + cardSize(c).width + 40));
+    const cardMaxY = Math.max(400, ...(canvas.cards || []).map((c) => cardTop(c) + cardSize(c).height + 40));
     board.style.width = cardMaxX + 'px';
     board.style.height = cardMaxY + 'px';
     /* 玻璃样式:写在内联变量上,卡片 CSS 消费;点阵层在 scroll 上由相机同步 */
@@ -555,10 +630,23 @@
     board.appendChild(wrap);
     CanvasEditor.syncZoom();
     if (editMode) {
-      // 编辑模式额外显示八连接点(连线交互在 canvas-editor.js 中实现):
-      // 上排四点 = 胜者输出 / A 位输入,下排四点 = 败者输出 / B 位输入
+      // 编辑模式额外显示连接点(连线交互在 canvas-editor.js 中实现):
+      // 比赛卡为固定八点——上排四点 = 胜者输出 / A 位输入,下排四点 = 败者输出 / B 位输入;
+      // roll 池卡改为动态出口节点(L1/T1/R2/B1 式),位置按出口几何现算
       board.querySelectorAll('.canvas-card').forEach((el) => {
         const cardId = el.dataset.match;
+        const raw = (canvas.cards || []).find((c) => c.id === cardId) || {};
+        if (raw.kind === 'rollPool') {
+          el.insertAdjacentHTML('beforeend', '<div class="card-ports">' +
+            outletList(raw.ports).map((o) => {
+              const off = portOffsetForCard(raw, o);
+              /* 出口节点几何与旧八口同口径:坐标点居中于节点(translate 平移半宽),
+               * 旧口靠 data-port 专属 CSS 居中,出口标识无对应规则,内联补齐 */
+              return '<span class="port port-node port-pool" data-port="' + o + '" data-card="' + cardId +
+                '" data-kind="pool" style="left:' + off.x + 'px;top:' + off.y + 'px;translate:-50% -50%" title="连接点 ' + o + ':拖入收人 / 拖出为出口"></span>';
+            }).join('') + '</div>');
+          return;
+        }
         const ports = [
           ['topLeft', 'upper', '上左连接点:拖出胜者 / 拖入 A 位'],
           ['topRight', 'upper', '上右连接点:拖出胜者 / 拖入 A 位'],
@@ -915,6 +1003,23 @@
     scoreDialog.showModal();
   }
 
+  /* roll 池手动 Roll:重写 assignments 快照。rollManual 返回 {outlets,unassigned},
+   * 落盘只存 outlets 平表(口→选手)——resolveCanvas 的快照读取即此形态;
+   * 已有分配时重 roll 会连锁改变下游对阵,确认防误触 */
+  async function doRollPool(cardId) {
+    const record = currentRecord();
+    const card = (record.canvas.cards || []).find((c) => c.id === cardId);
+    if (!card || card.kind !== 'rollPool') return;
+    if (card.assignments && Object.keys(card.assignments).length) {
+      if (!(await uiConfirm('重新 roll 会连锁改变下游对阵,确定吗?'))) return;
+    }
+    const resolved = CanvasModel.resolveCanvas(record.canvas, record.roster || [], record.scores || {});
+    const m = resolved.cards.find((c) => c.id === cardId);
+    if (!m) return;
+    card.assignments = rollManual(m.seats, card.ports, collectConnectedOutlets(record.canvas, cardId)).outlets;
+    save().then(() => renderAll());
+  }
+
   function bindCanvas() {
     const board = document.getElementById('canvas-board');
     board.addEventListener('click', (event) => {
@@ -923,6 +1028,8 @@
         openScoreDialog(scoreBtn.dataset.scoreOpen);
         return;
       }
+      const rollBtn = event.target.closest('[data-roll-open]');
+      if (rollBtn) { doRollPool(rollBtn.dataset.rollOpen); return; }
       const banBtn = event.target.closest('.ban-violated');
       if (banBtn) {
         openBanPopover(banBtn, banBtn.dataset.banCard, banBtn.dataset.banSide);
