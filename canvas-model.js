@@ -1153,6 +1153,47 @@ function arrowDefs(prefix) {
     return true;
   }
 
+  /* ========== 批量编辑(列表视图多选编辑用) ==========
+   * config 各键缺省 = 不应用;纯函数直接改写传入卡片(克隆/历史由调用方负责)。
+   * phase trim 后空串 = 清空;format 仅 match 卡适用,trim 空串落 'BO3';
+   * rankWinner/rankLoser 仅 match 卡(exitRanks 惰性建,null = 清除);
+   * banListIds 经 normalizeBanListIds 归一(空数组 = delete 解绑);
+   * titleTemplate 按 cards 数组序 {i} 从 1 编号,{old} 为原标题。 */
+  function renderBatchTitle(template, index, oldLabel) {
+    return String(template)
+      .replace(/\{i\}/g, String(index + 1))
+      .replace(/\{old\}/g, oldLabel == null ? '' : String(oldLabel));
+  }
+
+  function applyBatchEdit(cards, config) {
+    const cfg = config || {};
+    const list = Array.isArray(cards) ? cards : [];
+    for (let i = 0; i < list.length; i += 1) {
+      const card = list[i];
+      if (!card) continue;
+      const isMatch = card.kind !== 'rollPool';
+      if (cfg.phase !== undefined) card.phase = String(cfg.phase).trim();
+      if (cfg.format !== undefined && isMatch) {
+        const fmt = String(cfg.format).trim();
+        card.format = fmt || 'BO3';
+      }
+      if (isMatch && (cfg.rankWinner !== undefined || cfg.rankLoser !== undefined)) {
+        card.exitRanks = card.exitRanks || {};
+        if (cfg.rankWinner !== undefined) card.exitRanks.winner = cfg.rankWinner;
+        if (cfg.rankLoser !== undefined) card.exitRanks.loser = cfg.rankLoser;
+      }
+      if (cfg.banListIds !== undefined) {
+        const ids = normalizeBanListIds(cfg.banListIds);
+        if (ids.length) card.banListIds = ids;
+        else delete card.banListIds;
+      }
+      if (cfg.titleTemplate !== undefined) {
+        card.label = renderBatchTitle(cfg.titleTemplate, i, card.label);
+      }
+    }
+    return list;
+  }
+
   /* ========== 多卡剪贴板 ========== */
 
   /* 深拷贝一组卡片用于粘贴：全部换新 id、整体平移 (dx, dy) 格、label 加「副本」后缀；
@@ -1244,6 +1285,8 @@ function arrowDefs(prefix) {
     deriveStandings,
     listGroups,
     applyListOrder,
+    renderBatchTitle,
+    applyBatchEdit,
     migrateLegacyTournament
   };
 });
