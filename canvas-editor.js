@@ -25,8 +25,6 @@ let listActive = false;
   let connectState = null;
   let marqueeState = null;
   let copiedCards = [];
-  let cardDialog = null;
-  let editingCardId = null;
   let wheelBound = false;
 
   /* ---------- 撤销/重做(编辑安全感) ----------
@@ -38,7 +36,6 @@ let listActive = false;
   let dirty = false;
   let dragBeforeSnapshot = null;
   let nudgeBeforeSnapshot = null;
-  let dialogBeforeSnapshot = null;
 
   function currentRecord() {
     return window.TournamentApp.current;
@@ -97,7 +94,7 @@ let listActive = false;
     }
   }
 
-  /* 改动入栈:pre 为改动前快照(拖拽/弹窗这类"发起与落盘分离"的操作在发起时捕获),
+  /* 改动入栈:pre 为改动前快照(拖拽/微调这类"发起与落盘分离"的操作在发起时捕获),
    * 缺省取当前状态(调用点须紧贴改动之前) */
   function commitHistory(pre) {
     syncHistoryOwner();
@@ -184,7 +181,7 @@ let listActive = false;
   }
 
   /* 统一选择模型:batchSelected 是唯一多选集合(全工具生效,对齐 Figma);
-   * selectedCardId 是最近操作锚(卡片弹窗等单卡场景用) */
+   * selectedCardId 是最近操作锚(单卡场景用) */
   function selectedIds() {
     return [...batchSelected];
   }
@@ -283,7 +280,6 @@ let listActive = false;
     const sc = scrollEl();
     if (sc) sc.classList.remove('editing');
     document.body.classList.remove('canvas-editing');
-    if (cardDialog && cardDialog.open) cardDialog.close();
     refreshToolbarUI();
   }
 
@@ -773,7 +769,7 @@ let listActive = false;
       return;
     }
     if (tool === 'delete') {
-      /* 职业槽/比分按钮归 bracket 委托管(开弹窗),不进删除选择 */
+      /* 职业槽/比分按钮归 bracket 委托管(编辑态开抽屉),不进删除选择 */
       if (event.target.closest('button.class-slot, button.score-open')) return;
       event.preventDefault();
       toggleBatchSelected(cardEl.dataset.match);
@@ -929,9 +925,11 @@ let listActive = false;
     if (!active) return;
     const cardEl = event.target.closest('.canvas-card');
     if (cardEl) {
-      if (tool !== 'delete') openCardDialog(cardEl.dataset.match);
+      /* 卡片设置弹窗已下线:双击=选中并开设置抽屉(与单击等价) */
+      if (tool !== 'delete') selectCard(cardEl.dataset.match);
       return;
     }
+    /* 双击空白建卡(保留,现有逻辑不动) */
     if (tool === 'delete') return;
     const rect = board().getBoundingClientRect();
     /* 世界坐标 = DOM 坐标 + 渲染原点(负象限卡片包围盒左上归一在 DOM 0,0) */
@@ -943,8 +941,8 @@ let listActive = false;
   function onKeyDown(event) {
     if (!active && !listActive) return;
     if (event.target && event.target.closest && event.target.closest('input, textarea, select')) return;
-    /* 模态弹窗打开时不响应画布快捷键:撤销/删除会在弹窗底下改数据,
-     * 弹窗里再点保存会把旧值写回,造成静默数据错乱 */
+    /* 模态弹窗(删除确认/比分录入等)打开时不响应画布快捷键:撤销/删除会在
+     * 弹窗底下改数据,弹窗关闭后的落盘会把旧值写回,造成静默数据错乱 */
     if (document.querySelector('dialog[open]')) return;
     const mod = event.ctrlKey || event.metaKey;
     if (mod && (event.key === 'z' || event.key === 'Z')) {
@@ -1229,7 +1227,7 @@ let listActive = false;
   }
 
   /* 多卡粘贴:整体平移一个卡位(12×8 点)保持相对位置,集内连线跟随重映射;
-   * 自动选中新集合,不弹设置窗(多卡连续弹窗不合理) */
+   * 自动选中新集合(≥2 张时随之开批量表单抽屉) */
   function pasteCards(sources) {
     const record = currentRecord();
     const canvas = record.canvas || (record.canvas = { cards: [] });
@@ -1248,43 +1246,6 @@ let listActive = false;
     notify('已粘贴 ' + clones.length + ' 张卡片');
   }
 
-  /* ---------- 卡片属性弹窗 ---------- */
-
-  /* 弹窗底部的连线提示按卡型切换(比赛卡原文;roll 池讲口拖出与口数守卫) */
-  const MATCH_DIALOG_HINT = '连线:从连接点拖出箭头,拖到目标卡片连接点松手。上排连接点默认输出胜者、接入 A 位,下排默认输出败者、接入 B 位,均可在上面下拉中自定义。';
-  const POOL_DIALOG_HINT = '连线:从池口拖出箭头接到目标卡片或另一池;池位里的「来自 ×××」为连线位,换源请在画布上重连。缩减口数不得拆掉已连线的出口(先拆线再缩口)。';
-
-  function buildCardDialog() {
-    if (cardDialog) return;
-    cardDialog = document.createElement('dialog');
-    cardDialog.id = 'card-edit-dialog';
-    cardDialog.setAttribute('aria-labelledby', 'card-edit-title');
-    cardDialog.innerHTML =
-      '<div class="dialog-head">' +
-      '  <h2 id="card-edit-title">卡片设置</h2>' +
-      '  <button type="button" class="btn btn-ghost btn-sm" data-card-close>关闭</button>' +
-      '</div>' +
-      '<div class="dialog-body">' +
-      /* 表单字段挂载点:openCardDialog 按卡型(比赛卡 / roll 池)注入 fieldsHtml 系 */
-      '<div class="cf-fields"></div>' +
-      /* 专用类名区别于表单内的 banlist hint(同样是 hint 样式),按卡型切换文案 */
-      '  <p class="hint cf-dialog-hint"></p>' +
-      '  <div class="dialog-actions">' +
-      '    <button type="button" class="btn btn-secondary" data-card-close>取消</button>' +
-      '    <button type="button" class="btn btn-primary" data-card-save>' + (window.TournamentUtils ? window.TournamentUtils.iconMarkup('save', '保存') : '') + '保存</button>' +
-      '  </div>' +
-      '</div>';
-    document.body.appendChild(cardDialog);
-    cardDialog.querySelectorAll('[data-card-close]').forEach((btn) => btn.addEventListener('click', () => cardDialog.close()));
-    cardDialog.querySelector('[data-card-save]').addEventListener('click', saveCardDialog);
-    /* 弹窗无论保存还是取消,关闭时都清掉开窗快照(保存路径已先行消费) */
-    cardDialog.addEventListener('close', () => {
-      dialogBeforeSnapshot = null;
-    });
-    /* 行删除走事件委托(与选中抽屉共用同一绑定逻辑) */
-    CardForm.bindRowDeletion(cardDialog);
-  }
-
   /* ---------- 职业卡组链接列表编辑(A/B 两组):字段/回填/读取在 card-form.js ---------- */
 
   /* 连线来源卡片的可读名称:优先 label(如 胜者组 1/4 决赛 1)。
@@ -1294,72 +1255,13 @@ let listActive = false;
     return source ? (source.label || source.id) : cardId;
   }
 
-  function openCardDialog(cardId) {
-    const card = findCard(cardId);
-    if (!card) return;
-    buildCardDialog();
-    editingCardId = cardId;
-    dialogBeforeSnapshot = snapshotState();
-    const record = currentRecord();
-    const effOf = (c) => (record && CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {}).get(c.id)) || {};
-    /* 表单按卡型分流:roll 池走池专属表单(形状/口数/模式/池位/池位职业组) */
-    const isPool = card.kind === 'rollPool';
-    const fields = cardDialog.querySelector('.cf-fields');
-    if (fields) fields.innerHTML = isPool ? CardForm.fieldsHtmlPool() : CardForm.fieldsHtml();
-    const hint = cardDialog.querySelector('.cf-dialog-hint');
-    if (hint) hint.textContent = isPool ? POOL_DIALOG_HINT : MATCH_DIALOG_HINT;
-    if (isPool) {
-      CardForm.fillPool(cardDialog, card, effOf(card), flowLabelsPool(card));
-    } else {
-      const flowSourceLabels = { a: '', b: '' };
-      const slotA = card.slots && card.slots[0];
-      const slotB = card.slots && card.slots[1];
-      if (slotA && slotA.type === 'flow') flowSourceLabels.a = flowSourceLabel(slotA.cardId);
-      if (slotB && slotB.type === 'flow') flowSourceLabels.b = flowSourceLabel(slotB.cardId);
-      CardForm.fill(cardDialog, card, effOf(card), flowSourceLabels);
-    }
-    cardDialog.showModal();
-  }
-
-  function saveCardDialog() {
-    const card = findCard(editingCardId);
-    if (!card) return;
-    if (card.kind === 'rollPool') {
-      const poolData = CardForm.readPool(cardDialog);
-      /* 守卫不过:提示并保持弹窗打开,数据不动不落盘 */
-      if (!CardForm.applyToCardPool(card, poolData, currentRecord().canvas, cardDialog)) {
-        notify('该口数会拆掉已连线的出口,先拆线', 'danger');
-        return;
-      }
-    } else {
-      const { invalid, data } = CardForm.read(cardDialog);
-      if (invalid > 0) {
-        notify('有 ' + invalid + ' 行职业链接不完整(职业与链接/悬停文字需成对填写),请补全或清空该行', 'danger');
-        return;
-      }
-      CardForm.applyToCard(card, data);
-    }
-    /* 真有改动才入历史(打开又原样保存不产生空撤销步) */
-    if (dialogBeforeSnapshot) {
-      if (JSON.stringify(snapshotState()) !== JSON.stringify(dialogBeforeSnapshot)) {
-        commitHistory(dialogBeforeSnapshot);
-      }
-      dialogBeforeSnapshot = null;
-    }
-    cardDialog.close();
-    /* 弹窗保存后面板强制回填:面板表单停在弹窗打开前的旧值,不重置的话
-     * 下一次面板输入(CardForm.read 读全量旧值→applyToCard)会静默回退弹窗改动;
-     * 置空 panelCardId 让 syncPanel 走"换卡"分支,用最新 card+effLinks 重填 */
-    panelCardId = null;
-    refreshToolbarUI();
-    saveCanvas().then(() => {
-      requestRender();
-    });
-  }
-
-  /* ---------- 卡片设置抽屉(选中单卡实时编辑) ---------- */
+  /* ---------- 卡片设置抽屉(单卡实时应用 / ≥2 张批量表单) ---------- */
 
   let panelCardId = null;
+  /* 面板形态:single=单卡 CardForm 实时应用,batch=多选 BatchForm 显式应用,null=收起 */
+  let panelMode = null;
+  /* 批量形态的选中集签名:框选/加选/删卡改变集合时据此重填批量表单 */
+  let panelBatchSig = null;
   let panelBeforeSnapshot = null;
   let panelCommitTimer = null;
   /* 表单自上次回填起是否动过(任何实时 input/change/删行事件置位,回填/收起复位):
@@ -1382,7 +1284,7 @@ let listActive = false;
     return (CanvasModel.resolveEffectiveClassLinks(record.canvas, record.scores || {}).get(card.id)) || {};
   }
 
-  /* 连线来源可读名(与弹窗路径 openCardDialog 同算法,card-form.js 不自己算) */
+  /* 连线来源可读名(按 card-form.js 契约由宿主算好传入,表单模块不自算) */
   function flowLabelsOf(card) {
     const labels = { a: '', b: '' };
     const slotA = card.slots && card.slots[0];
@@ -1401,50 +1303,91 @@ let listActive = false;
     return labels;
   }
 
-  /* 唯一显隐同步点:refreshToolbarUI 每次选择变化后调用 */
+  /* 唯一显隐同步点:refreshToolbarUI 每次选择变化后调用。
+   * 双形态:选中 0 张收起;1 张 CardForm 实时应用(路径零改动);≥2 张 BatchForm 显式应用 */
   function syncPanel() {
     if (panelSyncing) return;
     if (!active && !listActive) return hidePanel();
     const ids = selectedIds();
-    if (ids.length !== 1) return hidePanel();
-    const card = findCard(ids[0]);
-    if (!card) return hidePanel();
+    if (!ids.length) return hidePanel();
     const el = panelEl();
     if (!el) return;
     panelSyncing = true;
     try {
-      if (panelCardId !== card.id) {
-        /* 拖动意图的静默选中:只换选择不开抽屉,松手无位移才补开 */
+      if (ids.length === 1) {
+        const card = findCard(ids[0]);
+        if (!card) return hidePanel();
+        if (panelMode !== 'single' || panelCardId !== card.id) {
+          /* 拖动意图的静默选中:只换选择不开抽屉,松手无位移才补开 */
+          if (panelSuppressed) return;
+          flushPanelCommit();
+          /* 上一次收回的滑出动画还没走完就重新选中:中断收合,面板原地复开 */
+          cancelPanelClose(el);
+          panelCardId = card.id;
+          panelMode = 'single';
+          el.hidden = false;
+          document.body.classList.add('card-panel-open');
+          const body = document.getElementById('card-panel-body');
+          /* 表单按卡型分流:换型(比赛卡 ↔ roll 池)时重建;事件绑定只挂一次
+           * (bindRowDeletion/bindPanelEvents 均为容器级委托,重建 innerHTML 不失效) */
+          const isPool = card.kind === 'rollPool';
+          if (!body.dataset.built || body.dataset.pool !== (isPool ? '1' : '0')) {
+            body.innerHTML = isPool ? CardForm.fieldsHtmlPool() : CardForm.fieldsHtml();
+            body.dataset.built = '1';
+            body.dataset.pool = isPool ? '1' : '0';
+            if (!body.dataset.bound) {
+              body.dataset.bound = '1';
+              bindPanelEvents(body);
+            }
+          }
+          if (isPool) CardForm.fillPool(body, card, effLinksOf(card), flowLabelsPool(card));
+          else CardForm.fill(body, card, effLinksOf(card), flowLabelsOf(card));
+          /* 新卡表单回填完成:零输入基线重新建立(上一卡的 touched 不带到新卡) */
+          panelFormTouched = false;
+        }
+        const tag = document.getElementById('card-panel-label');
+        if (tag) tag.textContent = card.label || card.id;
+        return;
+      }
+      /* 批量形态:选中 ≥2 张。选中集变化即重填(勾选态随之重置,可接受) */
+      const sig = ids.slice().sort().join('\n');
+      if (panelMode !== 'batch' || panelBatchSig !== sig) {
         if (panelSuppressed) return;
         flushPanelCommit();
-        /* 上一次收回的滑出动画还没走完就重新选中:中断收合,面板原地复开 */
         cancelPanelClose(el);
-        panelCardId = card.id;
+        panelMode = 'batch';
+        panelBatchSig = sig;
+        /* 单卡实时应用关闭:panelCardId 判空让 applyPanelEdits 自然短路,
+         * body 上残留的单卡监听(bindPanelEvents 容器级委托)不产生副作用 */
+        panelCardId = null;
         el.hidden = false;
         document.body.classList.add('card-panel-open');
         const body = document.getElementById('card-panel-body');
-        /* 表单按卡型分流:换型(比赛卡 ↔ roll 池)时重建;事件绑定只挂一次
-         * (bindRowDeletion/bindPanelEvents 均为容器级委托,重建 innerHTML 不失效) */
-        const isPool = card.kind === 'rollPool';
-        if (!body.dataset.built || body.dataset.pool !== (isPool ? '1' : '0')) {
-          body.innerHTML = isPool ? CardForm.fieldsHtmlPool() : CardForm.fieldsHtml();
-          body.dataset.built = '1';
-          body.dataset.pool = isPool ? '1' : '0';
-          if (!body.dataset.bound) {
-            body.dataset.bound = '1';
-            bindPanelEvents(body);
-          }
-        }
-        if (isPool) CardForm.fillPool(body, card, effLinksOf(card), flowLabelsPool(card));
-        else CardForm.fill(body, card, effLinksOf(card), flowLabelsOf(card));
-        /* 新卡表单回填完成:零输入基线重新建立(上一卡的 touched 不带到新卡) */
+        /* stats 按画布数组序(Task 2 契约:cards 序决定标题模板 {i} 编号) */
+        const order = (currentRecord().canvas && currentRecord().canvas.cards) || [];
+        const cards = ids.map(findCard).filter(Boolean)
+          .sort((x, y) => order.findIndex((c) => c.id === x.id) - order.findIndex((c) => c.id === y.id));
+        const stats = {
+          ids: cards.map((c) => c.id),
+          cards,
+          matchCount: cards.filter((c) => c.kind !== 'rollPool').length,
+          poolCount: cards.filter((c) => c.kind === 'rollPool').length
+        };
+        /* stats 闭包安全(Task 3 移交):每次重建容器重绑,不重用旧 DOM */
+        body.innerHTML = window.BatchForm.fieldsHtml();
+        /* CardForm 的 built/pool 标记作废:回单卡时强制重建表单
+         * (bound 容器级委托挂在 body 上,不受 innerHTML 替换影响,不重挂) */
+        delete body.dataset.built;
+        delete body.dataset.pool;
+        window.BatchForm.fill(body, stats);
+        window.BatchForm.bindEvents(body, stats, applyBatchFromPanel);
         panelFormTouched = false;
+        const tag = document.getElementById('card-panel-label');
+        if (tag) tag.textContent = '已选 ' + cards.length + ' 张';
       }
     } finally {
       panelSyncing = false;
     }
-    const tag = document.getElementById('card-panel-label');
-    if (tag) tag.textContent = card.label || card.id;
   }
 
   /* 收回动画:滑出 200ms(CSS card-panel-out)后才真正 hidden;
@@ -1462,6 +1405,8 @@ let listActive = false;
   function hidePanel() {
     flushPanelCommit();
     panelCardId = null;
+    panelMode = null;
+    panelBatchSig = null;
     /* 收起即作废当前表单的输入痕迹:重开走换卡分支重填并重建零输入基线 */
     panelFormTouched = false;
     const el = panelEl();
@@ -1507,7 +1452,7 @@ let listActive = false;
        * 应用:不完整职业行按行级丢弃,其余已完整字段照常写回落盘 */
       applyPanelEdits({ flush: true });
       panelBeforeSnapshot = null;
-      /* 与弹窗保存(saveCardDialog)同守卫:应用后与基线无实质改动不入历史不
+      /* 实质改动守卫:应用后与基线无实质改动不入历史不
        * 落盘(输入又改回原值、或宽容应用未产生任何净变化),撤销步与 PUT 只为
        * 真改动发生;顺带回滚求严格相等,内存与盘保持一致 */
       if (JSON.stringify(snapshotState()) === JSON.stringify(before)) {
@@ -1587,6 +1532,19 @@ let listActive = false;
     body.addEventListener('click', (event) => {
       if (event.target.closest('[data-cl-del], .cf-pool-del, .cf-pool-add')) applyPanelEdits();
     });
+  }
+
+  /* 批量应用(BatchForm 应用钮回调):一次快照→原位批量改→一步历史→落盘重绘。
+   * 卡集取 stats.cards(开面板时按画布数组序算好,闭包冻结);整批为一步撤销 */
+  function applyBatchFromPanel(config, stats) {
+    const before = snapshotState();
+    CanvasModel.applyBatchEdit(stats.cards, config);
+    commitHistory(before);
+    saveCanvas().then(() => {
+      requestRender();
+      highlightSelected();
+    });
+    notify('已应用到 ' + stats.cards.length + ' 张卡片');
   }
 
   /* 系统打断触摸(来电/手势导航):只清触摸轨迹,不打断可恢复的其它手势 */
@@ -1728,7 +1686,6 @@ let listActive = false;
     addPoolCard,
     deleteSelected,
     getSelectedIds: selectedIds,
-    editCard: openCardDialog,
     selectCard,
     setSelection,
     confirmClickSelection,

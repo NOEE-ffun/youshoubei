@@ -105,12 +105,13 @@ test('抽屉改标题实时生效并落盘', async ({ page }) => {
   await page.request.post('/api/dev/reset');
 });
 
-test('双击卡片仍开弹窗(保存/取消语义保留)', async ({ page }) => {
+test('双击卡片=选中开设置抽屉(卡片弹窗已下线)', async ({ page }) => {
   await enterEdit(page, { fit: true });
   await page.locator('.canvas-card').first().dblclick();
-  await page.locator('#card-edit-dialog').waitFor({ state: 'visible' });
-  await page.keyboard.press('Escape');
-  await page.locator('#card-edit-dialog').waitFor({ state: 'hidden' });
+  /* 弹窗整链已删:不出现 #card-edit-dialog,双击与单击等价(选中+抽屉) */
+  await expect(page.locator('#card-edit-dialog')).toHaveCount(0);
+  await expect(page.locator('#card-panel')).toBeVisible();
+  await expect(page.locator('#card-panel .cf-label')).not.toHaveValue('');
   await page.request.post('/api/dev/reset');
 });
 
@@ -141,22 +142,18 @@ test('抽屉连续输入合并为一步撤销', async ({ page }) => {
   await page.request.post('/api/dev/reset');
 });
 
-test('弹窗保存后面板同步回填,继续面板编辑不回退弹窗改动', async ({ page }) => {
+test('抽屉连续改名不回退,后续编辑与落盘一致(弹窗用例迁移)', async ({ page }) => {
   await enterEdit(page, { fit: true });
   await page.locator('.canvas-card').first().click();
   await expect(page.locator('#card-panel')).toBeVisible();
-  await page.locator('.canvas-card').first().dblclick();
-  await page.locator('#card-edit-dialog').waitFor({ state: 'visible' });
-  await page.locator('#card-edit-dialog .cf-label').fill('弹窗改的名');
-  await page.locator('#card-edit-dialog [data-card-save]').click();
-  await page.locator('#card-edit-dialog').waitFor({ state: 'hidden' });
-  /* 面板表单必须立刻反映弹窗保存的值,否则下一次面板输入会把全量旧值写回 */
-  await expect(page.locator('#card-panel .cf-label')).toHaveValue('弹窗改的名');
-  await page.locator('#card-panel .cf-label').fill('面板接着改');
+  await page.locator('#card-panel .cf-label').fill('抽屉第一次改');
   await page.waitForTimeout(800); // 防抖 500 + 落盘
-  await expect(page.locator('.canvas-card').first()).toContainText('面板接着改');
+  /* 抽屉内继续编辑:后一次输入不得把前一次的已落盘值回退 */
+  await page.locator('#card-panel .cf-label').fill('抽屉接着改');
+  await page.waitForTimeout(800);
+  await expect(page.locator('.canvas-card').first()).toContainText('抽屉接着改');
   const data = await (await page.request.get('/api/data')).json();
-  expect(data.tournaments[0].canvas.cards[0].label).toBe('面板接着改');
+  expect(data.tournaments[0].canvas.cards[0].label).toBe('抽屉接着改');
   await page.request.post('/api/dev/reset');
 });
 

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { ADMIN_PHONE, smsLogin, resetStore, seedWorkspace } from './helpers.mjs';
 
-/* 画布边界回归:双指抬起发生在画布外(指针泄漏)、弹窗打开时的键盘撤销、
+/* 画布边界回归:双指抬起发生在画布外(指针泄漏)、确认弹窗打开时的键盘撤销、
  * 恢复缩放后数据变更的重定中。均为 2026-08 批次新交互的边界。 */
 
 test.setTimeout(60_000);
@@ -61,31 +61,36 @@ test('手指在画布外抬起不破坏后续捏合(指针泄漏回归)', async 
   expect(second).toBeGreaterThan(first);
 });
 
-test('卡片弹窗打开时 Cmd+Z 不触发画布撤销', async ({ page }) => {
+test('确认弹窗打开时 Cmd+Z 不触发画布撤销', async ({ page }) => {
   await page.goto('/schedule.html');
   await page.waitForSelector('.canvas-card');
   await page.locator('#header-edit-btn').click();
   await page.waitForSelector('.canvas-board.editing');
 
+  /* 卡片设置弹窗已下线,模态守卫迁移到删除确认弹窗(dialog[open] 拦截画布快捷键) */
   const card0 = page.locator('.canvas-card').first();
-  await card0.dblclick();
-  const dlg = page.locator('#card-edit-dialog');
-  await dlg.waitFor({ state: 'visible' });
-  await page.locator('#card-edit-dialog .cf-label').fill('弹窗守卫卡');
-  await page.locator('#card-edit-dialog [data-card-save]').click();
-  await dlg.waitFor({ state: 'hidden' });
-  await page.waitForTimeout(400);
-  await expect(page.locator('.canvas-card').first()).toContainText('弹窗守卫卡');
+  await card0.dblclick(); // 双击=选中开抽屉(与单击等价)
+  await expect(page.locator('#card-panel')).toBeVisible();
+  await page.locator('#card-panel .cf-label').fill('守卫卡');
+  await page.waitForTimeout(800); // 防抖 500 + 落盘
+  await expect(card0).toContainText('守卫卡');
 
-  // 重开弹窗,焦点移到非输入区(标题),Cmd+Z 不应穿透到画布
-  await card0.dblclick();
+  // 选中卡按 Delete 弹删除确认:模态打开期间 Cmd+Z 不得穿透到画布撤销
+  await page.locator('#card-panel .card-panel-title').click(); // 焦点移出输入框
+  await page.keyboard.press('Delete');
+  const dlg = page.locator('#confirm-dialog');
   await dlg.waitFor({ state: 'visible' });
-  await page.locator('#card-edit-title').click();
+  await page.locator('#confirm-title').click(); // 焦点在非输入区
   await page.keyboard.press('Meta+z');
   await page.waitForTimeout(400);
-  await expect(page.locator('.canvas-card').first()).toContainText('弹窗守卫卡');
+  await expect(card0).toContainText('守卫卡'); // 撤销未发生
+
+  // 关掉确认弹窗后 Cmd+Z 正常生效
   await page.keyboard.press('Escape');
   await dlg.waitFor({ state: 'hidden' });
+  await page.keyboard.press('Meta+z');
+  await page.waitForTimeout(400);
+  await expect(card0).not.toContainText('守卫卡');
 
   // 云模式下本用例把改名写入开发存储:清场,不污染后续用例
   await page.request.post('/api/dev/reset');

@@ -37,16 +37,15 @@ test('卡片改名可撤销重做,删除可撤销找回', async ({ page }) => {
   const card0 = page.locator('.canvas-card').first();
   const originalLabel = await card0.locator('.match-title').textContent();
 
-  // 改名:双击卡片 → 弹窗改标题保存
+  // 改名:双击卡片=选中开抽屉(弹窗已下线),抽屉改标题实时应用
   await card0.dblclick();
-  await page.waitForSelector('#card-edit-dialog');
-  await page.locator('#card-edit-dialog .cf-label').fill('撤销测试卡');
-  await page.locator('#card-edit-dialog [data-card-save]').click();
-  await page.waitForSelector('#card-edit-dialog', { state: 'hidden' });
-  await page.waitForTimeout(400);
+  await expect(page.locator('#card-panel')).toBeVisible();
+  await page.locator('#card-panel .cf-label').fill('撤销测试卡');
+  await page.waitForTimeout(800); // 防抖 500 + 落盘
   await expect(page.locator('.canvas-card').first()).toContainText('撤销测试卡');
 
-  // Cmd+Z 撤销改名
+  // Cmd+Z 撤销改名(焦点移出抽屉输入框,画布快捷键守卫放行)
+  await page.locator('#card-panel .card-panel-title').click();
   await page.keyboard.press('Meta+z');
   await page.waitForTimeout(400);
   await expect(page.locator('.canvas-card').first()).toContainText(originalLabel.trim());
