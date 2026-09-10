@@ -75,6 +75,67 @@ function portOffset(port) {
   }
 }
 
+/* roll 池出口标识:方向字母(L 左/T 上/R 右/B 下)+ 序号(1 起),如 L1、R3 */
+const OUTLET_RE = /^([LTBR])([1-9]\d*)$/;
+
+/* 出口全序:L 组 → T 组 → R 组 → B 组,组内按序号升序 */
+function outletList(ports) {
+  const p = ports || {};
+  const out = [];
+  for (let i = 1; i <= (p.lr || 0); i += 1) out.push('L' + i);
+  for (let i = 1; i <= (p.tb || 0); i += 1) out.push('T' + i);
+  for (let i = 1; i <= (p.lr || 0); i += 1) out.push('R' + i);
+  for (let i = 1; i <= (p.tb || 0); i += 1) out.push('B' + i);
+  return out;
+}
+
+/* 卡片实际尺寸:roll 池按 w×h 点,比赛卡固定 10×7 点 */
+function cardSize(card) {
+  if (card && card.kind === 'rollPool') {
+    return { width: (Number(card.w) || 10) * DOT, height: (Number(card.h) || 7) * DOT };
+  }
+  return { width: CARD_WIDTH, height: CARD_HEIGHT };
+}
+
+/* 按卡取连接点偏移:roll 池走出口标识几何——同侧相邻口间距 1 DOT、以中线居中,
+ * 第 n 口 = 中线 + (n - (口数+1)/2)·DOT;序号越界回中线。其余(含比赛卡旧端口名)
+ * 回退比赛卡八点逻辑。 */
+function portOffsetForCard(card, port) {
+  if (!card || card.kind !== 'rollPool') return portOffset(port);
+  const size = cardSize(card);
+  const m = OUTLET_RE.exec(String(port || ''));
+  if (!m) return portOffset(port);
+  const n = Number(m[2]);
+  if (m[1] === 'L' || m[1] === 'R') {
+    const lr = (card.ports && card.ports.lr) || 0;
+    const y = (n >= 1 && n <= lr) ? size.height / 2 + (n - (lr + 1) / 2) * DOT : size.height / 2;
+    return { x: m[1] === 'L' ? 0 : size.width, y };
+  }
+  const tb = (card.ports && card.ports.tb) || 0;
+  const x = (n >= 1 && n <= tb) ? size.width / 2 + (n - (tb + 1) / 2) * DOT : size.width / 2;
+  return { x, y: m[1] === 'T' ? 0 : size.height };
+}
+
+/* 按卡取连接点法线:roll 池出口标识四侧外法线,其余回比赛卡法线表 */
+function portNormalForCard(card, port) {
+  const m = card && card.kind === 'rollPool' ? OUTLET_RE.exec(String(port || '')) : null;
+  if (!m) return PORT_NORMALS[port] || [1, 0];
+  if (m[1] === 'L') return [-1, 0];
+  if (m[1] === 'R') return [1, 0];
+  if (m[1] === 'T') return [0, -1];
+  return [0, 1];
+}
+
+/* roll 池建卡工厂:默认 4 个空池位 */
+function createRollPoolCard(x, y) {
+  return normalizeCard({
+    kind: 'rollPool',
+    x: Number(x) || 0,
+    y: Number(y) || 0,
+    slots: [{ type: 'empty' }, { type: 'empty' }, { type: 'empty' }, { type: 'empty' }]
+  });
+}
+
 /* 按两卡相对方位自动选连接点(白板式路由,卡片移动后连线自动跟随):
  * 横向错开超半卡宽走左右边;纵向连接在上/下对里按水平偏移选左右点,减少斜跨。
  * band 'upper'=上排四点(胜者出/A 位入),'lower'=下排四点 */
@@ -243,9 +304,45 @@ function edgePath(p1, n1, p2, n2) {
     return { a: normalizeClassLinkGroup(g.a), b: normalizeClassLinkGroup(g.b) };
   }
 
+  /* roll 池形状钳制:w/h ∈ [2,40] 点;左右口数 ≤ h-2、上下口数 ≤ w-2(口不压角),
+   * 非法/缺省回 10/7,口数缺省 2、下限 0 */
+  function clampPoolShape(w, h, lr, tb) {
+    const W = Math.max(2, Math.min(40, Math.round(Number(w) || 10)));
+    const H = Math.max(2, Math.min(40, Math.round(Number(h) || 7)));
+    const num = (v, dflt) => Math.max(0, Math.round(Number.isFinite(Number(v)) ? Number(v) : dflt));
+    return { w: W, h: H, lr: Math.min(H - 2, num(lr, 2)), tb: Math.min(W - 2, num(tb, 2)) };
+  }
+
+  /* 卡片归一:按 kind 分流,缺省一律按 match 处理(旧数据零迁移)。
+   * 两分支都是字段白名单式重建——roll 池新字段必须全部显式列全,漏一个就静默丢。 */
   function normalizeCard(card, index) {
     const c = card || {};
+    const kind = c.kind === 'rollPool' ? 'rollPool' : 'match';
+    if (kind === 'rollPool') {
+      const shape = clampPoolShape(c.w, c.h, c.ports && c.ports.lr, c.ports && c.ports.tb);
+      const slots = Array.isArray(c.slots) ? c.slots.map(normalizeSlot) : [];
+      const rawLinks = Array.isArray(c.classLinks) ? c.classLinks : [];
+      return {
+        kind: 'rollPool',
+        id: c.id || uid('c'),
+        label: c.label || 'Roll 池 ' + ((index || 0) + 1),
+        phase: c.phase || '',
+        x: Number.isFinite(Number(c.x)) ? Number(c.x) : 0,
+        y: Number.isFinite(Number(c.y)) ? Number(c.y) : 0,
+        w: shape.w,
+        h: shape.h,
+        ports: { lr: shape.lr, tb: shape.tb },
+        mode: c.mode === 'auto' ? 'auto' : 'manual',
+        seed: typeof c.seed === 'string' && c.seed ? c.seed : uid('s'),
+        assignments: c.assignments && typeof c.assignments === 'object' && !Array.isArray(c.assignments) ? c.assignments : null,
+        slots,
+        classLinks: slots.map((_, i) => normalizeClassLinkGroup(rawLinks[i])),
+        color: CARD_COLOR_RE.test(c.color || '') ? c.color : null,
+        banListIds: normalizeBanListIds(c.banListIds)
+      };
+    }
     return {
+      kind: 'match',
       id: c.id || uid('c'),
       label: c.label || '第 ' + ((index || 0) + 1) + ' 场',
       phase: c.phase || '',
@@ -268,13 +365,19 @@ function edgePath(p1, n1, p2, n2) {
     };
   }
 
+  /* flow 槽两形态:出口引用(outlet,合法出口标识才保留)或结果推进(outcome);
+   * inlet/outlet 非法一律丢弃,outlet 无效时回 outcome 形态(旧数据行为不变) */
   function normalizeSlot(slot) {
     if (!slot) return { type: 'empty' };
     if (slot.type === 'player') {
       return { type: 'player', playerId: slot.playerId || null };
     }
     if (slot.type === 'flow') {
-      return { type: 'flow', cardId: slot.cardId || '', outcome: slot.outcome === 'loser' ? 'loser' : 'winner' };
+      const out = { type: 'flow', cardId: slot.cardId || '' };
+      if (typeof slot.inlet === 'string' && OUTLET_RE.test(slot.inlet)) out.inlet = slot.inlet;
+      if (typeof slot.outlet === 'string' && OUTLET_RE.test(slot.outlet)) out.outlet = slot.outlet;
+      else out.outcome = slot.outcome === 'loser' ? 'loser' : 'winner';
+      return out;
     }
     return { type: 'empty' };
   }
@@ -947,6 +1050,13 @@ function arrowDefs(prefix) {
     PORT_SPAN,
     PORT_NORMALS,
     portOffset,
+    clampPoolShape,
+    outletList,
+    cardSize,
+    portOffsetForCard,
+    portNormalForCard,
+    createRollPoolCard,
+    OUTLET_RE,
     pickPort,
     edgePath,
     arrowDefs,
