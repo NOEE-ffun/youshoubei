@@ -423,7 +423,11 @@
     banPopoverEl.className = 'ban-popover';
     banPopoverEl.setAttribute('role', 'dialog');
     banPopoverEl.setAttribute('aria-label', '禁卡违规清单');
-    banPopoverEl.innerHTML = '<div class="ban-pop-title">' + (side === 'a' ? 'A 侧' : 'B 侧') + '禁卡违规</div>' +
+    /* side 侧名:比赛卡 a/b,roll 池为 sN(池位索引);缺省回落原文防泄露 undefined */
+    const sideMatch = /^s(\d+)$/.exec(String(side));
+    const sideLabel = side === 'a' ? 'A 侧' : side === 'b' ? 'B 侧'
+      : sideMatch ? '池位 ' + (Number(sideMatch[1]) + 1) : String(side);
+    banPopoverEl.innerHTML = '<div class="ban-pop-title">' + sideLabel + '禁卡违规</div>' +
       [...byList].map(([ln, vs]) =>
         '<div class="ban-pop-list"><div class="ban-pop-listname">' + escapeHtml(ln) + '</div>' + vs.map(row).join('') + '</div>').join('');
     document.body.appendChild(banPopoverEl);
@@ -487,7 +491,7 @@
     let clsHtml = links.map((entry, idx) => classSlotHtml(card, 's' + i, entry, idx)).join('');
     if (viol.length) {
       clsHtml += '<button type="button" class="class-slot ban-violated" data-ban-card="' + card.id +
-        '" data-ban-side="s' + i + '" title="禁卡违规 ' + viol.length + ' 项"><img class="icon" src="icons/block.svg" alt="" aria-hidden="true"><em class="ban-count">' + viol.length + '</em></button>';
+        '" data-ban-side="s' + i + '" title="禁卡违规 ' + viol.length + ' 项" aria-label="查看禁卡违规"><img class="icon" src="icons/block.svg" alt="" aria-hidden="true"><em class="ban-count">' + viol.length + '</em></button>';
     }
     if (editing) {
       clsHtml += '<button type="button" class="class-slot empty" data-cl-card="' + card.id + '" data-cl-group="s' + i + '" data-cl-idx="new" title="添加职业卡组"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true"></button>';
@@ -525,7 +529,8 @@
       (card.color ? ';--card-tint:' + card.color : '') + '">' +
       '<header class="match-head">' +
       '<h2 class="match-title">' + escapeHtml(card.label || card.id) + '</h2>' +
-      '<span class="match-format">' + card.ports.lr + '+' + card.ports.tb + ' 口</span>' +
+      /* 口数徽标守卫:超管 PUT 种子可缺 ports,避免整页渲染崩溃 */
+      '<span class="match-format">' + ((card.ports && card.ports.lr) || 0) + '+' + ((card.ports && card.ports.tb) || 0) + ' 口</span>' +
       '<span class="match-state">' + stateText + '</span>' +
       rollBtn +
       '</header>' +

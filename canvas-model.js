@@ -469,6 +469,19 @@ function rollManual(seats, ports, connectedOutlets, rng) {
     );
   }
 
+  /* 入场容量(报名"取前 N 人"上限的真实口径):比赛卡每卡固定 2 位,
+   * roll 池按空池位数计(手动 player 位/flow 位不占容量)。
+   * autoFillEntries 填入上限与设置页/自动填入校验共用此唯一真源。 */
+  function entryCapacity(canvas) {
+    let capacity = 0;
+    for (const card of entryCards(canvas)) {
+      capacity += card.kind === 'rollPool'
+        ? (card.slots || []).filter((s) => !s || s.type === 'empty').length
+        : 2;
+    }
+    return capacity;
+  }
+
   /* 报名自动填入:ids 为入选名单(调用方已按报名顺序截取),
    * Fisher-Yates 洗牌后按入场卡容量填入——比赛卡固定 2 槽整体覆盖
    * (人数不足留空、多余清空),roll 池按空池位逐个补、手动位不动。
@@ -481,12 +494,7 @@ function rollManual(seats, ports, connectedOutlets, rng) {
       const t = list[i]; list[i] = list[j]; list[j] = t;
     }
     const entries = entryCards(canvas);
-    let capacity = 0;
-    for (const card of entries) {
-      capacity += card.kind === 'rollPool'
-        ? (card.slots || []).filter((s) => !s || s.type === 'empty').length
-        : 2;
-    }
+    const capacity = entryCapacity(canvas);
     let k = 0;
     for (const card of entries) {
       if (card.kind === 'rollPool') {
@@ -1218,6 +1226,7 @@ function arrowDefs(prefix) {
     canvasOrigin,
     deriveRoster,
     entryCards,
+    entryCapacity,
     autoFillEntries,
     getCanvasSize,
     clampCanvasSize,

@@ -144,6 +144,26 @@ const filled = M.autoFillEntries(fillCanvas, ['P1', 'P2', 'P3'], () => 0.5);
 assert.equal(filled, 2, '只填 2 个空池位');
 assert.equal(fillCanvas.cards[0].slots[0].playerId, 'PX', '手动位不动');
 
+// entryCapacity(I-2):报名容量口径池化——纯比赛卡画布 = 旧口径(入场卡数×2)
+const capMatch = { cards: [
+  { id: 'e1', slots: [{ type: 'player', playerId: 'P1' }, { type: 'empty' }] },
+  { id: 'e2', slots: [{ type: 'player', playerId: 'P2' }, { type: 'empty' }] },
+  { id: 'm1', slots: [{ type: 'flow', cardId: 'e1', outcome: 'winner' }, { type: 'flow', cardId: 'e2', outcome: 'winner' }] }
+] };
+assert.equal(M.entryCapacity(capMatch), M.entryCards(capMatch).length * 2, '纯比赛卡容量 = 旧口径 entryCards×2');
+assert.equal(M.entryCapacity(capMatch), 4, '两张入场比赛卡 = 4 位');
+
+// 含 roll 池:空池位计入容量,手动 player 位不计(池内无 flow 槽才是入场卡)
+const capPool = { cards: [
+  { id: 'e1', slots: [{ type: 'player', playerId: 'P1' }, { type: 'empty' }] },
+  { kind: 'rollPool', id: 'p1', slots: [{ type: 'player', playerId: 'PX' }, { type: 'empty' }, { type: 'empty' }, { type: 'empty' }] }
+] };
+assert.equal(M.entryCapacity(capPool), 5, '比赛卡 2 位 + roll 池 3 空池位 = 5(手动位不计)');
+assert.notEqual(M.entryCapacity(capPool), M.entryCards(capPool).length * 2, 'roll 池在场时容量脱离旧口径 4');
+const capPoolFill = JSON.parse(JSON.stringify(capPool));
+assert.equal(M.autoFillEntries(capPoolFill, ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6'], () => 0.5),
+  M.entryCapacity(capPool), '容量与 autoFillEntries 实填人数同源一致');
+
 // 环:池位引用下游、下游引用池出口 → cycle 标记不崩
 // (现有 visiting 机制只标被重入的卡,比赛卡 2 环同语义:m8:true m9:false)
 const cycCanvas = { cards: [

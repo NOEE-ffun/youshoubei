@@ -1472,7 +1472,7 @@
             notify('取前人数需为正整数', 'danger');
             return;
           }
-          const capacity = CanvasModel.entryCards(record.canvas).length * 2;
+          const capacity = CanvasModel.entryCapacity(record.canvas);
           if (slots > capacity) {
             notify('取前人数不能大于空位数(' + capacity + ')', 'danger');
             return;
@@ -1523,7 +1523,7 @@
         return;
       }
       const entries = CanvasModel.entryCards(record.canvas);
-      const capacity = entries.length * 2;
+      const capacity = CanvasModel.entryCapacity(record.canvas);
       if (!capacity) {
         notify('画布上没有入场空位(无箭头指向的比赛)', 'danger');
         return;
@@ -1813,7 +1813,7 @@
     const signupFill = settingsDialog.querySelector('#signup-autofill');
     if (signupSlots) signupSlots.value = (record.signup && record.signup.slots) || '';
     if (signupSlotsHint) {
-      signupSlotsHint.textContent = '当前入场空位 ' + (CanvasModel.entryCards(record.canvas).length * 2) + ' 个';
+      signupSlotsHint.textContent = '当前入场空位 ' + CanvasModel.entryCapacity(record.canvas) + ' 个';
     }
     if (signupFill) signupFill.disabled = Boolean(record.signup && record.signup.open);
     pendingBackground = undefined;
