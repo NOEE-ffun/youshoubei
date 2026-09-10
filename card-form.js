@@ -423,8 +423,12 @@
   }
 
   /* roll 池写回;canvas 传入做口数悬空守卫:钳制后的新口列表不含任何被引用出口
-   * (他卡 flow 槽 {cardId 本卡, outlet 非空})即拒绝,返回 false 数据不动 */
-  function applyToCardPool(card, data, canvas) {
+   * (他卡 flow 槽 {cardId 本卡, outlet 非空})即拒绝,返回 false 数据不动。
+   * container 传入表单容器时(弹窗/抽屉):成功写回后把各组 data-orig-index 重刷
+   * 为当前 DOM 下标——写回产生的新数组与 DOM 序恒等对齐,而 live 抽屉不重填表单,
+   * 不重刷则下一次 apply 仍用渲染期旧下标索引已重写的新数组(prev 错位:末组
+   * undefined 丢 deck、中间组吸走邻组值);守卫失败路径数据未动,不刷 */
+  function applyToCardPool(card, data, canvas, container) {
     const shape = window.CanvasModel.clampPoolShape(data.w, data.h, data.lr, data.tb);
     const kept = new Set(window.CanvasModel.outletList({ lr: shape.lr, tb: shape.tb }));
     for (const c of (canvas && canvas.cards) || []) {
@@ -456,6 +460,11 @@
       if (g.unchangedInherited) return prev !== undefined ? prev : [];
       return g.rows;
     });
+    if (container) {
+      container.querySelectorAll('.cf-cl-p').forEach((list, i) => {
+        list.dataset.origIndex = String(i);
+      });
+    }
     return true;
   }
 

@@ -1319,7 +1319,7 @@ let listActive = false;
     if (card.kind === 'rollPool') {
       const poolData = CardForm.readPool(cardDialog);
       /* 守卫不过:提示并保持弹窗打开,数据不动不落盘 */
-      if (!CardForm.applyToCardPool(card, poolData, currentRecord().canvas)) {
+      if (!CardForm.applyToCardPool(card, poolData, currentRecord().canvas, cardDialog)) {
         notify('该口数会拆掉已连线的出口,先拆线', 'danger');
         return;
       }
@@ -1495,10 +1495,11 @@ let listActive = false;
     if (!card || !body) return;
     if (card.kind === 'rollPool') {
       const poolData = CardForm.readPool(body);
-      /* 先抓快照再写回;守卫不过时还原快照位(无改动不入空历史步),提示且不写 */
+      /* 先抓快照再写回;守卫不过时还原快照位(无改动不入空历史步),提示且不写。
+       * container 传 body:成功写回后重刷 origIndex,live 连续 apply 不吃陈旧下标 */
       const hadSnapshot = panelBeforeSnapshot;
       if (!panelBeforeSnapshot) panelBeforeSnapshot = snapshotState();
-      if (!CardForm.applyToCardPool(card, poolData, currentRecord().canvas)) {
+      if (!CardForm.applyToCardPool(card, poolData, currentRecord().canvas, body)) {
         panelBeforeSnapshot = hadSnapshot;
         notify('该口数会拆掉已连线的出口,先拆线', 'danger');
         return;
