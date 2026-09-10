@@ -1362,6 +1362,10 @@ let listActive = false;
   let panelCardId = null;
   let panelBeforeSnapshot = null;
   let panelCommitTimer = null;
+  /* 表单自上次回填起是否动过(任何实时 input/change/删行事件置位,回填/收起复位):
+   * 收口据此短路零输入路径——纯查看后收起/浏览式切卡不触发宽容应用,堵住
+   * read 默认值物化(空名次 Number('')=0 落成 exitRanks 0/0)与空历史步 */
+  let panelFormTouched = false;
   /* 撤销/重做还原进行中(restoreHistory 同步段):面板表单停在还原前旧值,
    * 收口不得把它宽容回写到刚还原的数据上 */
   let panelRestoring = false;
@@ -1433,6 +1437,8 @@ let listActive = false;
         }
         if (isPool) CardForm.fillPool(body, card, effLinksOf(card), flowLabelsPool(card));
         else CardForm.fill(body, card, effLinksOf(card), flowLabelsOf(card));
+        /* 新卡表单回填完成:零输入基线重新建立(上一卡的 touched 不带到新卡) */
+        panelFormTouched = false;
       }
     } finally {
       panelSyncing = false;
@@ -1456,6 +1462,8 @@ let listActive = false;
   function hidePanel() {
     flushPanelCommit();
     panelCardId = null;
+    /* 收起即作废当前表单的输入痕迹:重开走换卡分支重填并重建零输入基线 */
+    panelFormTouched = false;
     const el = panelEl();
     if (!el || el.hidden) {
       document.body.classList.remove('card-panel-open');
@@ -1487,16 +1495,26 @@ let listActive = false;
     }
     panelFlushing = true;
     try {
+      /* 零输入短路:表单从未动过(纯查看后收起/浏览式切卡)直接返回——宽容应用
+       * 的 read 恒有 data,照跑会把默认值物化进卡片(空名次成 exitRanks 0/0)、
+       * 置快照 commit 出空撤销步并清空 redo 栈,还要多打一次保存 */
+      if (!panelFormTouched) return;
+      /* 提交基线:实时应用已留待提交快照(首改前)用之,连续输入合一步撤销;
+       * 没有(编辑全被职业行中间态挡掉)则取本次宽容应用前的现状 */
+      const before = panelBeforeSnapshot || snapshotState();
       /* 宽容收口:实时应用被职业行中间态整体跳过期间,已完成编辑只存在于表单
-       * (panelBeforeSnapshot 未置位,直接提交会静默全丢)。收口前按 lenient 读
-       * 取补一次应用:不完整职业行按行级丢弃,其余已完整字段照常写回落盘 */
+       * (panelBeforeSnapshot 未置位,直接提交会静默全丢)。按 lenient 读取补一次
+       * 应用:不完整职业行按行级丢弃,其余已完整字段照常写回落盘 */
       applyPanelEdits({ flush: true });
-      const pre = panelBeforeSnapshot;
-      if (!pre) return;
-      /* 先清再提交:commitHistory 会经 refreshToolbarUI 重入 syncPanel,
-       * 重入路径(flushPanelCommit/hidePanel)须看到"无待提交"才不会二次入栈 */
       panelBeforeSnapshot = null;
-      commitHistory(pre);
+      /* 与弹窗保存(saveCardDialog)同守卫:应用后与基线无实质改动不入历史不
+       * 落盘(输入又改回原值、或宽容应用未产生任何净变化),撤销步与 PUT 只为
+       * 真改动发生;顺带回滚求严格相等,内存与盘保持一致 */
+      if (JSON.stringify(snapshotState()) === JSON.stringify(before)) {
+        applySnapshot(before);
+        return;
+      }
+      commitHistory(before);
       saveCanvas().then(() => {
         requestRender();
         highlightSelected();
@@ -1522,6 +1540,9 @@ let listActive = false;
    * 再排会变成收口后的二次提交循环) */
   function applyPanelEdits(opts) {
     const flush = Boolean(opts && opts.flush);
+    /* 任何实时事件(input/change/删行委托)都证明表单被动过;flush 调用不算
+     * (它不引入新的用户输入)。收口据此区分「宽容补应用」与「零输入直接跳过」 */
+    if (!flush) panelFormTouched = true;
     const card = panelCardId && findCard(panelCardId);
     const body = document.getElementById('card-panel-body');
     if (!card || !body) return;
