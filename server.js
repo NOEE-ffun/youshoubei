@@ -43,6 +43,7 @@ const apiPosterStage = require('./api/poster-stage');
 const apiAccount = require('./api/account');
 const apiDecks = require('./api/decks');
 const apiAdmin = require('./api/admin');
+const apiTemplates = require('./api/templates');
 const API_ROUTES = {
   '/api/data': apiData,
   '/api/upload': apiUpload,
@@ -62,6 +63,9 @@ const API_ROUTES = {
   '/api/codes': require('./api/codes'),
   '/api/notices': require('./api/notices'),
   '/api/docs': require('./api/docs'),
+  /* templates:personal 内按 method 分支(GET/PUT,同 data.js 惯例);market 为 Task 3 占位 */
+  '/api/templates': apiTemplates.personal,
+  '/api/templates/market': apiTemplates.market,
   '/api/dev/reset': require('./api/dev-store').resetHandler
 };
 
@@ -308,7 +312,7 @@ if (require.main === module) {
    * 生产由 nginx 反代 127.0.0.1:3000,本地开发访问 localhost 不受影响 */
   server.listen(PORT, '127.0.0.1', () => {
     console.log('赛事网站已启动：http://localhost:' + PORT);
-    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/notices /api/docs /api/dev/reset /api/admin/*');
+    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/notices /api/docs /api/templates /api/dev/reset /api/admin/*');
     console.log('按 Ctrl+C 停止服务器');
   });
 }
