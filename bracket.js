@@ -450,7 +450,7 @@
     const stateClass = match.invalid ? ' invalid' : match.draw ? ' draw' : cycle ? ' cycle' : live ? ' live' : played ? ' done' : '';
 
     const styleAttr = 'left:' + cardLeft(card) + 'px;top:' + cardTop(card) + 'px' +
-      (card.color ? ';--card-tint:' + card.color : '');
+      (card.color ? ';--card-tint:' + escapeHtml(card.color) : '');
     /* 填写比分按钮仅编辑模式渲染,图标化省空间;查看卡组按钮已删除 */
     const scoreBtn = editMode
       ? '<button type="button" class="btn btn-secondary btn-sm icon-btn score-open"' +
@@ -526,7 +526,7 @@
       '<article class="match-card canvas-card pool-card' + wide + '"' +
       ' data-match="' + card.id + '"' + (card.color ? ' data-tint' : '') +
       ' style="left:' + cardLeft(card) + 'px;top:' + cardTop(card) + 'px;width:' + cardSize(card).width + 'px;min-height:' + cardSize(card).height + 'px' +
-      (card.color ? ';--card-tint:' + card.color : '') + '">' +
+      (card.color ? ';--card-tint:' + escapeHtml(card.color) : '') + '">' +
       '<header class="match-head">' +
       '<h2 class="match-title">' + escapeHtml(card.label || card.id) + '</h2>' +
       /* 口数徽标守卫:超管 PUT 种子可缺 ports,避免整页渲染崩溃 */
