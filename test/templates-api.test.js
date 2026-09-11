@@ -4,7 +4,8 @@
  * storage 按 api/helpers.js createStorage 的真实注入契约 mock:
  * readJson/writeJson(对象级,同 test/codes-api.test.js memoryStorage),
  * 任务书草稿的 get/put 文本契约与仓库不符,已按实际核对改写。
- * now/appendAudit 注入:审计三分支(save/cover/delete)与 maskUser 在此断言。
+ * now/appendAudit/backupJson 注入:审计(save/cover/delete + 市场 list/unlist/adopt)
+ * 与 maskUser、撤架前备份策略在组 2/7-9 断言。
  * 权限(HTTP 层匿名 401/越权 403)由 requireRole+session 兜底,e2e 匿名打真服务覆盖,
  * 单测不重复造会话——第 1 组留注释占位,handler 直测从第 2 组起。 */
 
@@ -18,8 +19,13 @@ function boot() {
     writeJson: async (key, value) => { map.set(key, value); }
   };
   const audits = [];
-  const h = createHandler(storage, { now: () => 123, appendAudit: (a, d) => audits.push([a, d]) });
-  return { h, audits, map };
+  const backups = [];
+  const h = createHandler(storage, {
+    now: () => 123,
+    appendAudit: (a, d) => audits.push([a, d]),
+    backupJson: (key, prefix) => { backups.push([key, prefix]); return Promise.resolve(); }
+  });
+  return { h, audits, backups, map };
 }
 
 /* 用户字段对齐真实契约:requireRole→currentUser 返回对象键是 id(safeUser,
@@ -126,5 +132,77 @@ const tpl = (name, id) => ({
     assert.equal(map.get('templates.json').libraries.u1.templates.length, 1, '恢复后落库成功');
   }
 
+  /* 7) market.list:快照独立性(上架后改库不影响在架条目)+在架 ≤10(同模板重复上架也占位) */
+  {
+    const { h } = boot();
+    await h.__putLibrary(ADMIN, { templates: [tpl('八强赛')] });
+    const listed = await h.__marketAction(ADMIN, { action: 'list', templateId: 'tpl_x' });
+    assert.ok(/^mkt_/.test(listed.item.id), '在架条目发 mkt_ 前缀新 id');
+    await h.__putLibrary(ADMIN, { templates: [Object.assign(tpl('八强赛'), { name: '改名了' })] });
+    const mkt = await h.__marketList();
+    assert.equal(mkt.market.length, 1, '在架 1 条');
+    assert.equal(mkt.market[0].snapshot.name, '八强赛', '在架=上架当时快照');
+    /* 真实 maskUser 只脱敏手机号形态(***+末4),非手机号原样——任务书草稿 'ad***1' 系想象契约 */
+    assert.equal(mkt.market[0].authorName, 'admin1', '作者名走 maskUser(非手机号形态原样)');
+    for (let i = 0; i < 9; i++) {
+      /* 已 1 条,同模板再上 9 条到 10:重复上架也占在架位 */
+      await h.__marketAction(ADMIN, { action: 'list', templateId: 'tpl_x' });
+    }
+    assert.equal((await h.__marketList()).market.length, 10, '在架满 10');
+    const r = await h.__marketAction(ADMIN, { action: 'list', templateId: 'tpl_x' });
+    assert.equal(r.code, 400, '同模板重复上架也占在架位,第 11 条 400');
+  }
+
+  /* 8) adopt:拷贝语义(新 id/深拷贝)/撞名 409 带冲突名/renameTo 解冲突/库满 400/撤架后 404 */
+  {
+    const { h } = boot();
+    const SUPER2 = { username: '13900000003', id: 'u3', role: 'admin' }; /* 手机号形态,组 9 验 by= 脱敏 */
+    await h.__putLibrary(ADMIN, { templates: [tpl('八强赛')] });
+    await h.__marketAction(ADMIN, { action: 'list', templateId: 'tpl_x' });
+    const mkt = await h.__marketList();
+    await h.__putLibrary(SUPER2, { templates: [tpl('八强赛')] }); /* u3 已有同名 */
+    let r = await h.__marketAction(SUPER2, { action: 'adopt', marketId: mkt.market[0].id });
+    assert.equal(r.code, 409, '撞名 409');
+    assert.ok(r.error.includes('八强赛'), '409 带冲突名');
+    r = await h.__marketAction(SUPER2, { action: 'adopt', marketId: mkt.market[0].id, renameTo: '八强赛(副本)' });
+    /* 成功 outcome 不带 code(仅错误带,同 __putLibrary 契约),断产物 */
+    assert.ok(r.template && r.template.name === '八强赛(副本)', 'renameTo 解冲突');
+    const lib = await h.__getLibrary('u3'); /* __getLibrary 返回模板数组本身(组 4 契约) */
+    assert.equal(lib.length, 2, '加入后 2 条');
+    const adopted = lib[1];
+    assert.notEqual(adopted.id, 'tpl_x', '新条目 id 全新');
+    assert.equal(adopted.name, '八强赛(副本)', 'renameTo 生效');
+    adopted.cards[0].x = 999; /* 改加入后的副本不动在架快照=深拷贝 */
+    assert.equal((await h.__marketList()).market[0].snapshot.cards[0].x, 0, 'cards 深拷贝');
+    /* 库满 400:u3 已 2 条,整库补到 50 再 adopt */
+    await h.__putLibrary(SUPER2, {
+      templates: [tpl('八强赛', 'tpl_x'), tpl('八强赛(副本)')]
+        .concat(Array.from({ length: 48 }, (_, i) => tpl('T' + i, 'tpl_f' + i)))
+    });
+    r = await h.__marketAction(SUPER2, { action: 'adopt', marketId: mkt.market[0].id, renameTo: '新名字' });
+    assert.equal(r.code, 400, '个人模板库满 50 再 adopt 400');
+    await h.__marketAction(ADMIN, { action: 'unlist', templateId: 'tpl_x' });
+    r = await h.__marketAction(SUPER2, { action: 'adopt', marketId: mkt.market[0].id, renameTo: '新名字' });
+    assert.equal(r.code, 404, '已撤架');
+  }
+
+  /* 9) unlist 只能撤自己的(他人条目按 404 处理);三动作审计齐含 by=;备份仅 unlist 一次 */
+  {
+    const { h, audits, backups } = boot();
+    const SUPER2 = { username: '13900000003', id: 'u3', role: 'admin' };
+    await h.__putLibrary(ADMIN, { templates: [tpl('八强赛')] });
+    await h.__marketAction(ADMIN, { action: 'list', templateId: 'tpl_x' });
+    await h.__marketAction(SUPER2, { action: 'adopt', marketId: (await h.__marketList()).market[0].id });
+    const r = await h.__marketAction(SUPER2, { action: 'unlist', templateId: 'tpl_x' });
+    assert.equal(r.code, 404, '他人模板撤架按不存在处理');
+    await h.__marketAction(ADMIN, { action: 'unlist', templateId: 'tpl_x' });
+    assert.equal((await h.__marketList()).market.length, 0, '撤自己的成功');
+    assert.ok(audits.some(([a, d]) => a === 'tpl.list' && d.includes('by=admin1')), 'list 审计带 by=');
+    assert.ok(audits.some(([a, d]) => a === 'tpl.unlist' && d.includes('by=admin1')), 'unlist 审计带 by=');
+    assert.ok(audits.some(([a, d]) => a === 'tpl.adopt' && d.includes('by=***0003')), 'adopt 审计带 by=(手机号形态走 maskUser)');
+    assert.deepEqual(backups, [['templates.json', 'templates']], '备份仅 unlist 触发一次(list/adopt 不备份)');
+  }
+
+  console.log('✓ templates-api(market): 3 组断言通过');
   console.log('✓ templates-api(personal): 6 组断言通过');
 })().catch((e) => { console.error(e); process.exit(1); });
