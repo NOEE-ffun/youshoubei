@@ -6,10 +6,11 @@ const { backupJson, appendAudit } = require('./oss');
 const { requireUser, requireRole } = require('./auth');
 const { withWorkspaceLock } = require('./workspace-lock');
 const { effectiveRole, isAdminRole } = require('./rbac');
-const { DOC_CATEGORY_KEYS, docCategoryOrder } = require('../docs-meta');
+const { DOC_CATEGORY_MAX, docCategoryLabel, normalizeDocCategory, docCategoryRank } = require('../docs-meta');
 
 /* 官方文档(2026-09-01):super 撰写 md 文档,登录可读,单篇可标仅管理员可见。
- * 存独立 docs.json 不进 workspace(同 notices.json 隔离,不被整库保存冲掉)。
+ * 分类为自定义文字(2026-09-11 起,≤ DOC_CATEGORY_MAX 字;旧固定键折算为对应
+ * 文字兼容存量)。存独立 docs.json 不进 workspace(同 notices.json 隔离,不被整库保存冲掉)。
  *   GET  /api/docs                   会话:可见篇目(adminOnly 对非管理员服务端整篇剥离)
  *   GET  /api/admin/docs             super:全量管理列表
  *   POST /api/admin/docs             super:新建
@@ -31,20 +32,26 @@ function normalizeInput(body) {
   const title = typeof body.title === 'string' ? body.title.trim() : '';
   if (!title) return { ok: false, error: '标题不能为空' };
   if (title.length > TITLE_MAX) return { ok: false, error: '标题不能超过 ' + TITLE_MAX + ' 字' };
-  if (!DOC_CATEGORY_KEYS.includes(body.category)) return { ok: false, error: '分类不合法' };
+  const category = normalizeDocCategory(body.category);
+  if (!category) return { ok: false, error: '分类不能为空,且不超过 ' + DOC_CATEGORY_MAX + ' 字' };
   const md = typeof body.body === 'string' ? body.body : '';
   if (md.length > BODY_MAX) return { ok: false, error: '正文不能超过 ' + (BODY_MAX / 1024) + 'KB' };
   if (body.adminOnly !== undefined && typeof body.adminOnly !== 'boolean') return { ok: false, error: '可见性参数不合法' };
   const sort = body.sort === undefined ? 0 : Number(body.sort);
   if (!Number.isInteger(sort) || Math.abs(sort) > 1e9) return { ok: false, error: '排序必须是整数' };
-  return { ok: true, fields: { title, category: body.category, body: md, adminOnly: body.adminOnly === true, sort } };
+  return { ok: true, fields: { title, category, body: md, adminOnly: body.adminOnly === true, sort } };
 }
 
-/** 列表序:分类展示序 → sort 升序 → updatedAt 降序(同序号新写的排前) */
+/** 列表序:分类展示序(旧分类固定序在前,自定义文字按中文 locale)→ sort 升序
+ * → updatedAt 降序(同序号新写的排前)。分组展示沿用同一序(docs.js 按首现序聚合)。 */
 function docComparator(a, b) {
-  const ca = docCategoryOrder(a.category);
-  const cb = docCategoryOrder(b.category);
-  if (ca !== cb) return ca - cb;
+  const la = docCategoryLabel(a.category);
+  const lb = docCategoryLabel(b.category);
+  if (la !== lb) {
+    const ra = docCategoryRank(la);
+    const rb = docCategoryRank(lb);
+    return ra !== rb ? ra - rb : la.localeCompare(lb, 'zh');
+  }
   const sa = typeof a.sort === 'number' ? a.sort : 0;
   const sb = typeof b.sort === 'number' ? b.sort : 0;
   if (sa !== sb) return sa - sb;

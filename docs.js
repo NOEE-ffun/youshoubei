@@ -4,7 +4,7 @@
   /* 官方文档页:GET /api/docs 一次拉全量(文档量小,不做单篇接口),
    * 列表/阅读两视图本地切换;hash #doc-<id> 直链(hashchange 兜底路由)。 */
   const { escapeHtml } = window.TournamentUtils;
-  const { DOC_CATEGORIES, docCategoryLabel } = window.DocsMeta;
+  const { docCategoryLabel } = window.DocsMeta;
   let docs = [];
 
   function fmtDate(ts) {
@@ -15,9 +15,16 @@
   function renderList() {
     const wrap = document.getElementById('docs-list');
     const empty = document.getElementById('docs-empty');
-    const sections = DOC_CATEGORIES
-      .map((c) => ({ label: c.label, items: docs.filter((x) => x.category === c.key) }))
-      .filter((s) => s.items.length);
+    /* 分类为自定义文字:按展示文字聚合(旧固定键折算为对应文字,与手输同名文
+     * 字归同组),docs 已由服务端按分类序排好,首现序即分组序 */
+    const sections = [];
+    const byLabel = new Map();
+    for (const x of docs) {
+      const label = docCategoryLabel(x.category);
+      let s = byLabel.get(label);
+      if (!s) { s = { label, items: [] }; byLabel.set(label, s); sections.push(s); }
+      s.items.push(x);
+    }
     empty.hidden = !!sections.length;
     wrap.innerHTML = sections.map((s) =>
       '<section class="stats-section" aria-label="' + escapeHtml(s.label) + '">' +

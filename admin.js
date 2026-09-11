@@ -950,7 +950,6 @@
 
   let docsCache = [];
   let dfEditingId = null; /* null=新建模式;否则为编辑中的文档 id */
-  let dfCategoryOptionsBuilt = false;
 
   function docCategoryLabel(key) {
     return (window.DocsMeta && window.DocsMeta.docCategoryLabel(key)) || key;
@@ -966,7 +965,8 @@
     dfEditingId = doc ? doc.id : null;
     $('df-id').value = doc ? doc.id : '';
     $('df-title').value = doc ? (doc.title || '') : '';
-    $('df-category').value = doc ? doc.category : 'rules';
+    /* 分类为自定义文字:存量旧键回放折算为对应文字,保存即归一 */
+    $('df-category').value = doc ? docCategoryLabel(doc.category) : '赛事规则';
     $('df-sort').value = doc ? (doc.sort || 0) : 0;
     /* 新建选「内部规程」默认仅管理员可见;编辑回放存档值 */
     $('df-adminonly').checked = doc ? doc.adminOnly === true : false;
@@ -993,12 +993,6 @@
   }
 
   async function loadDocs() {
-    if (!dfCategoryOptionsBuilt && window.DocsMeta) {
-      $('df-category').innerHTML = window.DocsMeta.DOC_CATEGORIES
-        .map((c) => '<option value="' + escapeHtml(c.key) + '">' + escapeHtml(c.label) + '</option>')
-        .join('');
-      dfCategoryOptionsBuilt = true;
-    }
     const status = $('admin-docs-status');
     setStatus(status, '加载中…', false);
     const result = await api('/api/admin/docs');
@@ -1016,9 +1010,14 @@
   async function saveDoc(event) {
     event.preventDefault();
     const hint = $('df-hint');
+    const category = $('df-category').value.trim();
+    if (!category) {
+      setStatus(hint, '请填写分类。', true);
+      return;
+    }
     const body = {
       title: $('df-title').value,
-      category: $('df-category').value,
+      category,
       sort: $('df-sort').value === '' ? 0 : Number($('df-sort').value),
       adminOnly: $('df-adminonly').checked,
       body: $('df-body').value
@@ -1082,9 +1081,10 @@
   $('df-body').addEventListener('input', docPreviewSync);
   $('df-insert-image').addEventListener('click', () => $('df-image-file').click());
   $('df-image-file').addEventListener('change', uploadDocImage);
-  /* 新建模式切到「内部规程」默认勾上仅管理员可见(编辑模式不自动改) */
-  $('df-category').addEventListener('change', () => {
-    if (!dfEditingId && $('df-category').value === 'internal') $('df-adminonly').checked = true;
+  /* 新建模式分类填到「内部规程」默认勾上仅管理员可见(编辑模式不自动改);
+   * 文本输入用 input 事件实时反应(fill/逐字输入均触发) */
+  $('df-category').addEventListener('input', () => {
+    if (!dfEditingId && $('df-category').value.trim() === '内部规程') $('df-adminonly').checked = true;
   });
 
   /* 行内操作:编辑/删除(confirm) */

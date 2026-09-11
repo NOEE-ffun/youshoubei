@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { ADMIN_PHONE, smsLogin, resetStore } from './helpers.mjs';
 
-/* 官方文档读侧:登录墙/分类分组渲染/hash 直链/服务端剥离 adminOnly/渲染净化。 */
+/* 官方文档读侧:登录墙/分类分组渲染(自定义文字)/hash 直链/服务端剥离 adminOnly/渲染净化。 */
 
 test.setTimeout(60_000);
 
@@ -24,19 +24,23 @@ test('游客访问跳登录,登录后按分类分组渲染并可直链', async (
   await createDoc(adminCtx, { title: '第六届规则', category: 'rules', body: '## 报名\n- 组队', sort: 1 });
   await createDoc(adminCtx, { title: '如何交卡组', category: 'guide', body: '## 步骤', sort: 1 });
   await createDoc(adminCtx, { title: '内部规程', category: 'internal', body: '机密', adminOnly: true });
+  await createDoc(adminCtx, { title: '架构总览', category: ' 技术文档 ', body: '## 栈', sort: 0 });
 
   const userCtx = await browser.newContext();
   await smsLogin(userCtx, '13800001234');
   const list = await (await userCtx.request.get('/api/docs')).json();
-  expect(list.docs.length).toBe(2, '普通账号只见公开两篇');
+  expect(list.docs.length).toBe(3, '普通账号只见公开三篇');
 
   const up = await userCtx.newPage();
   await up.goto('/docs.html');
   await up.waitForSelector('#docs-list');
-  /* 分组标题按固定顺序,空 internal 组整节不见 */
+  /* 旧键折算为文字分组,空 internal 组整节不见;自定义文字组排旧分类之后 */
   await expect(up.locator('.stats-section[aria-label="赛事规则"] .doc-item')).toHaveCount(1);
   await expect(up.locator('.stats-section[aria-label="新手指南"] .doc-item')).toHaveCount(1);
+  await expect(up.locator('.stats-section[aria-label="技术文档"] .doc-item')).toHaveCount(1);
   await expect(up.locator('.stats-section[aria-label="内部规程"]')).toHaveCount(0);
+  expect(await up.locator('.stats-section-title').evaluateAll(
+    (els) => els.map((e) => e.textContent))).toEqual(['赛事规则', '新手指南', '技术文档']);
   /* hash 直链直接进入单篇(## 为 h2,降级渲染为 h3) */
   await up.goto('/docs.html#doc-' + list.docs[0].id);
   await up.reload(); /* 同 URL 含 hash 不重载 */
@@ -85,10 +89,10 @@ test('后台第六标签:新建/默认可见性/编辑/删除全链', async ({ b
   await page.goto('/admin.html');
   await page.locator('#admin-tab-docs').click();
 
-  /* 新建:选内部规程默认勾上仅管理员可见 */
+  /* 新建:分类填「内部规程」(自定义文字,同名文字触发)默认勾上仅管理员可见 */
   await page.locator('#df-new').click();
   await page.locator('#df-title').fill('裁判值班规程');
-  await page.locator('#df-category').selectOption('internal');
+  await page.locator('#df-category').fill('内部规程');
   await expect(page.locator('#df-adminonly')).toBeChecked();
   await page.locator('#df-body').fill('## 值班表\n- 周一:NOEE');
   await expect(page.locator('#df-preview h3')).toContainText('值班表', '编辑实时预览');
