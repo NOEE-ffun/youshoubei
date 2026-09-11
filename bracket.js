@@ -1279,6 +1279,16 @@
       openBanlist: () => banlistDropdown.toggle()
   };
 
+  /* 单卡构建器直读出口(零行为变更:函数本就独立,仅挂名导出)。
+   * 供 template.js 幽灵预览与页面渲染共用同一 HTML 产物,保证视觉一致。
+   * 真实签名 cardHtml(match, card, effLinksMap):
+   *  - match:resolveCanvas 解析卡(供给 played/a/b/score/winner 等状态;未分配上下文传
+   *    resolveCanvas({cards}, [], {}) 的产物即渲染"待定"空卡,与画布空卡同款);
+   *  - card:原始画布卡(供给 id/color/phase/slots/w/h/ports/classLinks;缺省回落 match);
+   *  - effLinksMap:resolveEffectiveClassLinks 产物(Map cardId→链接组),可空。
+   * 内联 left/top=(格坐标−worldOrigin)×DOT,幽灵层须按消费时机自行补偿原点。 */
+  window.CanvasBracket = { buildCardHtml: cardHtml };
+
   document.addEventListener('ts:ready', () => {
     /* 依赖单向化:把重绘/工具栏刷新/连线轻量重算注入编辑器,编辑器经回调请求 */
     CanvasEditor.connect({ renderCanvas: renderViews, updateToolbar: updateToolbarState, rerenderEdges });

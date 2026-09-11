@@ -1732,6 +1732,8 @@ let listActive = false;
     getSelectedCards: () => selectedIds().map(findCard).filter(Boolean),
     isCanvasActive: () => !listActive,
     toGridPoint,
+    /* 幽灵/预览层坐标系出口(纯读):板内像素=(格-原点)×DOT,板自带相机变换 */
+    getCamera: () => ({ ox: renderOrigin.x, oy: renderOrigin.y, scale }),
     placeCardsAt,
     selectCard,
     setSelection,

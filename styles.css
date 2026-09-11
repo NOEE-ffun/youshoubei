@@ -5829,12 +5829,13 @@ body.tpl-drawer-open .style-drawer { right: calc(min(19rem, 78vw) + 0.5rem); }
   stroke: var(--danger);
 }
 
-/* 幽灵:1:1 原尺寸半透明跟随光标,不接任何指针事件 */
+/* 幽灵:#canvas-board 内真实卡预览层(子容器)——天然继承板相机 translate+scale,
+ * 随缩放/平移联动;内含真卡 DOM(.match-card)不再另设样式。
+ * z-index 高于卡层(.canvas-card=2)低于查找高亮外的画布内全部层级;工具栏在
+ * board 之外的独立层叠上下文,天然压过幽灵。尺寸/位移由 template.js 内联写入 */
 .tpl-ghost {
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 250;
+  position: absolute;
+  z-index: 5;
   opacity: 0.55;
   pointer-events: none;
 }

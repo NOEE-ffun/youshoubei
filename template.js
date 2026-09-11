@@ -1,6 +1,7 @@
 'use strict';
-/* 卡片模板:放置引擎(模板/粘贴共用)+ 模板抽屉(个人库/市场)+ 保存弹窗。
- * 数据面见 api/templates.js;纯函数见 canvas-model captureTemplate/materializeTemplate。
+/* 卡片模板:放置引擎(board 内真实卡幽灵,模板/粘贴共用)+ 模板抽屉(个人库/市场)+ 保存弹窗。
+ * 数据面见 api/templates.js;纯函数见 canvas-model captureTemplate/materializeTemplate;
+ * 幽灵单卡 DOM 由 bracket.js CanvasBracket.buildCardHtml 出(与画布真卡同款)。
  * 本模块不进 common.js(D-04 债),不进 list.html(仅画布编辑页加载)。 */
 (function () {
   if (window.CanvasTemplates) return;
@@ -30,11 +31,11 @@
     });
   }
 
-  /* ---------- 缩略示意渲染(模板卡/市场快照/幽灵共用) ---------- */
+  /* ---------- 缩略示意渲染(抽屉缩略图用) ---------- */
 
   /* 离屏示意:按 meta.w/h 等比缩放到 targetW 宽。卡画色块矩形(card.color 染底,
    * roll 池虚线框)+label 首行;flow 连线画卡中心到卡中心的静态线段。
-   * 幽灵传 targetW = meta.w*DOT 即 1:1 原尺寸。 */
+   * (放置幽灵已改用 board 内真实卡预览,本函数只服务抽屉缩略图。) */
   function renderPreview(struct, targetW) {
     const DOT = (window.CanvasModel && window.CanvasModel.DOT) || 28;
     const cards = (struct && Array.isArray(struct.cards)) ? struct.cards.filter(Boolean) : [];
@@ -100,21 +101,45 @@
 
   /* ---------- 幽灵放置引擎(模板落子 / Ctrl+V 粘贴共用) ---------- */
 
-  let placing = null; /* { struct, source, ghostEl } */
+  /* 幽灵=board 内真实卡预览层:materialize 一次(临时 uid)+页面同款单卡构建器
+   * (CanvasBracket.buildCardHtml)出 DOM——空位/阶段/赛制/端口徽标/着色全渲染;
+   * 层在 #canvas-board 内天然继承相机 translate+scale(缩放跟随),mousemove 只写
+   * 层 left/top(格对齐公式与 placeCardsAt→materialize 同源:幽灵显示的就是落点)。 */
+  let placing = null; /* { struct, source, ghostEl, meta } */
 
   function isActive() { return !!placing; }
 
   function enterPlacement(struct, opts) {
     if (!window.CanvasEditor || !CanvasEditor.isCanvasActive()) return false;
     if (!struct || !Array.isArray(struct.cards) || !struct.cards.length) return false;
+    if (!window.CanvasBracket || typeof CanvasBracket.buildCardHtml !== 'function') return false;
+    const boardEl = document.getElementById('canvas-board');
+    if (!boardEl) return false;
     exitPlacement();
-    const metaW = Number(struct.meta && struct.meta.w) || 0;
-    const ghost = document.createElement('div');
-    ghost.className = 'tpl-ghost';
-    ghost.innerHTML = renderPreview(struct, metaW > 0 ? metaW * ((window.CanvasModel && window.CanvasModel.DOT) || 28) : 0);
-    ghost.style.visibility = 'hidden'; /* 首次 mousemove 前不亮相(尚无光标坐标) */
-    document.body.appendChild(ghost);
-    placing = { struct, source: (opts && opts.source) || 'template', ghostEl: ghost };
+    const DOT = (window.CanvasModel && window.CanvasModel.DOT) || 28;
+    const meta = {
+      w: Number(struct.meta && struct.meta.w) || 0,
+      h: Number(struct.meta && struct.meta.h) || 0
+    };
+    /* 构建期把相机原点吃进卡格坐标:materialize 的位移 dx=round(cx−w/2),
+     * 传 cx=ox+w/2 即得 dx=ox,buildCardHtml 内联 left/top=(格−worldOrigin)×DOT
+     * 恰好消掉原点——内卡变纯模板相对像素,此后原点变化只需动层,无需重建内卡 */
+    const cam = CanvasEditor.getCamera();
+    const preview = CanvasModel.materializeTemplate(struct, cam.ox + meta.w / 2, cam.oy + meta.h / 2);
+    /* 「未分配」空上下文(空 roster/空 scores):座位/池位全待定,与画布空卡同款 */
+    const resolved = CanvasModel.resolveCanvas({ cards: preview }, [], {});
+    const effLinks = CanvasModel.resolveEffectiveClassLinks({ cards: preview }, {});
+    const rawById = new Map(preview.map((c) => [c.id, c]));
+    const layer = document.createElement('div');
+    layer.className = 'tpl-ghost';
+    layer.innerHTML = resolved.cards.map((m) =>
+      CanvasBracket.buildCardHtml(m, rawById.get(m.id) || m, effLinks)).join('');
+    layer.style.width = (meta.w * DOT) + 'px';
+    layer.style.height = (meta.h * DOT) + 'px';
+    layer.style.visibility = 'hidden'; /* 首次 mousemove 前不亮相(尚无光标坐标) */
+    layer.setAttribute('inert', '');   /* 预览层不可聚焦/不进 Tab 序(pointer-events 之外的兜底) */
+    boardEl.appendChild(layer);
+    placing = { struct, source: (opts && opts.source) || 'template', ghostEl: layer, meta: meta };
     document.body.classList.add('tpl-placing');
     document.addEventListener('mousemove', onGhostMove, true);
     document.addEventListener('keydown', onPlacingKey, true);
@@ -136,15 +161,19 @@
 
   function onGhostMove(e) {
     if (!placing) return;
+    const boardEl = document.getElementById('canvas-board');
+    if (!boardEl) return;
+    /* 渲染器重建 board(innerHTML 清空)时兜底重挂:放置态手势已短路,重建低频 */
+    if (!placing.ghostEl.isConnected) boardEl.appendChild(placing.ghostEl);
     placing.ghostEl.style.visibility = '';
-    positionGhost(placing.ghostEl, e.clientX, e.clientY);
-  }
-
-  /* 包围盒中心吸附光标 */
-  function positionGhost(el, cx, cy) {
-    const s = el.getBoundingClientRect();
-    el.style.left = (cx - s.width / 2) + 'px';
-    el.style.top = (cy - s.height / 2) + 'px';
+    const cam = CanvasEditor.getCamera();
+    const pt = CanvasEditor.toGridPoint(e.clientX, e.clientY);
+    /* 与 placeCardsAt→materializeTemplate 同一取整公式(包围盒中心锚定):所见即落点 */
+    const dx = Math.round(pt.x - placing.meta.w / 2);
+    const dy = Math.round(pt.y - placing.meta.h / 2);
+    const DOT = (window.CanvasModel && window.CanvasModel.DOT) || 28;
+    placing.ghostEl.style.left = ((dx - cam.ox) * DOT) + 'px';
+    placing.ghostEl.style.top = ((dy - cam.oy) * DOT) + 'px';
   }
 
   /* Esc 取消:捕获层截住,不让 canvas-editor 的 Esc 清掉画布选择 */
