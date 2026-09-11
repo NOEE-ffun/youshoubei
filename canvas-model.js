@@ -1224,6 +1224,70 @@ function arrowDefs(prefix) {
     return clones;
   }
 
+  /* ========== 卡片模板(个人模板库/市场,2026-09-12) ========== */
+
+  /* 模板卡白名单:只收结构字段。未来卡模型加字段不会自动进旧模板(防意外),
+   * 要进模板须显式加这里。id/seed 说明:id 不进模板(落子全新生成),
+   * seed 是池卡随机种子(uid('s') 产物)随模板保留——非序号无撞号问题。 */
+  const TEMPLATE_CARD_FIELDS = ['kind', 'x', 'y', 'w', 'h', 'color', 'label', 'phase',
+    'format', 'exitRanks', 'banListIds', 'ports', 'seed', 'entryCapacity', 'classLinks', 'style'];
+
+  /* 捕获选中卡为纯结构模板:坐标相对包围盒左上归零;flow 槽集内引用换成
+   * 集内下标字符串(模板自包含,集外引用丢弃);非 flow 槽一律置空(选手分配剥离)。 */
+  function captureTemplate(cards) {
+    const list = (Array.isArray(cards) ? cards : []).filter(Boolean);
+    if (!list.length) return { cards: [], meta: { w: 0, h: 0 } };
+    const xs = list.map(c => Number(c.x) || 0), ys = list.map(c => Number(c.y) || 0);
+    const ws = list.map(c => Number(c.w) || 10), hs = list.map(c => Number(c.h) || 7);
+    const minX = Math.min(...xs), minY = Math.min(...ys);
+    const maxX = Math.max(...xs.map((x, i) => x + ws[i]));
+    const maxY = Math.max(...ys.map((y, i) => y + hs[i]));
+    const index = new Map(list.map((c, i) => [c.id, String(i)]));
+    const out = list.map((c) => {
+      const t = {};
+      for (const k of TEMPLATE_CARD_FIELDS) if (c[k] !== undefined) t[k] = JSON.parse(JSON.stringify(c[k]));
+      t.x = (Number(c.x) || 0) - minX;
+      t.y = (Number(c.y) || 0) - minY;
+      t.slots = (c.slots || []).map((slot) => {
+        if (slot && slot.type === 'flow' && index.has(slot.cardId)) {
+          /* outcome/outlet 仅在有值时写入(同 normalizeSlot 惯例),
+           * 避免显式 undefined 键破坏 deepEqual 严格比较 */
+          const fs = { type: 'flow', cardId: index.get(slot.cardId) };
+          if (slot.outcome !== undefined) fs.outcome = slot.outcome;
+          if (slot.outlet !== undefined) fs.outlet = slot.outlet;
+          return fs;
+        }
+        return { type: 'empty' };
+      });
+      return t;
+    });
+    return { cards: out, meta: { w: maxX - minX, h: maxY - minY } };
+  }
+
+  /* 模板落子:全新 id、flow 下标→新 id、包围盒中心对齐 (cx,cy)(格单位取整)。 */
+  function materializeTemplate(tpl, cx, cy, makeId) {
+    const src = (tpl && Array.isArray(tpl.cards)) ? tpl.cards : [];
+    if (!src.length) return [];
+    const idOf = typeof makeId === 'function' ? makeId : uid;
+    const meta = tpl.meta || { w: 0, h: 0 };
+    const dx = Math.round((Number(cx) || 0) - meta.w / 2);
+    const dy = Math.round((Number(cy) || 0) - meta.h / 2);
+    const newIds = src.map(() => idOf('c'));
+    return src.map((c, i) => {
+      const card = JSON.parse(JSON.stringify(c));
+      card.id = newIds[i];
+      card.x = (Number(card.x) || 0) + dx;
+      card.y = (Number(card.y) || 0) + dy;
+      card.slots = (card.slots || []).map((slot) => {
+        if (slot && slot.type === 'flow' && newIds[Number(slot.cardId)]) {
+          return Object.assign({}, slot, { cardId: newIds[Number(slot.cardId)] });
+        }
+        return { type: 'empty' };
+      });
+      return card;
+    });
+  }
+
   return {
     AVATAR_COLORS,
     CLASS_LIST,
@@ -1262,6 +1326,8 @@ function arrowDefs(prefix) {
     createDefaultTournament,
     createBlankTournament,
     cloneCardsForPaste,
+    captureTemplate,
+    materializeTemplate,
     normalizeCanvas,
     normalizeCard,
     canvasOrigin,
