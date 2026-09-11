@@ -523,6 +523,7 @@ let listActive = false;
     let maxX = 0;
     let maxY = 0;
     b.querySelectorAll('.canvas-card').forEach((el) => {
+      if (el.closest('.tpl-ghost')) return; /* 幽灵预览不计量:放置态「适应画布」不得把幽灵算进内容视野 */
       maxX = Math.max(maxX, el.offsetLeft + el.offsetWidth);
       maxY = Math.max(maxY, el.offsetTop + el.offsetHeight);
     });

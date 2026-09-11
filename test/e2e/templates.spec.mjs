@@ -23,7 +23,7 @@ function seedWorkspaceBody() {
       canvas: {
         grid: 'dot', size: { cols: 48, rows: 32 }, style: { opacity: 0.7, blur: 8 },
         cards: [
-          { id: 't_a', kind: 'match', label: 'A', phase: '', format: 'BO3', x: 2, y: 1, w: 10, h: 7,
+          { id: 't_a', kind: 'match', label: 'A', phase: '胜者组', format: 'BO3', x: 2, y: 1, w: 10, h: 7,
             slots: [{ type: 'flow', cardId: 't_b', outcome: 'winner' }, { type: 'empty' }],
             exitRanks: {}, deckCount: null, color: null, classLinks: { a: [], b: [] } },
           { id: 't_b', kind: 'match', label: 'B', phase: '', format: 'BO3', x: 14, y: 1, w: 10, h: 7,
@@ -126,14 +126,83 @@ test('选中→保存→抽屉→使用→幽灵落子→新卡全选→Ctrl+Z �
   await page.mouse.move(center.x, center.y);
   await expect(ghost).toBeVisible();
 
+  /* 信息完整钉:幽灵=页面同款构建器出的真实卡预览——每张 .match-card 的
+   * .match-title/.match-phase 与保存的模板快照逐卡一致(t_a 有阶段、t_b 无) */
+  const srcA = saved.cards.find((c) => c.label === 'A');
+  const srcB = saved.cards.find((c) => c.label === 'B');
+  expect(srcA.phase).toBe('胜者组');
+  expect(srcB.phase).toBe('');
+  const ghostInfo = await ghost.locator('.match-card').evaluateAll((els) => els.map((e) => ({
+    title: e.querySelector('.match-title').textContent.trim(),
+    phase: e.querySelector('.match-phase') ? e.querySelector('.match-phase').textContent.trim() : null
+  })));
+  expect(ghostInfo.map((i) => i.title).sort()).toEqual(saved.cards.map((c) => c.label).sort());
+  expect(ghostInfo.find((i) => i.title === 'A').phase).toBe(srcA.phase);
+  expect(ghostInfo.find((i) => i.title === 'B').phase).toBe(srcB.phase || null);
+
   /* 落子:3→5 张,新卡 2 张且全部 selected,克隆连线 +1,抽屉自动收起 */
   const edgesBefore = await page.locator('#canvas-board .canvas-edges path.canvas-edge').count();
   expect(edgesBefore).toBe(1); /* 种子 t_a→t_b 一条 */
-  await clickCanvasBlank(page);
+  /* 所见即所得零容差钉:mousemove 至落点后读「幽灵层 left/top + 内卡(锚 A)
+   * 内联 left/top」之和,点击同点落子后新卡 selected 的 left/top 与之严格相等。
+   * 落点限正象限空白带(dx≥0/dy≥0):负象限落子会触发渲染原点外扩+相机等量
+   * 补偿,新卡 left 被归一,DOM left 口径不可比——按格点反解屏幕坐标搜视口内点 */
+  const dropPt = await page.evaluate(() => {
+    const sr = document.getElementById('canvas-scroll').getBoundingClientRect();
+    const br = document.getElementById('canvas-board').getBoundingClientRect();
+    const cam = window.CanvasEditor.getCamera();
+    const DOT = window.CanvasModel.DOT;
+    const pick = (gx, gy) => ({
+      x: Math.round(br.left + (gx - cam.ox) * DOT * cam.scale),
+      y: Math.round(br.top + (gy - cam.oy) * DOT * cam.scale)
+    });
+    const inside = (p) => p.x >= sr.left + 8 && p.x <= sr.right - 8 &&
+      p.y >= sr.top + 8 && p.y <= sr.bottom - 8;
+    /* 命中校验:该点最顶层元素须属 #canvas-scroll 且不在任何卡上——
+     * 放置态抽屉仍开着(盖住右缘,点进抽屉落不了子),点在卡上则
+     * 落子后补发的 click 会单选该卡,顶掉新卡落选态 */
+    const onBlank = (p) => {
+      const el = document.elementFromPoint(p.x, p.y);
+      return !!el && !!(el.closest && el.closest('#canvas-scroll')) &&
+        !el.closest('.canvas-card');
+    };
+    /* 正象限空白带(dx=round(gx−11)≥0,dy=round(gy−3.5)≥0):先搜种子卡
+     * 包围盒(x≤24,y≤17)右下侧;窄视口(放置态抽屉盖住右缘)退让左半
+     * gx 12..24 的下方空白行(onBlank 已保证落点不压卡) */
+    const tryBand = (x0, x1) => {
+      for (let gx = x0; gx <= x1; gx += 2) {
+        for (let gy = 12; gy <= 30; gy += 2) {
+          const p = pick(gx, gy);
+          if (inside(p) && onBlank(p)) return p;
+        }
+      }
+      return null;
+    };
+    return tryBand(26, 46) || tryBand(12, 24) ||
+      { x: Math.round(sr.left + 6), y: Math.round(sr.top + sr.height - 6) };
+  });
+  await page.mouse.move(dropPt.x, dropPt.y);
+  const ghostSum = await page.evaluate(() => {
+    const layer = document.querySelector('.tpl-ghost');
+    const card = Array.from(layer.querySelectorAll('.match-card'))
+      .find((e) => e.querySelector('.match-title').textContent.trim() === 'A');
+    return {
+      left: parseFloat(layer.style.left) + parseFloat(card.style.left),
+      top: parseFloat(layer.style.top) + parseFloat(card.style.top)
+    };
+  });
+  await page.mouse.click(dropPt.x, dropPt.y);
   await expect(page.locator('body')).not.toHaveClass(/tpl-placing/);
   await expect(ghost).toHaveCount(0);
   await expect(page.locator('.canvas-card')).toHaveCount(5);
   await expect(page.locator('.canvas-card.selected')).toHaveCount(2);
+  const placedA = await page.evaluate(() => {
+    const card = Array.from(document.querySelectorAll('#canvas-board .canvas-card.selected'))
+      .find((e) => e.querySelector('.match-title').textContent.trim() === 'A');
+    return { left: parseFloat(card.style.left), top: parseFloat(card.style.top) };
+  });
+  expect(placedA.left).toBe(ghostSum.left); /* 容差 0:所见即落点 */
+  expect(placedA.top).toBe(ghostSum.top);
   expect(await placedCardIds(page)).toHaveLength(2);
   await expect(page.locator('#canvas-board .canvas-edges path.canvas-edge')).toHaveCount(2);
   await expect(drawer).toBeHidden();
@@ -157,11 +226,16 @@ test('Ctrl+C → Ctrl+V 幽灵落子(不再立即偏移粘贴),Esc 取消', asyn
   await selectTwoMatchCards(page);
   await page.keyboard.press('Control+c');
 
-  /* Ctrl+V:改走幽灵放置——画布不立即多卡(旧「偏移粘贴」行为已退役) */
+  /* Ctrl+V:改走幽灵放置——不立即落卡(旧「偏移粘贴」行为已退役)。
+   * 幽灵=board 内真实卡预览层:多出的 2 张 .canvas-card 全在 .tpl-ghost 内,
+   * 板内非幽灵卡仍 3 张(粘贴不落卡语义钉不放松) */
   await page.keyboard.press('Control+v');
   await expect(page.locator('body')).toHaveClass(/tpl-placing/);
   await expect(page.locator('.tpl-ghost')).toHaveCount(1);
-  await expect(page.locator('.canvas-card')).toHaveCount(3);
+  await expect(page.locator('.tpl-ghost .canvas-card')).toHaveCount(2);
+  const boardCardsWhilePlacing = await page.locator('.canvas-card').evaluateAll((els) =>
+    els.filter((e) => !e.closest('.tpl-ghost')).length);
+  expect(boardCardsWhilePlacing).toBe(3);
 
   /* 落子:3→5,新卡 2 张全选 */
   await clickCanvasBlank(page);
