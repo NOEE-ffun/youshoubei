@@ -67,7 +67,7 @@ const API_ROUTES = {
 
 /* 不对外下发的内部目录与根级文件;比对前统一转小写,顺带堵住 /API/ 这类大小写变体 */
 const BLOCKED_SEGMENTS = new Set(['api', 'node_modules', 'test', 'scripts', 'deploy', 'docs', 'design-system', 'kb']);
-const BLOCKED_ROOT_FILES = new Set(['server.js', 'package.json', 'package-lock.json', 'playwright.config.mjs', 'vercel.json']);
+const BLOCKED_ROOT_FILES = new Set(['server.js', 'package.json', 'package-lock.json', 'playwright.config.mjs', 'vercel.json', 'changelog.md', 'deploy_info']);
 
 /* 点击劫持/引用裁剪/权限收敛。frame-ancestors 无法写进 meta CSP,只能走响应头 */
 const SECURITY_HEADERS = {
@@ -304,7 +304,9 @@ function createServer() {
 
 if (require.main === module) {
   const server = createServer();
-  server.listen(PORT, () => {
+  /* 只绑回环:外网直连 3000 会绕过 nginx 的 TLS/头加固(安全审计 S-06);
+   * 生产由 nginx 反代 127.0.0.1:3000,本地开发访问 localhost 不受影响 */
+  server.listen(PORT, '127.0.0.1', () => {
     console.log('赛事网站已启动：http://localhost:' + PORT);
     console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/notices /api/docs /api/dev/reset /api/admin/*');
     console.log('按 Ctrl+C 停止服务器');
