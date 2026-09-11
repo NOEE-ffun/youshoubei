@@ -4,15 +4,15 @@
  * storage 按 api/helpers.js createStorage 的真实注入契约 mock:
  * readJson/writeJson(对象级,同 test/codes-api.test.js memoryStorage),
  * 任务书草稿的 get/put 文本契约与仓库不符,已按实际核对改写。
- * now/appendAudit/backupJson 注入:审计(save/cover/delete + 市场 list/unlist/adopt)
- * 与 maskUser、撤架前备份策略在组 2/7-9 断言。
+ * now/appendAudit/backupJson 注入:审计(save/cover/delete + 市场 list/unlist/adopt)、
+ * maskUser、撤架前备份策略、listedAt 倒序与配额计数口径在组 2 与市场组 7-11 断言。
  * 权限(HTTP 层匿名 401/越权 403)由 requireRole+session 兜底,e2e 匿名打真服务覆盖,
  * 单测不重复造会话——第 1 组留注释占位,handler 直测从第 2 组起。 */
 
 const assert = require('node:assert/strict');
 const { createHandler } = require('../api/templates.js');
 
-function boot() {
+function boot(nowFn) {
   const map = new Map();
   const storage = {
     readJson: async (key) => (map.has(key) ? map.get(key) : null),
@@ -20,8 +20,11 @@ function boot() {
   };
   const audits = [];
   const backups = [];
+  let tick = 100;
   const h = createHandler(storage, {
-    now: () => 123,
+    /* 默认可递增时钟:次序敏感断言(listedAt 倒序)需严格递增时间戳才可分辨;
+     * 固定值场景(组 2 updatedAt / 组 8 adopt 时间戳)局部传 nowFn 覆盖 */
+    now: nowFn || (() => ++tick),
     appendAudit: (a, d) => audits.push([a, d]),
     backupJson: (key, prefix) => { backups.push([key, prefix]); return Promise.resolve(); }
   });
@@ -45,7 +48,7 @@ const tpl = (name, id) => ({
 
   /* 2) PUT:合法落库、只写自己块、updatedAt 走注入 now、审计三分支 + by= 脱敏 */
   {
-    const { h, audits, map } = boot();
+    const { h, audits, map } = boot(() => 123); /* 固定 now:updatedAt 断言需要确定值 */
     await h.__putLibrary(ADMIN, { templates: [tpl('八强赛')] });
     let file = map.get('templates.json');
     assert.ok(file.libraries.u1 && file.libraries.u1.templates.length === 1, 'u1 落库');
@@ -155,7 +158,7 @@ const tpl = (name, id) => ({
 
   /* 8) adopt:拷贝语义(新 id/深拷贝)/撞名 409 带冲突名/renameTo 解冲突/库满 400/撤架后 404 */
   {
-    const { h } = boot();
+    const { h } = boot(() => 123); /* 固定 now:组尾断 adopt 副本时间戳=注入值 */
     const SUPER2 = { username: '13900000003', id: 'u3', role: 'admin' }; /* 手机号形态,组 9 验 by= 脱敏 */
     await h.__putLibrary(ADMIN, { templates: [tpl('八强赛')] });
     await h.__marketAction(ADMIN, { action: 'list', templateId: 'tpl_x' });
@@ -172,6 +175,9 @@ const tpl = (name, id) => ({
     const adopted = lib[1];
     assert.notEqual(adopted.id, 'tpl_x', '新条目 id 全新');
     assert.equal(adopted.name, '八强赛(副本)', 'renameTo 生效');
+    /* 时间戳重打:原快照 createdAt=1(tpl 固定),副本两时间戳=注入 now,可区分 */
+    assert.equal(adopted.createdAt, 123, 'adopt 副本 createdAt=注入 now(非沿用快照的 1)');
+    assert.equal(adopted.updatedAt, 123, 'adopt 副本 updatedAt=注入 now');
     adopted.cards[0].x = 999; /* 改加入后的副本不动在架快照=深拷贝 */
     assert.equal((await h.__marketList()).market[0].snapshot.cards[0].x, 0, 'cards 深拷贝');
     /* 库满 400:u3 已 2 条,整库补到 50 再 adopt */
@@ -203,6 +209,40 @@ const tpl = (name, id) => ({
     assert.deepEqual(backups, [['templates.json', 'templates']], '备份仅 unlist 触发一次(list/adopt 不备份)');
   }
 
-  console.log('✓ templates-api(market): 3 组断言通过');
+  /* 10) 倒序:三模板 A→B→C 依次上架,__marketList 按 listedAt 倒序回 [C,B,A]
+   *     (默认递增时钟使三次 listedAt 严格不同——固定 now 下稳定排序保持插入序,钉不住倒序) */
+  {
+    const { h } = boot();
+    await h.__putLibrary(ADMIN, {
+      templates: [tpl('A', 'tpl_a'), tpl('B', 'tpl_b'), tpl('C', 'tpl_c')]
+    });
+    for (const tid of ['tpl_a', 'tpl_b', 'tpl_c']) {
+      await h.__marketAction(ADMIN, { action: 'list', templateId: tid });
+    }
+    const mkt = await h.__marketList();
+    assert.deepEqual(mkt.market.map((m) => m.snapshot.name), ['C', 'B', 'A'], 'listedAt 倒序');
+    assert.ok(
+      mkt.market[0].listedAt > mkt.market[1].listedAt && mkt.market[1].listedAt > mkt.market[2].listedAt,
+      'listedAt 严格递减');
+  }
+
+  /* 11) 混合配额:5 个不同模板 + 同模板重复 5 次 = 10 条在架,换新模板第 11 条 400
+   *     (钉住按 authorUid 全量条目计数口径,防未来误改成按 templateId 去重后放行第 11 条) */
+  {
+    const { h } = boot();
+    const tpls = ['A', 'B', 'C', 'D', 'E', 'F'].map((n) => tpl(n, 'tpl_' + n.toLowerCase()));
+    await h.__putLibrary(ADMIN, { templates: tpls });
+    for (const t of tpls.slice(0, 5)) {
+      assert.ok((await h.__marketAction(ADMIN, { action: 'list', templateId: t.id })).item, '5 个不同模板各上架成功');
+    }
+    for (let i = 0; i < 5; i++) {
+      assert.ok((await h.__marketAction(ADMIN, { action: 'list', templateId: 'tpl_a' })).item, '同模板重复上架成功且占位');
+    }
+    assert.equal((await h.__marketList()).market.length, 10, '混合计数恰 10 条');
+    const r = await h.__marketAction(ADMIN, { action: 'list', templateId: 'tpl_f' });
+    assert.equal(r.code, 400, '新模板第 11 条 400(按 authorUid 条目数,非 templateId 去重)');
+  }
+
+  console.log('✓ templates-api(market): 5 组断言通过');
   console.log('✓ templates-api(personal): 6 组断言通过');
 })().catch((e) => { console.error(e); process.exit(1); });
