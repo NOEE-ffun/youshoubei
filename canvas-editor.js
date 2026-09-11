@@ -589,6 +589,20 @@ let listActive = false;
     syncZoom();
   }
 
+  /* 屏幕坐标 → 世界格坐标(与双击建卡/视口落卡同口径):
+   * board 的 getBoundingClientRect 已含相机 transform,DOM 像素按 DOT*scale
+   * 折算成格偏移,再加渲染原点(负象限卡片包围盒左上归一在 DOM 0,0)。
+   * 模板幽灵放置(Task 5)经导出口用它算落点 */
+  function toGridPoint(clientX, clientY) {
+    const b = board();
+    if (!b) return { x: renderOrigin.x, y: renderOrigin.y };
+    const rect = b.getBoundingClientRect();
+    return {
+      x: Math.round((clientX - rect.left) / (DOT * scale)) + renderOrigin.x,
+      y: Math.round((clientY - rect.top) / (DOT * scale)) + renderOrigin.y
+    };
+  }
+
   function onWheel(event) {
     // Obsidian 白板语义:Ctrl/Cmd+滚轮(含 Mac 捏合)以光标为锚缩放;普通滚轮平移(Shift 转横向)
     event.preventDefault();
@@ -980,7 +994,15 @@ let listActive = false;
       return;
     }
     if (mod && (event.key === 'v' || event.key === 'V')) {
-      if (copiedCards.length) pasteCards(copiedCards);
+      if (!copiedCards.length) return;
+      /* 画布态且有模板模块:改为幽灵放置(2026-09-12 模板批);列表态/模块未载保持原粘贴。
+       * captureTemplate 归一剪贴板结构——指向集外卡的引用按模板语义丢弃 */
+      if (!listActive && window.CanvasTemplates && typeof window.CanvasTemplates.enterPlacement === 'function') {
+        window.CanvasTemplates.enterPlacement(
+          CanvasModel.captureTemplate(copiedCards), { source: 'clipboard' });
+        return;
+      }
+      pasteCards(copiedCards);
       return;
     }
     if (mod && (event.key === 'd' || event.key === 'D')) {
@@ -1244,6 +1266,27 @@ let listActive = false;
       refreshToolbarUI();
     });
     notify('已粘贴 ' + clones.length + ' 张卡片');
+  }
+
+  /* 模板/粘贴共用落子:结构卡按包围盒中心对齐 (cx,cy) 落画布,单步撤销,落完全选。
+   * structCards 即 captureTemplate 产物({cards, meta});返回 Promise<新卡数组> */
+  function placeCardsAt(cx, cy, structCards) {
+    const record = currentRecord();
+    const canvas = record.canvas || (record.canvas = { cards: [] });
+    const clones = CanvasModel.materializeTemplate(
+      { cards: structCards.cards, meta: structCards.meta }, cx, cy);
+    if (!clones.length) return Promise.resolve([]);
+    commitHistory();
+    for (const clone of clones) canvas.cards.push(clone);
+    if (tool === 'delete') setTool('select');
+    batchSelected = new Set(clones.map((c) => c.id));
+    selectedCardId = clones[0].id;
+    return saveCanvas().then(() => {
+      requestRender();
+      highlightSelected();
+      refreshToolbarUI();
+      return clones;
+    });
   }
 
   /* ---------- 职业卡组链接列表编辑(A/B 两组):字段/回填/读取在 card-form.js ---------- */
@@ -1686,6 +1729,10 @@ let listActive = false;
     addPoolCard,
     deleteSelected,
     getSelectedIds: selectedIds,
+    getSelectedCards: () => selectedIds().map(findCard).filter(Boolean),
+    isCanvasActive: () => !listActive,
+    toGridPoint,
+    placeCardsAt,
     selectCard,
     setSelection,
     confirmClickSelection,
