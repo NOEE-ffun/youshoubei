@@ -66,7 +66,7 @@ function createHandler(storage, options) {
     const checked = validateLibrary(body);
     if (checked.code) return checked;
     const file = await readFile();
-    const prev = getLibrary(file, user.uid);
+    const prev = getLibrary(file, user.id);
     const next = body.templates.map((raw) => normalizeTemplate(raw).value);
     /* 审计三分支:save=新 id / delete=消失 / cover=同 id 保留(覆盖更新) */
     const prevIds = new Map(prev.map((t) => [t.id, t.name]));
@@ -76,8 +76,8 @@ function createHandler(storage, options) {
     for (const t of added) audit('tpl.save', '模板「' + t.name + '」' + t.cards.length + ' 卡 by=' + maskUser(user.username));
     for (const t of removed) audit('tpl.delete', '模板「' + prevIds.get(t.id) + '」by=' + maskUser(user.username));
     for (const t of covered) audit('tpl.cover', '模板「' + t.name + '」覆盖更新 by=' + maskUser(user.username));
-    if (!file.libraries[user.uid]) file.libraries[user.uid] = { templates: [] };
-    file.libraries[user.uid].templates = next;
+    if (!file.libraries[user.id]) file.libraries[user.id] = { templates: [] };
+    file.libraries[user.id].templates = next;
     await write(TPL_KEY, file);
     return { templates: next };
   }
@@ -87,7 +87,7 @@ function createHandler(storage, options) {
     const user = await requireRole(req, res, ROLES);
     if (!user) return;
     const file = await readFile();
-    sendJson(res, 200, { templates: getLibrary(file, user.uid) });
+    sendJson(res, 200, { templates: getLibrary(file, user.id) });
   }
 
   /* PUT /api/templates → 整体提交本人库(前端权威;服务端只校验+写自己块) */

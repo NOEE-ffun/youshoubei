@@ -22,9 +22,11 @@ function boot() {
   return { h, audits, map };
 }
 
-const ADMIN = { username: 'admin1', uid: 'u1', role: 'admin' };
+/* 用户字段对齐真实契约:requireRole→currentUser 返回对象键是 id(safeUser,
+ * account.js:60),uid 只在 session 载荷里——mock 照真实形状造 */
+const ADMIN = { username: 'admin1', id: 'u1', role: 'admin' };
 /* 手机号形态 username:验审计 detail 里 maskUser 只留末 4 位 */
-const USER = { username: '13900000002', uid: 'u2', role: 'player' };
+const USER = { username: '13900000002', id: 'u2', role: 'player' };
 const tpl = (name, id) => ({
   id: id || 'tpl_x', name,
   cards: [{ kind: 'match', x: 0, y: 0 }],
@@ -90,5 +92,39 @@ const tpl = (name, id) => ({
     assert.deepEqual(await h.__getLibrary('u2'), [], '他人块不可见');
   }
 
-  console.log('✓ templates-api(personal): 4 组断言通过');
+  /* 5) 双用户隔离:A、B 两个 admin 先后落库,各占独立块,B 的 PUT 不删 A 的 */
+  {
+    const { h, map } = boot();
+    const A = { username: 'adminA', id: 'uA', role: 'admin' };
+    const B = { username: 'adminB', id: 'uB', role: 'admin' };
+    await h.__putLibrary(A, { templates: [tpl('A1', 'tpl_a1')] });
+    await h.__putLibrary(B, { templates: [tpl('B1', 'tpl_b1'), tpl('B2', 'tpl_b2')] });
+    await h.__putLibrary(A, { templates: [tpl('A1', 'tpl_a1'), tpl('A2', 'tpl_a2')] });
+    const file = map.get('templates.json');
+    assert.deepEqual(file.libraries.uA.templates.map((t) => t.name), ['A1', 'A2'], 'A 块=自己最后一次提交');
+    assert.deepEqual(file.libraries.uB.templates.map((t) => t.name), ['B1', 'B2'], 'B 块不被 A 的提交覆盖');
+    assert.equal((await h.__getLibrary('uA')).length, 2, 'A 回读不空(B 的 PUT 不删 A 的)');
+    assert.equal((await h.__getLibrary('uB')).length, 2, 'B 回读完整');
+    assert.ok(file.libraries.uA && file.libraries.uB, '两个独立块并存(非 libraries["undefined"] 合写)');
+  }
+
+  /* 6) write 抛错:错误原样上抛不吞(HTTP 层 500 由 server.js handleApi catch 兜底),
+   *    且 workspace-lock 链尾吞错设计保证失败不断链——恢复后同 handler 可继续写 */
+  {
+    const map = new Map();
+    let fail = true;
+    const storage = {
+      readJson: async (key) => (map.has(key) ? map.get(key) : null),
+      writeJson: async (key, value) => { if (fail) throw new Error('oss down'); map.set(key, value); }
+    };
+    const h = createHandler(storage, { now: () => 123, appendAudit: () => {} });
+    await assert.rejects(() => h.__putLibrary(ADMIN, { templates: [tpl('X')] }), /oss down/,
+      'write 失败原样 reject(吞错会变假 200)');
+    fail = false;
+    const ok = await h.__putLibrary(ADMIN, { templates: [tpl('X')] });
+    assert.ok(Array.isArray(ok.templates), '锁链未断,恢复后可写');
+    assert.equal(map.get('templates.json').libraries.u1.templates.length, 1, '恢复后落库成功');
+  }
+
+  console.log('✓ templates-api(personal): 6 组断言通过');
 })().catch((e) => { console.error(e); process.exit(1); });
