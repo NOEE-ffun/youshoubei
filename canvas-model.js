@@ -1230,7 +1230,8 @@ function arrowDefs(prefix) {
    * 要进模板须显式加这里。id/seed 说明:id 不进模板(落子全新生成),
    * seed 是池卡随机种子(uid('s') 产物)随模板保留——非序号无撞号问题。 */
   const TEMPLATE_CARD_FIELDS = ['kind', 'x', 'y', 'w', 'h', 'color', 'label', 'phase',
-    'format', 'exitRanks', 'banListIds', 'ports', 'seed', 'entryCapacity', 'classLinks', 'style'];
+    'format', 'exitRanks', 'banListIds', 'ports', 'seed', 'entryCapacity', 'classLinks', 'style',
+    'deckCount', 'mode'];
 
   /* 捕获选中卡为纯结构模板:坐标相对包围盒左上归零;flow 槽集内引用换成
    * 集内下标字符串(模板自包含,集外引用丢弃);非 flow 槽一律置空(选手分配剥离)。 */
@@ -1250,11 +1251,13 @@ function arrowDefs(prefix) {
       t.y = (Number(c.y) || 0) - minY;
       t.slots = (c.slots || []).map((slot) => {
         if (slot && slot.type === 'flow' && index.has(slot.cardId)) {
-          /* outcome/outlet 仅在有值时写入(同 normalizeSlot 惯例),
-           * 避免显式 undefined 键破坏 deepEqual 严格比较 */
+          /* outcome/outlet/inlet 仅在有值时写入(同 normalizeSlot 惯例),
+           * 避免显式 undefined 键破坏 deepEqual 严格比较;inlet 是池入口
+           * 连线的落点口(渲染锚点),丢弃会导致模板内连线断裂 */
           const fs = { type: 'flow', cardId: index.get(slot.cardId) };
           if (slot.outcome !== undefined) fs.outcome = slot.outcome;
           if (slot.outlet !== undefined) fs.outlet = slot.outlet;
+          if (slot.inlet !== undefined) fs.inlet = slot.inlet;
           return fs;
         }
         return { type: 'empty' };
