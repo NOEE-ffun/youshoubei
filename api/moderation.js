@@ -26,10 +26,14 @@ function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** 归一化:NFKC(全角→半角等兼容分解)→ 去所有空白 → 小写。词与文本同规则,
- * 空格混淆/全角变体/大小写绕不过。非字符串按空串(受检侧=放行,词侧=无效)。 */
+/** 归一化:NFKC(全角→半角等兼容分解)→ 清零宽字符 → 去所有空白 → 小写。词与文本同规则,
+ * 空格混淆/全角变体/大小写/零宽字符(ZWSP/ZWNJ/BOM 等)绕不过。非字符串按空串(受检侧=放行,词侧=无效)。 */
 function normalize(s) {
-  return String(s == null ? '' : s).normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+  return String(s == null ? '' : s)
+    .normalize('NFKC')
+    .replace(/[\u200b-\u200f\ufeff]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
 }
 
 /* deploy 种子只此一处经 fs 进来(模块级缓存,进程内读一次):
@@ -69,14 +73,20 @@ function createModeration(storage, options) {
     regex = words.length ? new RegExp(words.map(escapeRe).join('|'), 'i') : null;
   }
 
-  /** 归一化+校验+去重(保序):存储/种子侧统一清洗,脏词条静默丢弃 */
+  /** 归一化+校验+去重(保序):存储/种子侧统一清洗。脏词条静默丢弃;
+   * 超长丢弃时 console.warn 留痕(只记长度,不回显词内容——真实词表纪律) */
   function sanitizeList(list) {
     const seen = new Set();
     const out = [];
     for (const w of list || []) {
       if (typeof w !== 'string') continue;
       const n = normalize(w);
-      if (!n || n.length > MAX_WORD_LEN || seen.has(n)) continue;
+      if (!n) continue;
+      if (n.length > MAX_WORD_LEN) {
+        console.warn('[moderation] 超长词条丢弃(len=' + n.length + ' > ' + MAX_WORD_LEN + ',词内容不记录)');
+        continue;
+      }
+      if (seen.has(n)) continue;
       seen.add(n);
       out.push(n);
     }
@@ -112,9 +122,16 @@ function createModeration(storage, options) {
     return loading.then(() => words.slice());
   }
 
-  /** 受检文本是否放行;命中拒绝文案固定,不回显命中词 */
+  /** 受检文本是否放行;命中拒绝文案固定,不回显命中词。
+   * 存储故障策略=fail-open:词库读失败时放行写入并 console.warn(可用性优先——
+   * 审查是降级体验而非可用性依赖;loadWords 失败已自清 memo,下次调用重试) */
   async function checkText(text) {
-    await loadWords();
+    try {
+      await loadWords();
+    } catch (error) {
+      console.warn('[moderation] 词库读取失败,本次放行(fail-open):', (error && (error.code || error.name)) || error);
+      return { ok: true, reason: null };
+    }
     if (!regex) return { ok: true, reason: null };
     return regex.test(normalize(text)) ? { ok: false, reason: REJECT_REASON } : { ok: true, reason: null };
   }

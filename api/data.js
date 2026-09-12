@@ -15,6 +15,35 @@ const MAX_BODY = 1024 * 1024;
 /* 读-改-写走三态存储(无 OSS 环境降级开发内存,行为与云端一致) */
 const storage = createStorage();
 
+/* 内容审查(Task 2):整库 PUT 的文本扫描消费共享单例;
+ * __setModeration 是测试注入口(合成词实例),生产路径不碰 */
+let moderation = require('./moderation').shared;
+
+/* 整库文本扫描:卡片 label/phase/format + 选手 name/tag/title(管理端选手编辑
+ * 无独立端点,走本整库 PUT,故在此一并覆盖)。返回首处命中的定位提示
+ * (届名+卡 id / 选手 id,不带命中词)或 null(放行) */
+async function scanBlockedText(workspace) {
+  for (const record of (workspace && workspace.tournaments) || []) {
+    if (!record || !record.canvas) continue;
+    for (const card of record.canvas.cards || []) {
+      if (!card) continue;
+      const where = '届「' + (record.name || record.id) + '」卡 ' + card.id;
+      for (const field of ['label', 'phase', 'format']) {
+        const verdict = await moderation.checkText(card[field]);
+        if (!verdict.ok) return verdict.reason + ':' + where + '(' + field + ')';
+      }
+    }
+  }
+  for (const p of (workspace && workspace.players) || []) {
+    if (!p) continue;
+    for (const field of ['name', 'tag', 'title']) {
+      const verdict = await moderation.checkText(p[field]);
+      if (!verdict.ok) return verdict.reason + ':选手 ' + (p.id || '?') + '(' + field + ')';
+    }
+  }
+  return null;
+}
+
 /* 未公示卡组剥离:开关开启期间,该届未录比分的卡,某侧已提交的 own classLinks
  * 对"非该侧所属选手"的请求者置 [](继承链自动回退到已公示数据,不泄露)。
  * roll 池卡按池位剥离(classLinks 数组逐位 map);管理员角色(admin/super)原样;
@@ -133,6 +162,9 @@ module.exports = async function handler(req, res) {
           users.filter((u) => u && u.playerId).map((u) => String(u.playerId)));
         const guarded = workspacePutGuard(user, current, workspace, boundPlayerIds);
         if (!guarded.ok) return { status: guarded.status, error: guarded.error };
+        /* 内容审查(Task 2):守卫通过后、写盘前整库扫描,命中 400 不落库 */
+        const blocked = await scanBlockedText(guarded.workspace);
+        if (blocked) return { status: 400, error: blocked };
         /* 覆盖前备份当前版本(best-effort,失败不阻塞);落盘守卫盖章后的 workspace */
         await backupData();
         await storage.write(DATA_PATH, guarded.workspace);
@@ -157,3 +189,5 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.stripHiddenDecks = stripHiddenDecks;
+/* 测试注入口:替换整库扫描消费的审查实例(默认 .shared);生产不碰 */
+module.exports.__setModeration = (m) => { moderation = m; };

@@ -5,6 +5,7 @@ const { sendJson, readJsonBody, createStorage, maskUser } = require('./helpers')
 const { appendAudit, backupJson } = require('./oss');
 const { requireRole } = require('./auth');
 const { withWorkspaceLock } = require('./workspace-lock');
+const { shared: sharedModeration } = require('./moderation');
 
 /* 卡片模板(2026-09-12 spec):个人库 + 市场,单文件 templates.json。
  * 个人库=每管理用户一块;市场=快照数组:上架时深拷贝(后续改库/删库不影响在架条目),
@@ -24,6 +25,8 @@ function createHandler(storage, options) {
   const now = typeof o.now === 'function' ? o.now : Date.now;
   const audit = typeof o.appendAudit === 'function' ? o.appendAudit : appendAudit;
   const backup = typeof o.backupJson === 'function' ? o.backupJson : backupJson; /* 同 signup.js 注入面 */
+  /* 内容审查(Task 2):模板名拒审;默认共享单例,测试注入合成词实例 */
+  const moderation = o.moderation || sharedModeration;
   const { read, write } = createStorage(storage);
 
   async function readFile() { return (await read(TPL_KEY)) || emptyFile(); }
@@ -70,6 +73,11 @@ function createHandler(storage, options) {
     const file = await readFile();
     const prev = getLibrary(file, user.id);
     const next = body.templates.map((raw) => normalizeTemplate(raw).value);
+    /* 内容审查(Task 2):normalizeTemplate 之后的模板名逐条拒审,先于写盘 */
+    for (const t of next) {
+      const verdict = await moderation.checkText(t.name);
+      if (!verdict.ok) return { code: 400, error: verdict.reason };
+    }
     /* 审计三分支:save=新 id / delete=消失 / cover=同 id 保留(覆盖更新) */
     const prevIds = new Map(prev.map((t) => [t.id, t.name]));
     const added = next.filter((t) => !prevIds.has(t.id));
@@ -163,6 +171,9 @@ function createHandler(storage, options) {
         const want = String(body.renameTo == null ? copy.name : body.renameTo).trim();
         if (!want || want.length > LIMITS.name) return { code: 400, error: '模板名须为 1-20 字' };
         if (lib.some((t) => t.name === want)) return { code: 409, error: '已有同名模板:' + want };
+        /* 内容审查(Task 2):adopt 落库名(renameTo 或沿用快照名)过检,先于写盘 */
+        const verdict = await moderation.checkText(want);
+        if (!verdict.ok) return { code: 400, error: verdict.reason };
         copy.name = want;
         if (!file.libraries[user.id]) file.libraries[user.id] = { templates: [] };
         file.libraries[user.id].templates.push(copy);

@@ -3,6 +3,7 @@
 const { sendJson, readJsonBody, createStorage, maskUser } = require('./helpers');
 const { DATA_PATH, backupData, appendAudit } = require('./oss');
 const account = require('./account');
+const { shared: sharedModeration } = require('./moderation');
 const { withWorkspaceLock } = require('./workspace-lock');
 const { parseDeckHash, resolveDeck: defaultResolveDeck } = require('./deck-resolve');
 const { CLASS_LIST, resolveCanvas, getResult, isWindowOpen, normalizeDeckUrl } = require('../canvas-model');
@@ -38,6 +39,8 @@ function createHandler(storage, options) {
   const resolveDeck = typeof o.resolveDeck === 'function' ? o.resolveDeck : defaultResolveDeck;
   /* 会话→用户解析默认走全局 account(共用其存储降级);测试可注入 */
   const currentUser = typeof o.currentUser === 'function' ? o.currentUser : (req) => account.currentUser(req);
+  /* 内容审查(Task 2):卡组备注 links[].text 拒审;默认共享单例,测试注入合成词实例 */
+  const moderation = o.moderation || sharedModeration;
   const { read, write } = createStorage(storage);
 
   async function submit(req, res) {
@@ -66,6 +69,14 @@ function createHandler(storage, options) {
     if (links === null) {
       sendJson(res, 400, { error: 'links 必须是数组' });
       return;
+    }
+
+    /* 内容审查(Task 2):卡组备注文本拒审,先于落库——放在校验段
+     * (网络解析与锁之前)快速失败,与 links 结构校验同一层级 */
+    for (const entry of links) {
+      if (!entry.text) continue;
+      const verdict = await moderation.checkText(entry.text);
+      if (!verdict.ok) return sendJson(res, 400, { error: verdict.reason });
     }
 
     /* WB 链接解析:锁外完成(网络 IO 绝不进锁)。成功附快照并以卡组真实职业纠错 cls,

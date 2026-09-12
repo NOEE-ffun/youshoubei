@@ -178,7 +178,13 @@ async function main() {
     console.log('✓ isWindowOpen:now=Date.now 函数形态(生产路径回归)');
 
     const storage = memoryStorage(seedWorld({ open: '00:00', close: '23:59' }));
-    const h = createHandler(storage, { appendAudit: () => {}, currentUser: makeFindUser(storage) });
+    /* 固定时钟注入:close 为开区间(cur < closeMin),真实时钟跑到 23:59 分时
+     * cur===closeMin 必判关 → 423,深夜跑测必红;固定到上午时刻消 flake */
+    const h = createHandler(storage, {
+      appendAudit: () => {},
+      currentUser: makeFindUser(storage),
+      now: () => new Date('2026-08-25T10:30:00').getTime()
+    });
     let status = null;
     let err = null;
     try {

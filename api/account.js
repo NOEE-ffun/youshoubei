@@ -7,6 +7,7 @@ const { withWorkspaceLock } = require('./workspace-lock');
 const { sessionOf, setSessionCookie, issueFor } = require('./session');
 const { effectiveRole } = require('./rbac');
 const { createSmsService, realVerifier } = require('./sms');
+const { shared: sharedModeration } = require('./moderation');
 
 /* 账号体系(v2):
  *   POST /api/auth/sms/send   发送短信验证码(限速在 sms 服务内:重发间隔/手机与 IP 日限)
@@ -140,6 +141,8 @@ function createHandlers(storage, options) {
   /* 真通道注入平台验码器(dypns CheckSmsVerifyCode)→ provider-verify 模式;
    * 注入 o.sms(测试)时完全替换,不触发真通道 */
   const sms = (o && o.sms) || createSmsService({ verifier: realVerifier });
+  /* 内容审查(Task 2):默认共享单例;测试注入合成词实例 */
+  const moderation = o.moderation || sharedModeration;
   const { read, write } = createStorage(storage);
 
   async function readUsers() {
@@ -399,6 +402,13 @@ function createHandlers(storage, options) {
        * 昵称是账号级字段(写 users.json),与选手档案无关,无 playerId 的存量账号也可改 */
       if (Object.keys(patch).length && !user.playerId) {
         return sendJson(res, 400, { error: '该账号未绑定选手,无法编辑资料' });
+      }
+
+      /* 内容审查(Task 2):昵称与选手资料文本字段逐字段拒审,先于任何落库 */
+      for (const value of [nickname, patch.name, patch.tag, patch.title]) {
+        if (value == null) continue;
+        const verdict = await moderation.checkText(value);
+        if (!verdict.ok) return sendJson(res, 400, { error: verdict.reason });
       }
 
       /* 读-改-写整段上锁:users(昵称)与 players(资料)两段写共用一把锁,

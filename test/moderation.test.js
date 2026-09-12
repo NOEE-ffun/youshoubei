@@ -1,8 +1,10 @@
 'use strict';
 
-/* 审查词库核心:种子灌入(OSS 真源回写)、归一化命中(NFKC 全角/去空白/小写)、
+/* 审查词库核心:种子灌入(OSS 真源回写)、归一化命中(NFKC 全角/去空白/小写/零宽字符)、
  * 拒绝文案不回显命中词、wordsApi 鉴权矩阵(super-only)+add/remove 即时生效、
- * 词校验(去重/空词/超长>32)、正则转义、空库恒放行、真源优先于种子、导出形态。
+ * 词校验(去重/空词/超长>32)、正则转义、空库恒放行、真源优先于种子、导出形态、
+ * 评审裁定(零宽清除/超长丢弃 warn/存储故障 fail-open)、
+ * Task 2 写入端拒审钩子(account/decks/templates/data,每端点一正一负)。
  * 合成词纪律:全文件只用「测试违禁甲/乙」与 'badword'/'a.b*c' 等合成词,
  * 不经 fs 碰 deploy/ 真实词表(seedWords 注入);拒绝文案固定不含命中词。 */
 
@@ -11,6 +13,10 @@ const session = require('../api/session');
 const devStore = require('../api/dev-store');
 const moderation = require('../api/moderation.js');
 const { createModeration } = moderation;
+const account = require('../api/account');
+const decks = require('../api/decks');
+const templates = require('../api/templates');
+const apiData = require('../api/data');
 
 function boot(seedWords) {
   const store = new Map();
@@ -21,6 +27,16 @@ function boot(seedWords) {
   /* 种子文件注入:options.seedWords 直接给数组,绕开 deploy/ 真实文件 */
   const m = createModeration(storage, { seedWords, now: () => 7 });
   return { m, store };
+}
+
+/* Map 存储注入(钩子组各 api 工厂共用,同 decks-api/login-wall 惯例) */
+function mapStorage(seed) {
+  const map = new Map(Object.entries(seed || {}));
+  return {
+    readJson: async (key) => (map.has(key) ? JSON.parse(JSON.stringify(map.get(key))) : null),
+    writeJson: async (key, value) => { map.set(key, value); },
+    _map: map
+  };
 }
 
 function mockReq(method, opts) {
@@ -187,6 +203,195 @@ async function call(handler, req) {
   assert.strictEqual(typeof moderation.createModeration, 'function', '工厂自别名');
   assert.ok(moderation.shared && typeof moderation.shared.checkText === 'function' && typeof moderation.shared.wordsApi === 'function', 'shared 单例(供 server 挂路由与 Task 2 写入端消费)');
 
+  /* ---- 7) 评审裁定:零宽字符清除 / 超长词条丢弃 warn / 存储故障 fail-open ---- */
+  {
+    const warns = [];
+    const origWarn = console.warn;
+    console.warn = (...args) => warns.push(args.map(String).join(' '));
+    try {
+      /* 零宽字符(ZWSP/ZWLR/BOM)拆词绕不过归一化 */
+      const { m: mZw } = boot(['测试违禁甲']);
+      assert.strictEqual((await mZw.checkText('测\u200b试违禁甲')).ok, false, 'ZWSP 拆词命中');
+      assert.strictEqual((await mZw.checkText('测试违禁\u200e甲')).ok, false, '零宽字符变体命中');
+      assert.strictEqual((await mZw.checkText('\ufeff测试违禁甲')).ok, false, 'BOM 前缀命中');
+
+      /* 超长词条丢弃:种子与存量同规则,warn 只记长度不回显词内容 */
+      const { m: mLong } = boot(['超'.repeat(40), '好词']);
+      assert.deepStrictEqual(await mLong.loadWords(), ['好词'], '超长种子词条被丢弃');
+      assert.ok(warns.some((x) => x.includes('超长词条丢弃') && x.includes('len=40')), '丢弃有 warn 留痕(带长度)');
+      assert.ok(!warns.join('\n').includes('超'.repeat(40)), 'warn 不回显词内容');
+      const stExisting = mapStorage({ 'blocked-words.json': { words: ['x'.repeat(33), '好词'] } });
+      const mExisting = createModeration(stExisting);
+      assert.deepStrictEqual(await mExisting.loadWords(), ['好词'], '存量超长词条同样丢弃');
+      assert.strictEqual(warns.filter((x) => x.includes('超长词条丢弃')).length, 2, '两处丢弃各一条 warn');
+
+      /* 存储故障 fail-open:checkText 放行 + warn;失败自清 memo,下次调用重试 */
+      let reads = 0;
+      const mBroken = createModeration({
+        readJson: async () => { reads += 1; throw new Error('storage boom'); },
+        writeJson: async () => {}
+      });
+      let r2 = await mBroken.checkText('测试违禁甲');
+      assert.strictEqual(r2.ok, true, '存储故障放行(fail-open)');
+      assert.strictEqual(r2.reason, null, 'fail-open 时 reason 为 null');
+      assert.ok(warns.some((x) => x.includes('fail-open')), 'fail-open 有 warn 留痕');
+      assert.strictEqual(reads, 1, '本次读取失败');
+      await mBroken.checkText('任意');
+      assert.strictEqual(reads, 2, '失败自清 memo,下次调用重读');
+    } finally {
+      console.warn = origWarn;
+    }
+    console.log('✓ 评审裁定:零宽清除/超长丢弃 warn/存储故障 fail-open');
+  }
+
+  /* ---- 8) Task 2 写入端拒审钩子:每端点一正一负(合成词「测试违禁乙」)----
+   * account/decks/templates 走各 createHandler/createHandlers 的 options.moderation
+   * 注入口(默认 .shared);data.js 是模块级单例,走其 __setModeration 注入口。 */
+  {
+    const BAD = '测试违禁乙';
+    const REJECT = '内容包含不允许的词汇,请修改';
+    const modBad = () => boot([BAD]).m;
+
+    /* 8a) account:me PUT 昵称 + 选手资料 name/tag/title 逐字段 */
+    {
+      const storage = mapStorage({
+        'users.json': [{ id: 'u2', username: 'p', usernameLower: 'p', phone: '13900000002', passHash: null, role: 'player', playerId: 'p1', status: 'active', createdAt: 't' }],
+        'data.json': { tournaments: [], players: [{ id: 'p1', name: '甲', tag: null, title: null }], activeId: null }
+      });
+      const acc = account.createHandlers(storage, { moderation: modBad() });
+      const cookie = { cookie: 'sess=' + session.issueFor('u2', '') };
+      const mePut = (body) => call(acc.me, mockReq('PUT', { body: JSON.stringify(body), headers: cookie }));
+
+      let r = await mePut({ nickname: '昵称' + BAD });
+      assert.strictEqual(r.status, 400, 'me PUT 昵称命中 → 400');
+      assert.strictEqual(r.body.error, REJECT, '统一拒绝文案');
+      assert.ok(!JSON.stringify(r.body).includes(BAD), '响应不回显命中词');
+      r = await mePut({ nickname: '正常昵称' });
+      assert.strictEqual(r.status, 200, '干净昵称 → 200');
+      assert.strictEqual(storage._map.get('users.json')[0].nickname, '正常昵称', '昵称落库');
+
+      r = await mePut({ name: '选' + BAD });
+      assert.strictEqual(r.status, 400, 'me PUT 选手名命中 → 400');
+      assert.strictEqual(storage._map.get('data.json').players[0].name, '甲', '选手名未落库');
+      r = await mePut({ tag: BAD });
+      assert.strictEqual(r.status, 400, 'me PUT 队伍 ID 命中 → 400');
+      r = await mePut({ title: 'x' + BAD + 'y' });
+      assert.strictEqual(r.status, 400, 'me PUT 垃圾话命中 → 400');
+      r = await mePut({ name: '新名', tag: '正常队', title: '正常话' });
+      assert.strictEqual(r.status, 200, '干净资料 → 200');
+      assert.strictEqual(storage._map.get('data.json').players[0].name, '新名', '资料落库');
+
+      /* fail-open 端到端:词库存储故障时写入放行(可用性优先) */
+      const mBroken = createModeration({
+        readJson: async () => { throw new Error('boom'); },
+        writeJson: async () => {}
+      });
+      const acc2 = account.createHandlers(storage, { moderation: mBroken });
+      r = await call(acc2.me, mockReq('PUT', { body: JSON.stringify({ nickname: '故障' + BAD }), headers: cookie }));
+      assert.strictEqual(r.status, 200, 'fail-open:词库读失败 → 昵称写入放行');
+      assert.strictEqual(storage._map.get('users.json')[0].nickname, '故障' + BAD, 'fail-open 落库');
+      console.log('✓ 钩子·account:me PUT 昵称+资料四字段,一正一负+fail-open');
+    }
+
+    /* 8b) decks:classlinks 提交的 links[].text(校验段拒审,先于网络解析/锁/落库) */
+    {
+      const PASS = 'scrypt:00112233445566778899aabb';
+      const storage = mapStorage({
+        'users.json': [{ id: 'u1', username: 'alice', usernameLower: 'alice', passHash: PASS, role: 'player', playerId: 'P1', createdAt: '2026-01-01T00:00:00Z' }],
+        'data.json': {
+          activeId: 't1',
+          players: [{ id: 'P1', name: '甲' }, { id: 'P2', name: '乙' }],
+          tournaments: [{
+            id: 't1', name: '测试届', roster: ['P1', 'P2'],
+            canvas: { cards: [{ id: 'c1', label: '首场', format: 'BO3', slots: [{ type: 'player', playerId: 'P1' }, { type: 'player', playerId: 'P2' }], classLinks: { a: [], b: [] } }] },
+            scores: {}, deckWindow: { manual: 'open' }, updatedAt: 1
+          }]
+        }
+      });
+      const users = storage._map.get('users.json');
+      const findUser = async (req) => {
+        const payload = session.sessionOf(req);
+        const u = users.find((x) => x.id === (payload && payload.uid));
+        return (u && payload.pv === u.passHash.slice(-8)) ? u : null;
+      };
+      const h = decks.createHandler(storage, { moderation: modBad(), currentUser: findUser, appendAudit: () => {}, backupData: async () => {} });
+      const cookie = { cookie: 'sess=' + session.issueFor('u1', PASS.slice(-8)) };
+      const submit = (links) => call(h.submit, mockReq('PUT', { body: JSON.stringify({ tournamentId: 't1', cardId: 'c1', side: 'a', links }), headers: cookie }));
+
+      let r = await submit([{ cls: '皇家', text: '备注' + BAD }]);
+      assert.strictEqual(r.status, 400, '卡组备注命中 → 400');
+      assert.strictEqual(r.body.error, REJECT, '统一拒绝文案');
+      assert.deepStrictEqual(storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks.a, [], '未落库');
+      r = await submit([{ cls: '皇家', text: '速攻' }]);
+      assert.strictEqual(r.status, 200, '干净备注 → 200');
+      assert.deepStrictEqual(storage._map.get('data.json').tournaments[0].canvas.cards[0].classLinks.a, [{ cls: '皇家', url: '', text: '速攻' }], '落库');
+      console.log('✓ 钩子·decks:classlinks links[].text,一正一负');
+    }
+
+    /* 8c) templates:个人库模板名 + 市场 adopt renameTo(normalizeTemplate 之后过检) */
+    {
+      const storage = mapStorage({});
+      const th = templates.createHandler(storage, { moderation: modBad(), appendAudit: () => {}, backupJson: async () => {} });
+      const cookie = { cookie: ck('u5') };
+      const putLib = (templates_) => call(th.personal, mockReq('PUT', { url: '/api/templates', body: JSON.stringify({ templates: templates_ }), headers: cookie }));
+
+      let r = await putLib([{ name: BAD, cards: [] }]);
+      assert.strictEqual(r.status, 400, '个人库模板名命中 → 400');
+      assert.strictEqual(r.body.error, REJECT, '统一拒绝文案');
+      assert.strictEqual((await th.__getLibrary('u5')).length, 0, '未落库');
+      r = await putLib([{ name: '正常模板', cards: [{ kind: 'match' }] }]);
+      assert.strictEqual(r.status, 200, '干净模板名 → 200');
+      assert.strictEqual((await th.__getLibrary('u5')).length, 1, '落库');
+
+      /* 市场 adopt:renameTo 缺省沿用快照名同样过检 */
+      const saved = (await th.__getLibrary('u5'))[0];
+      await th.__marketAction({ id: 'u5', username: 's', role: 'super' }, { action: 'list', templateId: saved.id });
+      const mid = (await th.__marketList()).market[0].id;
+      const adopt = (renameTo) => call(th.market, mockReq('POST', { url: '/api/templates/market', body: JSON.stringify({ action: 'adopt', marketId: mid, renameTo }), headers: cookie }));
+      r = await adopt('改' + BAD);
+      assert.strictEqual(r.status, 400, 'adopt renameTo 命中 → 400');
+      assert.strictEqual((await th.__getLibrary('u5')).length, 1, 'adopt 未落库');
+      r = await adopt('正常新名');
+      assert.strictEqual(r.status, 200, '干净 renameTo → 200');
+      assert.strictEqual((await th.__getLibrary('u5')).length, 2, 'adopt 落库');
+      console.log('✓ 钩子·templates:个人库名+adopt renameTo,各一正一负');
+    }
+
+    /* 8d) data:整库 PUT 扫描卡片 label/phase/format + 选手 name/tag/title
+     * (管理端选手编辑无独立端点,走整库 PUT,在此覆盖);命中提示带届名+卡 id 不带词 */
+    {
+      apiData.__setModeration(modBad());
+      const wsSeed = {
+        tournaments: [{ id: 't1', name: '钩子届', canvas: { cards: [{ id: 'c1', label: '干净标题', phase: '胜者组', format: 'BO3' }] } }],
+        series: [],
+        players: [{ id: 'p1', name: '甲', tag: null, title: null }],
+        activeId: 't1'
+      };
+      await devStore.writeJson('data.json', wsSeed);
+      const put = (ws) => call(apiData, mockReq('PUT', { url: '/api/data', body: JSON.stringify(ws), headers: { cookie: ck('u5') } }));
+
+      let bad = JSON.parse(JSON.stringify(wsSeed));
+      bad.tournaments[0].canvas.cards[0].label = '标题' + BAD;
+      let r = await put(bad);
+      assert.strictEqual(r.status, 400, '整库 PUT 卡标题命中 → 400');
+      assert.ok(r.body.error.includes('钩子届') && r.body.error.includes('c1'), '提示带届名+卡 id');
+      assert.ok(!r.body.error.includes(BAD), '提示不带命中词');
+      assert.strictEqual((await devStore.readJson('data.json')).tournaments[0].canvas.cards[0].label, '干净标题', '未落库');
+
+      bad = JSON.parse(JSON.stringify(wsSeed));
+      bad.players[0].name = '选手' + BAD;
+      r = await put(bad);
+      assert.strictEqual(r.status, 400, '整库 PUT 选手名命中 → 400(管理端选手编辑路径)');
+      assert.ok(r.body.error.includes('p1'), '提示带选手 id');
+
+      r = await put(JSON.parse(JSON.stringify(wsSeed)));
+      assert.strictEqual(r.status, 200, '干净整库 → 200');
+      assert.strictEqual((await devStore.readJson('data.json')).tournaments[0].canvas.cards[0].label, '干净标题', '落库');
+      apiData.__setModeration(moderation.shared);
+      console.log('✓ 钩子·data:整库 PUT 卡文本+选手字段,一正一负');
+    }
+  }
+
   delete process.env.SESSION_SECRET;
-  console.log('✓ moderation: 54 断言通过');
+  console.log('✓ moderation: 102 断言通过');
 })().catch((e) => { console.error(e); process.exit(1); });
