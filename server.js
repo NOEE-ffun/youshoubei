@@ -61,6 +61,8 @@ const API_ROUTES = {
   '/api/me/classlinks': apiDecks,
   '/api/me/signup': require('./api/signup'),
   '/api/codes': require('./api/codes'),
+  /* 审查词库:GET/POST 均 super(词表管理,moderation.shared 单例) */
+  '/api/moderation/words': require('./api/moderation').shared.wordsApi,
   '/api/notices': require('./api/notices'),
   '/api/docs': require('./api/docs'),
   /* templates:personal 内按 method 分支(GET/PUT,同 data.js 惯例);market 为 Task 3 占位 */
