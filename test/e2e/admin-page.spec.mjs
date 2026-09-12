@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import { ADMIN_PHONE, smsLogin, seedWorkspace, resetStore, makeAdmin } from './helpers.mjs';
 
 /* 超管后台页(admin.html)E2E:
- * 1) 权限门:匿名跳登录、非 super 管理员无权提示、super 见五 tab。
+ * 1) 权限门:匿名跳登录、非 super 管理员无权提示、super 见八个标签
+ *    (审计/账号/选手/比赛/健康/通知/文档/审查,断言按 id 抽查不数总数)。
  * 2) 封禁降级:封禁 → 该账号短信登录 403;解封恢复;admin 降 player 后失去码表权;
  *    账号表手机号全程脱敏,码表 usedBy(兑码者 username=手机号)渲染侧同款脱敏,
  *    整页可见文本不见完整手机号。
@@ -14,7 +15,7 @@ test.setTimeout(60_000);
 const PHONE_ADMIN = '13800002222';
 const PHONE_USER = '13800003333';
 
-test('权限门:匿名跳登录,非超管无权提示,超管五 tab 可见', async ({ page, context, browser }) => {
+test('权限门:匿名跳登录,非超管无权提示,超管后台标签可见', async ({ page, context, browser }) => {
   await resetStore(context);
 
   /* 匿名 → 跳登录页并带 returnTo */
@@ -34,7 +35,7 @@ test('权限门:匿名跳登录,非超管无权提示,超管五 tab 可见', asy
   await pageA.close();
   await contextA.close();
 
-  /* super → 后台壳 + 五个 tab,默认审计面板可见 */
+  /* super → 后台壳 + 标签可见(现八个:加通知/文档/审查;断言按 id 抽查核心五个),默认审计面板 */
   await smsLogin(context, ADMIN_PHONE);
   await page.goto('/admin.html');
   await expect(page.locator('#admin-shell')).toBeVisible();
