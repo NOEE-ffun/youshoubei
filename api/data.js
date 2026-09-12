@@ -19,9 +19,11 @@ const storage = createStorage();
  * __setModeration 是测试注入口(合成词实例),生产路径不碰 */
 let moderation = require('./moderation').shared;
 
-/* 整库文本扫描:卡片 label/phase/format + 选手 name/tag/title(管理端选手编辑
- * 无独立端点,走本整库 PUT,故在此一并覆盖)。返回首处命中的定位提示
- * (届名+卡 id / 选手 id,不带命中词)或 null(放行) */
+/* 整库文本扫描:卡片 label/phase/format + 卡组备注 classLinks[].text + 选手
+ * name/tag/title(管理端选手编辑无独立端点,走本整库 PUT,故在此一并覆盖)。
+ * classLinks 两形态:比赛卡 {a,b} 对象与 roll 池座位数组,统一逐组逐条过 text
+ * (闭掉 admin 整库 PUT 带脏词卡组备注的绕面——decks 提交口之外的第二入口)。
+ * 返回首处命中的定位提示(届名+卡 id / 选手 id,不带命中词)或 null(放行) */
 async function scanBlockedText(workspace) {
   for (const record of (workspace && workspace.tournaments) || []) {
     if (!record || !record.canvas) continue;
@@ -31,6 +33,15 @@ async function scanBlockedText(workspace) {
       for (const field of ['label', 'phase', 'format']) {
         const verdict = await moderation.checkText(card[field]);
         if (!verdict.ok) return verdict.reason + ':' + where + '(' + field + ')';
+      }
+      const groups = Array.isArray(card.classLinks)
+        ? card.classLinks
+        : (card.classLinks && typeof card.classLinks === 'object') ? Object.values(card.classLinks) : [];
+      for (const group of groups) {
+        for (const link of Array.isArray(group) ? group : []) {
+          const verdict = await moderation.checkText(link && link.text);
+          if (!verdict.ok) return verdict.reason + ':' + where + '(classLinks)';
+        }
       }
     }
   }

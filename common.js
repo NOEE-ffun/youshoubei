@@ -2390,6 +2390,10 @@
     const manageBtn = document.getElementById('manage-btn');
     if (manageBtn) manageBtn.hidden = mode === 'cloud' && !appInstance.isAdmin();
 
+    /* 举报/投诉入口:云端登录态才显示(服务端要求会话;本地模式无受理方) */
+    const reportBtn = document.getElementById('report-btn');
+    if (reportBtn) reportBtn.hidden = mode !== 'cloud' || !sessionUser;
+
     /* 后台导航项:按需补建 + 仅超管可见(admin.html 独立轻量页,不引 common.js) */
     ensureAdminNavLink();
     const adminVisible = Boolean(mode === 'cloud' && sessionUser && sessionUser.role === 'super');
@@ -2502,10 +2506,12 @@
     moreMenu.innerHTML =
       '<button type="button" id="header-login-btn" class="side-action" title="登录" aria-label="登录"></button>' +
       '<button type="button" id="header-theme-btn" class="side-action" aria-label="切换主题"></button>' +
-      '<button type="button" id="manage-btn" class="side-action" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>';
+      '<button type="button" id="manage-btn" class="side-action" title="管理" aria-label="管理">' + iconMarkup('dashboard', '管理') + '</button>' +
+      '<button type="button" id="report-btn" class="side-action" title="举报/投诉" aria-label="举报/投诉">' + iconMarkup('flag', '举报/投诉') + '</button>';
     group.appendChild(moreMenu);
     sidebar.appendChild(group);
     appendSideLabel(moreMenu.querySelector('#manage-btn'), '管理');
+    appendSideLabel(moreMenu.querySelector('#report-btn'), '举报');
 
     /* 移动端底栏「更多」:登录/主题/管理三钮收进弹出层,底栏不再溢出(桌面隐藏) */
     const moreBtn = document.createElement('button');
@@ -2542,6 +2548,7 @@
     });
     group.querySelector('#header-theme-btn').addEventListener('click', toggleTheme);
     group.querySelector('#manage-btn').addEventListener('click', openManageDialog);
+    group.querySelector('#report-btn').addEventListener('click', openReportDialog);
     syncSideToggle();
     sideActionsBuilt = true;
   }
@@ -2618,6 +2625,94 @@
   /* 登录入口统一跳独立登录页;旧弹窗(用户名+密码+邀请码注册)已随口令体系退役 */
   function openLoginDialog() {
     location.href = loginUrl();
+  }
+
+  /* ---------- 举报/投诉(内容审查·方案甲:登录态侧边栏入口) ---------- */
+
+  let reportDialog = null;
+
+  function buildReportDialog() {
+    reportDialog = document.createElement('dialog');
+    reportDialog.id = 'report-dialog';
+    reportDialog.setAttribute('aria-labelledby', 'report-title');
+    reportDialog.innerHTML =
+      '<div class="dialog-head">' +
+      '  <h2 id="report-title">举报 / 投诉</h2>' +
+      '  <button type="button" class="btn btn-ghost btn-sm" data-dialog-close>关闭</button>' +
+      '</div>' +
+      '<div class="dialog-body">' +
+      '  <form id="report-form">' +
+      '    <fieldset class="form-field report-kind-field">' +
+      '      <span class="form-label">举报类型</span>' +
+      '      <div class="report-kind-row">' +
+      '        <label class="report-kind"><input type="radio" name="report-kind" value="nickname" checked>违规昵称</label>' +
+      '        <label class="report-kind"><input type="radio" name="report-kind" value="avatar">违规头像</label>' +
+      '        <label class="report-kind"><input type="radio" name="report-kind" value="other">其他</label>' +
+      '      </div>' +
+      '    </fieldset>' +
+      '    <label class="form-field">' +
+      '      <span class="form-label">补充说明(必填,≤200 字)</span>' +
+      '      <textarea id="report-detail" rows="3" maxlength="200" required' +
+      '        placeholder="请描述违规内容(如昵称原文、所在页面),便于管理员核实处理"></textarea>' +
+      '    </label>' +
+      '    <div class="dialog-actions">' +
+      '      <button type="button" class="btn btn-secondary" data-dialog-close>取消</button>' +
+      '      <button type="submit" class="btn btn-primary">提交举报</button>' +
+      '    </div>' +
+      '  </form>' +
+      '</div>';
+    reportDialog.querySelectorAll('[data-dialog-close]').forEach((btn) => {
+      btn.addEventListener('click', () => reportDialog.close());
+    });
+    reportDialog.querySelector('#report-form').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const kindInput = reportDialog.querySelector('input[name="report-kind"]:checked');
+      const detailEl = reportDialog.querySelector('#report-detail');
+      const detail = detailEl.value.trim();
+      if (!detail) {
+        notify('请填写补充说明', 'danger');
+        detailEl.focus();
+        return;
+      }
+      const submitBtn = reportDialog.querySelector('#report-form button[type="submit"]');
+      submitBtn.disabled = true;
+      try {
+        const resp = await fetch('/api/reports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: kindInput ? kindInput.value : 'other', detail })
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.status === 401) {
+          notify('登录已过期,请重新登录', 'danger');
+          location.href = loginUrl();
+          return;
+        }
+        if (!resp.ok) {
+          notify('提交失败:' + (data.error || resp.status), 'danger');
+          return;
+        }
+        reportDialog.close();
+        detailEl.value = '';
+        notify('举报已提交,感谢反馈', 'success');
+      } catch (error) {
+        notify('提交失败:' + errMsg(error), 'danger');
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
+    document.body.appendChild(reportDialog);
+  }
+
+  function openReportDialog() {
+    if (mode !== 'cloud') return;
+    if (!sessionUser) {
+      location.href = loginUrl();
+      return;
+    }
+    if (!reportDialog) buildReportDialog();
+    reportDialog.querySelector('#report-detail').value = '';
+    reportDialog.showModal();
   }
 
   /* ---------- 主流程 ---------- */

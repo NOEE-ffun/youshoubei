@@ -5849,3 +5849,93 @@ body.tpl-placing #canvas-scroll {
 .tpl-prompt {
   inline-size: min(92vw, 22rem);
 }
+
+/* —— 举报弹窗(common.js 登录态侧边栏入口,内容审查·方案甲) —— */
+.report-kind-field {
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.report-kind-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.1rem;
+  margin-block-start: 0.35rem;
+}
+
+.report-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.report-kind input[type='radio'] {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+/* —— 超管后台·审查标签(举报处置 + 违禁词库) —— */
+
+/* 举报表行内「选手 ID」输入(处置需选手 ID,v1 手填) */
+.admin-report-edit {
+  margin-block-end: 0.35rem;
+}
+
+.admin-report-edit input,
+#admin-words-input {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.6rem;
+  inline-size: 13rem;
+}
+
+.admin-report-edit input:focus,
+#admin-words-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
+}
+
+/* 词库标签列:软糖块 + 行内删除 */
+.admin-words-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-block: 0.5rem;
+}
+
+.admin-word-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.35rem 0.15rem 0.65rem;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.admin-word-del {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.admin-word-del:hover {
+  color: var(--danger-strong);
+  background: var(--danger-soft);
+}

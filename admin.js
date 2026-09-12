@@ -3,8 +3,9 @@
 /**
  * 超管后台(admin.html 独立轻量页,不引 common.js):
  * boot fetch /api/me → 401 跳登录页 / 非 super 无权提示;
- * 四块 tab:审计流水(月份+关键词过滤)/ 账号与邀请码(封禁/解封/降级升管)
- * / 比赛状态(/api/data 原样,卡组窗口与进度判定复用 canvas-model)/ 健康与备份。
+ * 八块 tab:审计流水(月份+关键词过滤)/ 账号与邀请码(封禁/解封/降级升管)
+ * / 选手 / 比赛状态(/api/data 原样,卡组窗口与进度判定复用 canvas-model)
+ * / 健康与备份 / 通知 / 官方文档 / 审查(举报处置+违禁词库)。
  * 工具函数就地内置(escapeHtml 等),避免拉入整份 common.js。 */
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -106,7 +107,8 @@
     { id: 'tourneys', btn: 'admin-tab-tourneys', load: loadTourneys },
     { id: 'health', btn: 'admin-tab-health', load: loadHealth },
     { id: 'notices', btn: 'admin-tab-notices', load: loadNotices },
-    { id: 'docs', btn: 'admin-tab-docs', load: loadDocs }
+    { id: 'docs', btn: 'admin-tab-docs', load: loadDocs },
+    { id: 'review', btn: 'admin-tab-review', load: loadReviewPanel }
   ];
   let activeTab = null;
 
@@ -1110,6 +1112,167 @@
       loadDocs();
     }
   });
+
+  /* ---------- 审查(举报处置 + 违禁词库,内容审查·方案甲) ---------- */
+
+  const REPORT_KINDS = { nickname: '违规昵称', avatar: '违规头像', other: '其他' };
+  /* 处置动作短名:chip/状态行统一拼「已+短名」 */
+  const REPORT_ACTIONS = { dismiss: '忽略', 'name-reset': '改名', 'avatar-clear': '清头像' };
+
+  let reportsCache = [];
+  let wordsCache = [];
+
+  function renderReports() {
+    const tbody = $('admin-reports-tbody');
+    if (!reportsCache.length) {
+      tbody.innerHTML = '';
+      return;
+    }
+    tbody.innerHTML = reportsCache.map((r) => {
+      const handled = r.handled;
+      const statusCell = handled
+        ? chip('已' + (REPORT_ACTIONS[handled.action] || handled.action), 'admin-chip-muted') +
+          '<div class="admin-detail-cell">by ' + escapeHtml(handled.by || '—') + ' · ' + fmtDateTime(handled.at) + '</div>'
+        : chip('待处理', 'admin-chip-accent');
+      const actions = handled
+        ? '—'
+        : '<div class="admin-report-edit"><input type="text" class="admin-report-player" data-report-player="' + escapeHtml(r.id) + '" placeholder="选手 ID(处置需选手 ID)" autocomplete="off" aria-label="处置选手 ID"></div>' +
+          '<span class="admin-row-actions">' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-act="dismiss" data-id="' + escapeHtml(r.id) + '">' + iconImg('block') + '忽略</button> ' +
+          '<button type="button" class="btn btn-secondary btn-sm" data-act="name-reset" data-id="' + escapeHtml(r.id) + '">' + iconImg('edit') + '改名</button> ' +
+          '<button type="button" class="btn btn-danger btn-sm" data-act="avatar-clear" data-id="' + escapeHtml(r.id) + '">' + iconImg('format_color_reset') + '清头像</button>' +
+          '</span>';
+      return '<tr>' +
+        '<td>' + chip(REPORT_KINDS[r.kind] || r.kind, 'admin-chip-muted') + '</td>' +
+        '<td class="admin-detail-cell" title="' + escapeHtml(r.detail) + '">' + escapeHtml(r.detail) + '</td>' +
+        '<td class="admin-detail-cell">' + escapeHtml(fmtDateTime(r.at)) + '</td>' +
+        '<td>' + statusCell + '</td>' +
+        '<td>' + actions + '</td></tr>';
+    }).join('');
+  }
+
+  async function loadReports() {
+    const status = $('admin-reports-status');
+    setStatus(status, '加载中…', false);
+    const result = await api('/api/reports');
+    if (!result.ok) {
+      setStatus(status, '举报加载失败:' + (result.data.error || result.status), true);
+      return;
+    }
+    reportsCache = Array.isArray(result.data.reports) ? result.data.reports : [];
+    renderReports();
+    const pending = reportsCache.filter((r) => !r.handled).length;
+    setStatus(status, reportsCache.length
+      ? '共 ' + reportsCache.length + ' 条(新在前),待处理 ' + pending + ' 条。'
+      : '暂无举报。', false);
+  }
+
+  /* 处置:忽略仅标记;改名/清头像需行内选手 ID(服务端锁内精确流执行) */
+  $('admin-reports-tbody').addEventListener('click', async (event) => {
+    const btn = event.target.closest('button[data-act]');
+    if (!btn || btn.disabled) return;
+    const id = btn.dataset.id;
+    const report = reportsCache.find((x) => x.id === id);
+    if (!report) return;
+    const act = btn.dataset.act;
+    const status = $('admin-reports-status');
+
+    let playerId = null;
+    if (act === 'name-reset' || act === 'avatar-clear') {
+      const input = $('admin-reports-tbody').querySelector('[data-report-player="' + CSS.escape(id) + '"]');
+      playerId = input ? input.value.trim() : '';
+      if (!playerId) {
+        setStatus(status, '请先在行内输入选手 ID(处置需选手 ID)。', true);
+        if (input) input.focus();
+        return;
+      }
+    }
+    const verbs = {
+      dismiss: '忽略该举报',
+      'name-reset': '把该选手名与绑定账号昵称改为「选手+尾 4 位」',
+      'avatar-clear': '清除该选手的头像与队标'
+    };
+    if (!window.confirm('确认' + verbs[act] + '?')) return;
+
+    setStatus(status, '处理中…', false);
+    const result = await api('/api/reports', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ id, action: act }, playerId ? { playerId } : {}))
+    });
+    if (!result.ok) {
+      setStatus(status, '处置失败:' + (result.data.error || result.status), true);
+      if (result.status === 409) loadReports();
+      return;
+    }
+    setStatus(status, '已' + (REPORT_ACTIONS[act] || act) + (playerId ? '(选手 ' + playerId + ')。' : '。'), false);
+    loadReports();
+  });
+
+  function renderWords() {
+    const box = $('admin-words-list');
+    box.innerHTML = wordsCache.map((w, i) =>
+      '<span class="admin-word-chip">' + escapeHtml(w) +
+      '<button type="button" class="admin-word-del" data-word-idx="' + i + '" title="删除词条" aria-label="删除词条 ' + escapeHtml(w) + '">×</button></span>'
+    ).join('');
+  }
+
+  async function loadWords() {
+    const status = $('admin-words-status');
+    setStatus(status, '加载中…', false);
+    const result = await api('/api/moderation/words');
+    if (!result.ok) {
+      setStatus(status, '词库加载失败:' + (result.data.error || result.status), true);
+      return;
+    }
+    wordsCache = Array.isArray(result.data.words) ? result.data.words : [];
+    renderWords();
+    setStatus(status, wordsCache.length
+      ? '共 ' + wordsCache.length + ' 个词,增删即时生效。'
+      : '词库为空:所有文本放行。', false);
+  }
+
+  async function wordAction(action, word) {
+    const status = $('admin-words-status');
+    setStatus(status, '提交中…', false);
+    const result = await api('/api/moderation/words', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, word })
+    });
+    if (!result.ok) {
+      setStatus(status, (action === 'add' ? '添加' : '删除') + '失败:' + (result.data.error || result.status), true);
+      return false;
+    }
+    wordsCache = Array.isArray(result.data.words) ? result.data.words : [];
+    renderWords();
+    setStatus(status, action === 'add' ? '已添加。' : '已删除。', false);
+    return true;
+  }
+
+  $('admin-words-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = $('admin-words-input');
+    const word = input.value.trim();
+    if (!word) {
+      setStatus($('admin-words-status'), '请填写词条。', true);
+      return;
+    }
+    if (await wordAction('add', word)) input.value = '';
+  });
+
+  $('admin-words-list').addEventListener('click', async (event) => {
+    const btn = event.target.closest('button[data-word-idx]');
+    if (!btn) return;
+    const word = wordsCache[Number(btn.dataset.wordIdx)];
+    if (word == null || !window.confirm('确认删除词条?删除后立即不再拦截。')) return;
+    wordAction('remove', word);
+  });
+
+  function loadReviewPanel() {
+    loadReports();
+    loadWords();
+  }
 
   /* ---------- 启动 ---------- */
 

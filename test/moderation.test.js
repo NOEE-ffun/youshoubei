@@ -392,6 +392,165 @@ async function call(handler, req) {
     }
   }
 
+  /* ---- 9) Task 3:举报通道(reports)+ data 整库 PUT classLinks 绕面闭合 ---- */
+  {
+    const BAD = '测试违禁乙';
+    const REJECT = '内容包含不允许的词汇,请修改';
+    const reports = require('../api/reports');
+
+    /* 9a) data:整库 PUT 卡 classLinks[].text(admin 绕面,比赛卡 {a,b} 与 roll 池数组两形态) */
+    {
+      apiData.__setModeration(boot([BAD]).m);
+      const wsSeed = {
+        tournaments: [{ id: 't1', name: '绕面届', canvas: { cards: [
+          { id: 'c1', label: '干净标题', phase: '胜者组', format: 'BO3', classLinks: { a: [], b: [] } }
+        ] } }],
+        series: [],
+        players: [{ id: 'p1', name: '甲', tag: null, title: null }],
+        activeId: 't1'
+      };
+      await devStore.writeJson('data.json', wsSeed);
+      const put = (ws) => call(apiData, mockReq('PUT', { url: '/api/data', body: JSON.stringify(ws), headers: { cookie: ck('u5') } }));
+
+      const bad = JSON.parse(JSON.stringify(wsSeed));
+      bad.tournaments[0].canvas.cards[0].classLinks.a = [{ cls: '皇家', url: '', text: '备注' + BAD }];
+      let r = await put(bad);
+      assert.strictEqual(r.status, 400, '整库 PUT 卡组备注命中 → 400');
+      assert.ok(r.body.error.includes('绕面届') && r.body.error.includes('c1'), '提示带届名+卡 id');
+      assert.ok(!r.body.error.includes(BAD), '提示不带命中词');
+      assert.strictEqual((await devStore.readJson('data.json')).tournaments[0].canvas.cards[0].classLinks.a.length, 0, '未落库');
+
+      const badPool = JSON.parse(JSON.stringify(wsSeed));
+      badPool.tournaments[0].canvas.cards[0].classLinks = [[{ cls: '皇家', url: '', text: 'x' + BAD + 'y' }]];
+      r = await put(badPool);
+      assert.strictEqual(r.status, 400, 'roll 池数组形态备注命中 → 400');
+
+      r = await put(JSON.parse(JSON.stringify(wsSeed)));
+      assert.strictEqual(r.status, 200, '干净整库(含空 classLinks)→ 200');
+      apiData.__setModeration(moderation.shared);
+      console.log('✓ 绕面闭合:data 整库 PUT classLinks[].text(对象/数组两形态)');
+    }
+
+    /* 9b) reports:POST 权限/长度/违禁 detail 拒;GET super 倒序;PUT 三动作语义+409 */
+    {
+      const storage = mapStorage({
+        'data.json': {
+          tournaments: [], series: [], activeId: null,
+          players: [
+            { id: 'p12345678', name: '坏名字', tag: '队标字', title: null, avatar: 'https://x/a.png', tagImg: 'https://x/t.png', tagImgRatio: 2, tagImgSize: 64 },
+            { id: 'p2', name: '乙', avatar: null, tagImg: null }
+          ]
+        },
+        'users.json': [
+          { id: 'u2', username: 'p', usernameLower: 'p', phone: '13900000002', passHash: null, role: 'player', playerId: 'p12345678', nickname: '旧昵称', status: 'active', createdAt: 't' },
+          { id: 'u5', username: 's', usernameLower: 's', phone: '13900000005', passHash: null, role: 'super', playerId: null, nickname: null, status: 'active', createdAt: 't' }
+        ]
+      });
+      const audits = [];
+      const h = reports.createHandler(storage, {
+        now: () => 42,
+        appendAudit: (action, detail) => audits.push(action + ' | ' + detail),
+        moderation: boot([BAD]).m
+      });
+      const post = (body, cookie) => call(h, mockReq('POST', { url: '/api/reports', body: JSON.stringify(body), headers: cookie || { cookie: ck('u2') } }));
+      const put = (body, cookie) => call(h, mockReq('PUT', { url: '/api/reports', body: JSON.stringify(body), headers: cookie || { cookie: ck('u5') } }));
+      const get = (cookie) => call(h, mockReq('GET', { url: '/api/reports', headers: cookie || { cookie: ck('u5') } }));
+
+      /* POST:权限 */
+      assert.strictEqual((await post({ kind: 'other', detail: 'x' }, {})).status, 401, '匿名 POST 401');
+      assert.strictEqual((await get({})).status, 401, '匿名 GET 401');
+      assert.strictEqual((await get({ cookie: ck('u3') })).status, 403, 'admin GET 403');
+      assert.strictEqual((await put({ id: 'r_x', action: 'dismiss' }, { cookie: ck('u3') })).status, 403, 'admin PUT 403');
+
+      /* POST:校验矩阵 */
+      assert.strictEqual((await post({ kind: 'frob', detail: 'x' })).status, 400, '未知 kind 400');
+      assert.strictEqual((await post({ kind: 'nickname', detail: '' })).status, 400, '空 detail 400');
+      assert.strictEqual((await post({ kind: 'nickname', detail: 'x'.repeat(201) })).status, 400, 'detail 201 字 400');
+      assert.strictEqual((await post({ kind: 'nickname', detail: 'x'.repeat(200) })).status, 200, 'detail 恰 200 字 200');
+      let r = await post({ kind: 'nickname', detail: '选手昵称里有' + BAD });
+      assert.strictEqual(r.status, 400, '违禁 detail 拒 400');
+      assert.strictEqual(r.body.error, REJECT, '统一拒绝文案');
+      assert.ok(!JSON.stringify(r.body).includes(BAD), '响应不回显命中词');
+
+      /* POST:落库形态+审计 */
+      const stored0 = storage._map.get('reports.json');
+      assert.strictEqual(stored0.length, 1, '被拒的不落库,仅存 200 字那条');
+      r = await post({ kind: 'nickname', detail: '选手 p12345678 昵称违规' });
+      assert.strictEqual(r.status, 200, '干净举报 200');
+      const list0 = storage._map.get('reports.json');
+      assert.strictEqual(list0.length, 2, '追加一条');
+      const entry = list0[1];
+      assert.ok(/^r_/.test(entry.id), 'id 前缀 r_');
+      assert.strictEqual(entry.uid, 'u2', 'uid 落举报人');
+      assert.strictEqual(entry.username, 'p', 'username 落举报人');
+      assert.strictEqual(entry.kind, 'nickname', 'kind 落库');
+      assert.strictEqual(entry.at, '1970-01-01T00:00:00.042Z', 'at 走注入时钟');
+      assert.strictEqual(entry.handled, null, 'handled 初始 null');
+      assert.ok(audits.some((x) => x.startsWith('report.new | by=p')), 'audit report.new 带 by=');
+
+      /* GET:super 最近 200 倒序 */
+      r = await get();
+      assert.strictEqual(r.status, 200, 'super GET 200');
+      assert.strictEqual(r.body.reports.length, 2, '两条都在');
+      assert.strictEqual(r.body.reports[0].id, entry.id, '新在前(倒序)');
+      assert.ok(r.body.reports.every((x) => x.kind === 'nickname' && typeof x.detail === 'string'), '公共字段齐');
+
+      /* PUT:dismiss 只标记 */
+      r = await put({ id: list0[0].id, action: 'dismiss' });
+      assert.strictEqual(r.status, 200, 'dismiss 200');
+      const dismissed = storage._map.get('reports.json')[0];
+      assert.strictEqual(dismissed.handled.action, 'dismiss', 'handled.action=dismiss');
+      assert.strictEqual(dismissed.handled.by, 's', 'handled.by=操作超管');
+      assert.strictEqual(dismissed.handled.at, '1970-01-01T00:00:00.042Z', 'handled.at 走注入时钟');
+      assert.strictEqual(dismissed.detail, 'x'.repeat(200), 'dismiss 不动内容');
+      assert.ok(audits.some((x) => x.startsWith('report.handle |') && x.includes('by=s')), 'audit report.handle');
+      assert.strictEqual((await put({ id: list0[0].id, action: 'dismiss' })).status, 409, '重复处理 409');
+
+      /* PUT:name-reset 双改(player.name 与 user.nickname 同改「选手」+尾4) */
+      r = await put({ id: entry.id, action: 'name-reset', playerId: 'p12345678' });
+      assert.strictEqual(r.status, 200, 'name-reset 200');
+      const player = storage._map.get('data.json').players.find((x) => x.id === 'p12345678');
+      assert.strictEqual(player.name, '选手5678', 'player.name 改为 选手+playerId 尾 4');
+      const u2 = storage._map.get('users.json').find((x) => x.id === 'u2');
+      assert.strictEqual(u2.nickname, '选手5678', '对应 user.nickname 同改');
+      assert.strictEqual(storage._map.get('reports.json')[1].handled.action, 'name-reset', 'handled 标记');
+      assert.ok(audits.some((x) => x.startsWith('mod.name-reset |') && x.includes('p12345678') && x.includes('by=s')), 'audit mod.name-reset 带 player+by=');
+      assert.strictEqual((await put({ id: entry.id, action: 'name-reset', playerId: 'p12345678' })).status, 409, '再处理 409');
+
+      /* PUT:avatar-clear 四字段清、其余不动 */
+      r = await post({ kind: 'avatar', detail: '头像不当' });
+      const id3 = storage._map.get('reports.json')[2].id;
+      r = await put({ id: id3, action: 'avatar-clear', playerId: 'p12345678' });
+      assert.strictEqual(r.status, 200, 'avatar-clear 200');
+      const player2 = storage._map.get('data.json').players.find((x) => x.id === 'p12345678');
+      assert.strictEqual(player2.avatar, null, 'avatar 置 null');
+      assert.strictEqual(player2.tagImg, null, 'tagImg 置 null');
+      assert.strictEqual(player2.tagImgRatio, null, 'tagImgRatio 置 null');
+      assert.strictEqual(player2.tagImgSize, null, 'tagImgSize 置 null');
+      assert.strictEqual(player2.name, '选手5678', 'name 不动');
+      assert.strictEqual(player2.tag, '队标字', 'tag 不动');
+      assert.strictEqual(player2.title, null, 'title 不动');
+      assert.ok(audits.some((x) => x.startsWith('mod.avatar-clear |') && x.includes('p12345678') && x.includes('by=s')), 'audit mod.avatar-clear');
+
+      /* PUT:校验矩阵(未处理举报一条 + 已处理语义在上) */
+      r = await post({ kind: 'other', detail: 'y' });
+      const id4 = storage._map.get('reports.json')[3].id;
+      assert.strictEqual((await put({ id: 'r_missing', action: 'dismiss' })).status, 404, '举报不存在 404');
+      assert.strictEqual((await put({ id: id4, action: 'frob' })).status, 400, '未知 action 400');
+      assert.strictEqual((await put({ id: id4, action: 'name-reset' })).status, 400, 'name-reset 缺 playerId 400');
+      assert.strictEqual((await put({ id: id4, action: 'avatar-clear' })).status, 400, 'avatar-clear 缺 playerId 400');
+      assert.strictEqual((await put({ id: id4, action: 'name-reset', playerId: 'p404' })).status, 404, 'playerId 不存在 404');
+      assert.strictEqual((await call(h, mockReq('DELETE', { url: '/api/reports', headers: { cookie: ck('u5') } }))).status, 405, '非 GET/POST/PUT 405');
+
+      /* GET:最近 200 截断 */
+      for (let i = 0; i < 205; i++) await post({ kind: 'other', detail: '压测' + i });
+      r = await get();
+      assert.strictEqual(r.body.reports.length, 200, '超 200 条截到最近 200');
+      assert.strictEqual(r.body.reports[0].detail, '压测204', '最新在前');
+      console.log('✓ reports:POST 矩阵/GET 倒序截断/PUT 三动作语义+409');
+    }
+  }
+
   delete process.env.SESSION_SECRET;
-  console.log('✓ moderation: 102 断言通过');
+  console.log('✓ moderation: 163 断言通过');
 })().catch((e) => { console.error(e); process.exit(1); });

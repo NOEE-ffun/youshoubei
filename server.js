@@ -63,6 +63,8 @@ const API_ROUTES = {
   '/api/codes': require('./api/codes'),
   /* 审查词库:GET/POST 均 super(词表管理,moderation.shared 单例) */
   '/api/moderation/words': require('./api/moderation').shared.wordsApi,
+  /* 举报通道:POST 登录提交 / GET+PUT super 列表与处置(reports.js 内按 method 分支) */
+  '/api/reports': require('./api/reports'),
   '/api/notices': require('./api/notices'),
   '/api/docs': require('./api/docs'),
   /* templates:personal 内按 method 分支(GET/PUT,同 data.js 惯例);market 为 Task 3 占位 */
@@ -314,7 +316,7 @@ if (require.main === module) {
    * 生产由 nginx 反代 127.0.0.1:3000,本地开发访问 localhost 不受影响 */
   server.listen(PORT, '127.0.0.1', () => {
     console.log('赛事网站已启动：http://localhost:' + PORT);
-    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/notices /api/docs /api/templates /api/dev/reset /api/admin/*');
+    console.log('API 路由: /api/data /api/upload /api/health /api/poster-stage /api/auth/* /api/me /api/codes /api/moderation/words /api/reports /api/notices /api/docs /api/templates /api/dev/reset /api/admin/*');
     console.log('按 Ctrl+C 停止服务器');
   });
 }

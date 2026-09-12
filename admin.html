@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="右手杯超管后台:审计流水、账号与邀请码、选手管理、比赛状态、健康与备份、通知与官方文档。">
+  <meta name="description" content="右手杯超管后台:审计流水、账号与邀请码、选手管理、比赛状态、健康与备份、通知与官方文档、内容审查(举报处置与违禁词库)。">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>超管后台 - 右手杯</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏆</text></svg>">
   <script src="theme-init.js?v=2026090051"></script>
-  <link rel="stylesheet" href="styles.css?v=2026090085">
+  <link rel="stylesheet" href="styles.css?v=2026090086">
 </head>
 <body class="admin-body" data-page="admin">
   <a class="skip-link" href="#main-content">跳到主要内容</a>
@@ -41,6 +41,7 @@
           <button type="button" class="me-tab" id="admin-tab-health" role="tab" aria-controls="admin-panel-health">健康与备份</button>
           <button type="button" class="me-tab" id="admin-tab-notices" role="tab" aria-controls="admin-panel-notices">通知</button>
           <button type="button" class="me-tab" id="admin-tab-docs" role="tab" aria-controls="admin-panel-docs">官方文档</button>
+          <button type="button" class="me-tab" id="admin-tab-review" role="tab" aria-controls="admin-panel-review">审查</button>
         </nav>
 
         <section class="me-panel" id="admin-panel-audit" role="tabpanel" aria-labelledby="admin-tab-audit" hidden>
@@ -274,6 +275,31 @@
             </table>
           </div>
         </section>
+
+        <section class="me-panel" id="admin-panel-review" role="tabpanel" aria-labelledby="admin-tab-review" hidden>
+          <section class="me-subsection">
+            <h2 class="subsection-title">举报</h2>
+            <p class="hint admin-status" id="admin-reports-status" role="status" aria-live="polite"></p>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>类型</th><th>内容</th><th>时间</th><th>状态</th><th>操作</th></tr></thead>
+                <tbody id="admin-reports-tbody"></tbody>
+              </table>
+            </div>
+            <p class="hint">处置需选手 ID:改名(昵称与选手名一并改为「选手+尾 4 位」)与清头像(头像/队标一并清除)填选手 ID 后执行;忽略仅标记不再显示待处理。已处理的举报不可再改。</p>
+          </section>
+          <section class="me-subsection">
+            <h2 class="subsection-title">违禁词库</h2>
+            <p class="hint admin-status" id="admin-words-status" role="status" aria-live="polite"></p>
+            <form id="admin-words-form" class="admin-toolbar">
+              <label class="visually-hidden" for="admin-words-input">新增词条</label>
+              <input type="text" id="admin-words-input" placeholder="新增违禁词(≤32 字,归一化后去重)" autocomplete="off">
+              <button type="submit" class="btn btn-primary btn-sm"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true">添加</button>
+            </form>
+            <div class="admin-words-list" id="admin-words-list"></div>
+            <p class="hint">词库命中即拒绝写入(昵称/选手资料/卡组备注/卡文本/模板名与举报内容);增删即时生效,全站写入端共用同一份词表。</p>
+          </section>
+        </section>
       </div>
     </main>
   </div>
@@ -283,6 +309,6 @@
   <script src="vendor/purify.min.js?v=2026090051" defer></script>
   <script src="docs-meta.js?v=2026090052" defer></script>
   <script src="md-render.js?v=2026090051" defer></script>
-  <script src="admin.js?v=2026090084" defer></script>
+  <script src="admin.js?v=2026090085" defer></script>
 </body>
 </html>
