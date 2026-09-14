@@ -121,7 +121,16 @@ async function call(handler, req) {
   assert.strictEqual((await call(api, mockReq('POST', { body: '{}', headers: { cookie: ck('u3') } }))).status, 403, 'admin POST 403');
   let g = await call(api, mockReq('GET', { headers: { cookie: ck('u5') } }));
   assert.strictEqual(g.status, 200);
-  assert.deepStrictEqual(g.body.words, ['测试违禁甲', 'badword'], 'super GET 列词');
+  assert.strictEqual(g.body.count, 2, 'super GET 无 q 只回计数');
+  assert.strictEqual(g.body.words, undefined, 'GET 不整表下发');
+  /* 搜索契约:片段定位(词含关键词)+整段文本查命中(关键词含词)双向 */
+  g = await call(api, mockReq('GET', { url: '/api/moderation/words?q=' + encodeURIComponent('违禁'), headers: { cookie: ck('u5') } }));
+  assert.deepStrictEqual(g.body.matches, ['测试违禁甲'], '片段搜索命中含关键词的词');
+  g = await call(api, mockReq('GET', { url: '/api/moderation/words?q=' + encodeURIComponent('前缀中间夹badword后缀'), headers: { cookie: ck('u5') } }));
+  assert.deepStrictEqual(g.body.matches, ['badword'], '整段文本搜索命中其中包含的词');
+  g = await call(api, mockReq('GET', { url: '/api/moderation/words?q=' + encodeURIComponent('干净文本'), headers: { cookie: ck('u5') } }));
+  assert.deepStrictEqual(g.body.matches, [], '无命中返回空数组');
+  assert.strictEqual(g.body.more, false, '未截断 more=false');
 
   /* ---- 3) add/remove 生命周期:即时生效 + 词校验 ---- */
   let p = await call(api, mockReq('POST', { body: JSON.stringify({ action: 'add', word: '测试违禁乙' }), headers: { cookie: ck('u5') } }));
@@ -168,10 +177,10 @@ async function call(handler, req) {
   p = await call(api, mockReq('POST', { body: JSON.stringify({ action: 'remove', word: '测试违禁乙' }), headers: { cookie: ck('u5') } }));
   assert.strictEqual(p.status, 400, '删除不存在的词 400');
 
-  /* 真源持久化:内存态与存储态一致 */
+  /* 真源持久化:内存态与存储态一致(GET 计数与真源对照) */
   g = await call(api, mockReq('GET', { headers: { cookie: ck('u5') } }));
-  assert.strictEqual(g.body.words.length, 4, 'add/remove 后真源同步(甲+badword+32字边+元字符)');
-  assert.deepStrictEqual(store.get('blocked-words.json').words, g.body.words);
+  assert.strictEqual(g.body.count, 4, 'add/remove 后真源同步(甲+badword+32字边+元字符)');
+  assert.deepStrictEqual(store.get('blocked-words.json').words, ['测试违禁甲', 'badword', '边'.repeat(32), 'a.b*c']);
 
   /* ---- 4) 空库:readJson 缺失且无种子 → 恒放行 ---- */
   {
@@ -552,5 +561,5 @@ async function call(handler, req) {
   }
 
   delete process.env.SESSION_SECRET;
-  console.log('✓ moderation: 163 断言通过');
+  console.log('✓ moderation: 168 断言通过');
 })().catch((e) => { console.error(e); process.exit(1); });

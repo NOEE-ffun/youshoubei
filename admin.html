@@ -291,13 +291,18 @@
           <section class="me-subsection">
             <h2 class="subsection-title">违禁词库</h2>
             <p class="hint admin-status" id="admin-words-status" role="status" aria-live="polite"></p>
+            <form id="admin-words-search" class="admin-toolbar">
+              <label class="visually-hidden" for="admin-words-query">搜索词库</label>
+              <input type="text" id="admin-words-query" placeholder="搜索:输入关键词定位词条,或粘贴被拒文本查命中违禁词" autocomplete="off">
+              <button type="submit" class="btn btn-secondary btn-sm"><img class="icon" src="icons/search.svg" alt="" aria-hidden="true">搜索</button>
+            </form>
             <form id="admin-words-form" class="admin-toolbar">
               <label class="visually-hidden" for="admin-words-input">新增词条</label>
               <input type="text" id="admin-words-input" placeholder="新增违禁词(≤32 字,归一化后去重)" autocomplete="off">
               <button type="submit" class="btn btn-primary btn-sm"><img class="icon" src="icons/add.svg" alt="" aria-hidden="true">添加</button>
             </form>
-            <div class="admin-words-list" id="admin-words-list"></div>
-            <p class="hint">词库命中即拒绝写入(昵称/选手资料/卡组备注/卡文本/模板名与举报内容);增删即时生效,全站写入端共用同一份词表。</p>
+            <div class="admin-words-list" id="admin-words-list" aria-live="polite"></div>
+            <p class="hint">词库命中即拒绝写入(昵称/选手资料/卡组备注/卡文本/模板名与举报内容);增删即时生效,全站写入端共用同一份词表。词库不整表展示,用搜索定位词条(命中超 50 个仅显示前 50,请换更精确的关键词)。</p>
           </section>
         </section>
       </div>
@@ -309,6 +314,6 @@
   <script src="vendor/purify.min.js?v=2026090051" defer></script>
   <script src="docs-meta.js?v=2026090052" defer></script>
   <script src="md-render.js?v=2026090051" defer></script>
-  <script src="admin.js?v=2026090086" defer></script>
+  <script src="admin.js?v=2026090087" defer></script>
 </body>
 </html>

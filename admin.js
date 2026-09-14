@@ -1120,7 +1120,9 @@
   const REPORT_ACTIONS = { dismiss: '忽略', 'name-reset': '改名', 'avatar-clear': '清头像' };
 
   let reportsCache = [];
-  let wordsCache = [];
+  /* 词库不整表拉取:仅缓存搜索命中,删除按钮从命中结果取词 */
+  let wordsMatches = [];
+  let wordsLastQuery = '';
 
   function renderReports() {
     const tbody = $('admin-reports-tbody');
@@ -1209,14 +1211,19 @@
     loadReports();
   });
 
-  function renderWords() {
+  function renderWordMatches() {
     const box = $('admin-words-list');
-    box.innerHTML = wordsCache.map((w, i) =>
+    if (!wordsMatches.length) {
+      box.innerHTML = '<span class="hint">无命中。</span>';
+      return;
+    }
+    box.innerHTML = wordsMatches.map((w, i) =>
       '<span class="admin-word-chip">' + escapeHtml(w) +
       '<button type="button" class="admin-word-del" data-word-idx="' + i + '" title="删除词条" aria-label="删除词条 ' + escapeHtml(w) + '">×</button></span>'
     ).join('');
   }
 
+  /* 词库只取计数,不整表展示;搜索按需返回命中(片段定位或整段文本查命中) */
   async function loadWords() {
     const status = $('admin-words-status');
     setStatus(status, '加载中…', false);
@@ -1225,11 +1232,25 @@
       setStatus(status, '词库加载失败:' + (result.data.error || result.status), true);
       return;
     }
-    wordsCache = Array.isArray(result.data.words) ? result.data.words : [];
-    renderWords();
-    setStatus(status, wordsCache.length
-      ? '共 ' + wordsCache.length + ' 个词,增删即时生效。'
+    setStatus(status, typeof result.data.count === 'number'
+      ? '词库共 ' + result.data.count + ' 个词,增删即时生效。'
       : '词库为空:所有文本放行。', false);
+  }
+
+  async function searchWords(query) {
+    const status = $('admin-words-status');
+    setStatus(status, '搜索中…', false);
+    const result = await api('/api/moderation/words?q=' + encodeURIComponent(query));
+    if (!result.ok) {
+      setStatus(status, '搜索失败:' + (result.data.error || result.status), true);
+      return;
+    }
+    wordsLastQuery = query;
+    wordsMatches = Array.isArray(result.data.matches) ? result.data.matches : [];
+    renderWordMatches();
+    setStatus(status, '命中 ' + wordsMatches.length + ' 个词' +
+      (result.data.more ? '(超 50 个仅显示前 50,请换更精确的关键词)' : '') +
+      ',点词条上的 × 删除。', false);
   }
 
   async function wordAction(action, word) {
@@ -1244,11 +1265,25 @@
       setStatus(status, (action === 'add' ? '添加' : '删除') + '失败:' + (result.data.error || result.status), true);
       return false;
     }
-    wordsCache = Array.isArray(result.data.words) ? result.data.words : [];
-    renderWords();
-    setStatus(status, action === 'add' ? '已添加。' : '已删除。', false);
+    if (action === 'remove' && wordsLastQuery) {
+      await searchWords(wordsLastQuery);
+      setStatus(status, '已删除(词库共 ' + (result.data.count != null ? result.data.count : '?') + ' 个词)。', false);
+    } else {
+      setStatus(status, '已添加(词库共 ' + (result.data.count != null ? result.data.count : '?') + ' 个词)。', false);
+    }
     return true;
   }
+
+  $('admin-words-search').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const input = $('admin-words-query');
+    const query = input.value.trim();
+    if (!query) {
+      setStatus($('admin-words-status'), '请填写搜索关键词。', true);
+      return;
+    }
+    searchWords(query);
+  });
 
   $('admin-words-form').addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -1264,7 +1299,7 @@
   $('admin-words-list').addEventListener('click', async (event) => {
     const btn = event.target.closest('button[data-word-idx]');
     if (!btn) return;
-    const word = wordsCache[Number(btn.dataset.wordIdx)];
+    const word = wordsMatches[Number(btn.dataset.wordIdx)];
     if (word == null || !window.confirm('确认删除词条?删除后立即不再拦截。')) return;
     wordAction('remove', word);
   });

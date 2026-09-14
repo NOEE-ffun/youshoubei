@@ -8,18 +8,23 @@ const { requireRole } = require('./auth');
 const { withWorkspaceLock } = require('./workspace-lock');
 
 /* 内容审查·方案甲(词库核心):
- *   GET  /api/moderation/words  super:词表全量
- *   POST /api/moderation/words  super:{action:'add'|'remove', word}
+ *   GET  /api/moderation/words          super:{count, updatedAt} 不回词表
+ *   GET  /api/moderation/words?q=关键词  super:{count, updatedAt, matches[, more]}
+ *                                       双向匹配:词包含关键词(定位词条)或关键词包含词
+ *                                       (粘贴被拒文本查命中),matches 截 SEARCH_CAP 条
+ *   POST /api/moderation/words  super:{action:'add'|'remove', word} → {ok, count, updatedAt}
  * 真源 = OSS blocked-words.json({words:[...]});缺文件时读 deploy/blocked-words.seed.json
  * (gitignored 本地同步层,Task 4 生成)灌入并回写真源,此后只在真源上增删。
  * 命中判定:词与受检文本同走 normalize(NFKC 全角→半角 + 去全部空白 + 小写),
  * 词编译为转义字面量交替的 RegExp 缓存,增删后重建。
  * 真实词表纪律:词内容只允许存在于 deploy/ 与 OSS;代码/测试/日志一律合成词,
- * 拒绝文案固定为统一话术,绝不回显命中词。 */
+ * 拒绝文案固定为统一话术,绝不回显命中词;接口不整表下发,仅按需返回搜索命中。 */
 const WORDS_KEY = 'blocked-words.json';
 const SEED_PATH = path.join(__dirname, '..', 'deploy', 'blocked-words.seed.json');
 const MAX_BODY = 4 * 1024;
 const MAX_WORD_LEN = 32;
+const SEARCH_CAP = 50;
+const MAX_QUERY_LEN = 500;
 const REJECT_REASON = '内容包含不允许的词汇,请修改';
 
 function escapeRe(s) {
@@ -145,7 +150,16 @@ function createModeration(storage, options) {
     const user = await requireRole(req, res, ['super']);
     if (!user) return;
     const list = await loadWords();
-    sendJson(res, 200, { words: list, updatedAt });
+    const base = { count: list.length, updatedAt };
+    const q = new URL(req.url, 'http://localhost').searchParams.get('q');
+    if (q === null || !q.trim()) return sendJson(res, 200, base);
+    const nq = normalize(q);
+    if (nq.length > MAX_QUERY_LEN) {
+      return sendJson(res, 400, { error: '关键词过长(最多 ' + MAX_QUERY_LEN + ' 字)' });
+    }
+    /* 双向匹配:短关键词=按片段找词;长文本=查其中命中了哪些词 */
+    const hits = list.filter((w) => w.includes(nq) || nq.includes(w));
+    sendJson(res, 200, Object.assign({ matches: hits.slice(0, SEARCH_CAP), more: hits.length > SEARCH_CAP }, base));
   }
 
   async function post(req, res) {
@@ -182,7 +196,7 @@ function createModeration(storage, options) {
       await write(WORDS_KEY, { words: words.slice(), updatedAt });
       rebuild();
       audit('moderation.' + body.action, 'by=' + maskUser(user.username) + ' word=' + w);
-      sendJson(res, 200, { ok: true, words: words.slice(), updatedAt });
+      sendJson(res, 200, { ok: true, count: words.length, updatedAt });
     });
   }
 

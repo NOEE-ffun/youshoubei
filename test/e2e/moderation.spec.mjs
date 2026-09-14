@@ -128,13 +128,28 @@ test('③ 词库即时生效:后台加词立刻拒写,删词恢复可写', async
   const WORD = '测试违禁乙';
   const BAD_NICK = '昵称带' + WORD + '拒绝';
 
-  /* 超管审查标签词库表单加词(不走 API:同链测「后台词库管理」UI 面) */
+  /* 超管审查标签词库表单加词(不走 API:同链测「后台词库管理」UI 面);
+   * 词库不整表展示:初始无 chip,搜索后才见命中 */
   await smsLogin(context, ADMIN_PHONE);
   await page.goto('/admin.html#review');
   await expect(page.locator('#admin-words-form')).toBeVisible();
+  await expect(page.locator('#admin-words-list .admin-word-chip')).toHaveCount(0);
+  await expect(page.locator('#admin-words-status')).toContainText('词库共');
   await page.locator('#admin-words-input').fill(WORD);
   await page.locator('#admin-words-form button[type="submit"]').click();
   await expect(page.locator('#admin-words-status')).toContainText('已添加');
+  await expect(page.locator('#admin-words-list .admin-word-chip')).toHaveCount(0);
+
+  /* 搜索:片段定位新词;无命中关键词返回空 */
+  await page.locator('#admin-words-query').fill(WORD);
+  await page.locator('#admin-words-search button[type="submit"]').click();
+  await expect(page.locator('#admin-words-status')).toContainText('命中 1 个词');
+  await expect(page.locator('#admin-words-list .admin-word-chip', { hasText: WORD })).toHaveCount(1);
+  await page.locator('#admin-words-query').fill('不存在的干净词');
+  await page.locator('#admin-words-search button[type="submit"]').click();
+  await expect(page.locator('#admin-words-status')).toContainText('命中 0 个词');
+  await page.locator('#admin-words-query').fill(WORD);
+  await page.locator('#admin-words-search button[type="submit"]').click();
   await expect(page.locator('#admin-words-list .admin-word-chip', { hasText: WORD })).toHaveCount(1);
 
   /* 加词即时生效:选手改昵称(同一端点)立刻 400,文案不含词 */
@@ -146,10 +161,11 @@ test('③ 词库即时生效:后台加词立刻拒写,删词恢复可写', async
   expect(badBody.error).toContain('不允许的词汇');
   expect(badBody.error).not.toContain(WORD);
 
-  /* chip 删词(confirm)→ 同一昵称恢复可写并落库 */
+  /* 搜索结果 chip 删词(confirm)→ 结果刷新且同昵称恢复可写并落库 */
   page.once('dialog', (d) => d.accept());
   await page.locator('#admin-words-list .admin-word-chip', { hasText: WORD }).locator('.admin-word-del').click();
   await expect(page.locator('#admin-words-status')).toContainText('已删除');
+  await expect(page.locator('#admin-words-list .admin-word-chip', { hasText: WORD })).toHaveCount(0);
   const ok = await userCtx.request.put('/api/me/player', { data: { nickname: BAD_NICK } });
   expect(ok.status(), '删词后同一昵称应恢复可写').toBe(200);
   const meAfter = await (await userCtx.request.get('/api/me')).json();
