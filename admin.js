@@ -486,7 +486,7 @@
     });
   }
 
-  /* 头像直传 /api/upload(裸字节体,魔数嗅探拒 SVG、5MB 上限;超管低频场景不做客户端压缩) */
+  /* 头像直传 /api/upload(裸字节体,魔数嗅探拒 SVG、30MB 上限;超管低频场景不做客户端压缩) */
   function ensurePlayersFileInput() {
     if (playersFileInput) return playersFileInput;
     playersFileInput = document.createElement('input');
@@ -1046,7 +1046,7 @@
     loadDocs();
   }
 
-  /* 插图:裸字节体直传 /api/upload(魔数嗅探拒 SVG,5MB 上限),成功插入光标处 */
+  /* 插图:裸字节体直传 /api/upload(魔数嗅探拒 SVG,30MB 上限),成功插入光标处 */
   async function uploadDocImage(event) {
     const file = event.target.files && event.target.files[0];
     event.target.value = '';

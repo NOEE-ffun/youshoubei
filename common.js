@@ -971,7 +971,7 @@
     '        <button type="button" id="bg-upload" class="btn btn-secondary btn-sm" aria-describedby="bg-hint">' + iconMarkup('upload', '上传背景') + '上传背景</button>' +
     '        <button type="button" id="bg-remove" class="btn btn-danger btn-sm">' + iconMarkup('delete', '移除背景') + '移除背景</button>' +
       '      </div>' +
-      '      <p class="hint" id="bg-hint">支持 PNG/JPEG/WebP/GIF，原图直传不压缩；云端模式单张限 5MB。</p>' +
+      '      <p class="hint" id="bg-hint">支持 PNG/JPEG/WebP/GIF，原图直传不压缩；云端模式单张限 30MB。</p>' +
       '    </div>' +
       '    <div class="form-field" data-sec="signup">' +
       '      <span id="deck-window-label">卡组提交</span>' +
@@ -1565,7 +1565,7 @@
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       try {
-        /* 背景图不做压缩，原图直传(云端 >5MB 会被服务端 413 拒绝) */
+        /* 背景图不做压缩，原图直传(云端 >30MB 会被服务端 413 拒绝) */
         if (!file.type || !file.type.startsWith('image/')) throw new Error('请选择图片文件');
         let image = file;
         if (mode === 'cloud') image = await uploadCloudImage(image);

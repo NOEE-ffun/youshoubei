@@ -6,7 +6,7 @@ const { effectiveRole, isAdminRole } = require('./rbac');
 const { sendJson, readBody } = require('./helpers');
 const { uploadImageBuffer, publicUrl, appendAudit } = require('./oss');
 
-const MAX_SIZE = 5 * 1024 * 1024;
+const MAX_SIZE = 30 * 1024 * 1024;
 
 const EXT_BY_TYPE = {
   'image/png': '.png',
@@ -51,7 +51,7 @@ module.exports = async function handler(req, res) {
 
   const buffer = await readBody(req, MAX_SIZE);
   if (buffer === null) {
-    sendJson(res, 413, { error: '图片过大' });
+    sendJson(res, 413, { error: '图片过大（限 30MB）' });
     return;
   }
   if (!buffer.length) {
