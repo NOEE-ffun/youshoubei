@@ -541,7 +541,7 @@
   }
 
   /* 压缩公共管线:加载文件 → canvas 重采样 → WebP 优先、JPEG 回退。
-   * draw 负责设置画布尺寸并绘制(等比缩放 or 头像中心裁切)。 */
+   * draw 负责设置画布尺寸并绘制(头像中心裁切)。 */
   function compressToBlob(file, draw, quality) {
     const q = quality || 0.85;
     return new Promise((resolve, reject) => {
@@ -570,15 +570,6 @@
       };
       image.src = url;
     });
-  }
-
-  function compressImage(file, maxDim, quality) {
-    return compressToBlob(file, (image, canvas) => {
-      const scale = Math.min(1, maxDim / Math.max(image.naturalWidth, image.naturalHeight));
-      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
-      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-      canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
-    }, quality);
   }
 
   /* 头像压缩：中心裁切成 200×200 方形 */
@@ -980,7 +971,7 @@
     '        <button type="button" id="bg-upload" class="btn btn-secondary btn-sm" aria-describedby="bg-hint">' + iconMarkup('upload', '上传背景') + '上传背景</button>' +
     '        <button type="button" id="bg-remove" class="btn btn-danger btn-sm">' + iconMarkup('delete', '移除背景') + '移除背景</button>' +
       '      </div>' +
-      '      <p class="hint" id="bg-hint">支持常见图片格式，上传后自动压缩至最长边 1600px。</p>' +
+      '      <p class="hint" id="bg-hint">支持 PNG/JPEG/WebP/GIF，原图直传不压缩；云端模式单张限 5MB。</p>' +
       '    </div>' +
       '    <div class="form-field" data-sec="signup">' +
       '      <span id="deck-window-label">卡组提交</span>' +
@@ -1574,7 +1565,9 @@
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       try {
-        let image = await compressImage(file, 1600, 0.8);
+        /* 背景图不做压缩，原图直传(云端 >5MB 会被服务端 413 拒绝) */
+        if (!file.type || !file.type.startsWith('image/')) throw new Error('请选择图片文件');
+        let image = file;
         if (mode === 'cloud') image = await uploadCloudImage(image);
         pendingBackground = image;
         const preview = settingsDialog.querySelector('#bg-preview');
@@ -2901,7 +2894,6 @@
       players: [],
       mode: 'local',
       blobUrl,
-      compressImage,
       compressAvatar,
       openLightbox,
       renderHeader,
