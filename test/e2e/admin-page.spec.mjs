@@ -66,10 +66,12 @@ test('封禁降级链路:封禁后登录 403,解封恢复,admin 降 player 失�
   expect(tableText).not.toContain(PHONE_USER);
   expect(tableText).not.toContain(PHONE_ADMIN);
 
-  /* 码表:makeAdmin 兑过的码 usedBy=手机号用户名(13800002222),渲染侧须脱敏 */
+  /* 码表:makeAdmin 兑过的码 usedBy=手机号用户名(13800002222),渲染侧须脱敏。
+   * 口径(2026-09-16 拍板):码表/审计写入=maskUser ***尾4(隐私批 ef24c2b 起收紧);
+   * 账号表=maskUsername 138****前3(超管区分用),两形态并存以各自服务端为准 */
   await page.waitForSelector('#admin-codes-tbody tr');
   const codesText = await page.locator('#admin-codes-tbody').innerText();
-  expect(codesText).toContain('138****2222');
+  expect(codesText).toContain('***2222');
   expect(codesText).not.toContain(PHONE_ADMIN);
 
   /* 整页可见文本不见完整手机号(脱敏断言从账号表扩到全页,兜住码表等一切角落) */
