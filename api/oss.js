@@ -163,10 +163,27 @@ async function backupData() {
 
 const AUDIT_PREFIX = 'audit/';
 const AUDIT_KEEP_PER_FILE = 2000; // 单文件条数上限,超出裁最旧
+const AUDIT_RETENTION_MONTHS = 12; // 保留期(网安法日志≥6 个月,取 12 留余量)
 
 function auditKeyNow(now) {
   const d = new Date(now);
   return AUDIT_PREFIX + 'log-' + d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '.json';
+}
+
+/** 纯函数:过期审计月文件甄别(名字即月;非本命名规则的条目不动)。
+ * cur-seq >= 保留期 → 整文件删:如 2026-09 保留 2025-10 起共 12 个月文件 */
+function staleAuditKeys(names, now) {
+  const d = new Date(now);
+  const cur = d.getUTCFullYear() * 12 + d.getUTCMonth();
+  const re = /^audit\/log-(\d{4})-(\d{2})\.json$/;
+  const out = [];
+  for (const name of names || []) {
+    const m = re.exec(name);
+    if (!m) continue;
+    const seq = Number(m[1]) * 12 + (Number(m[2]) - 1);
+    if (cur - seq >= AUDIT_RETENTION_MONTHS) out.push(name);
+  }
+  return out;
 }
 
 /** 纯函数:构造审计条目(时间可注入,可单测) */
@@ -177,6 +194,19 @@ function buildAuditEntry(action, detail, now) {
     detail: String(detail || '').slice(0, 200)
   };
 }
+
+/** 保留期清理:删过期的审计月文件;失败仅告警不阻塞 */
+async function pruneStaleAudit() {
+  const client = getClient();
+  const listed = await client.list({ prefix: AUDIT_PREFIX, 'max-keys': 1000 });
+  const names = (listed.objects || []).map((o) => o.name);
+  for (const key of staleAuditKeys(names, Date.now())) {
+    await client.delete(key);
+  }
+  return names;
+}
+
+let auditPruneAt = 0;
 
 /** 追加审计条目;失败静默(只 console.error) */
 async function appendAudit(action, detail) {
@@ -199,6 +229,11 @@ async function appendAudit(action, detail) {
     await client.put(key, Buffer.from(JSON.stringify(list), 'utf8'), {
       headers: { 'Content-Type': 'application/json; charset=utf-8' }
     });
+    /* 保留期清理随写节流:每进程至多每天一次,异步放行不阻塞审计写入 */
+    if (Date.now() - auditPruneAt > 24 * 3600 * 1000) {
+      auditPruneAt = Date.now();
+      pruneStaleAudit().catch((e) => console.warn('[audit] 保留期清理失败(不影响业务):', e.message));
+    }
   } catch (error) {
     console.error('[audit] 审计写入失败(不影响业务):', error.message);
   }
@@ -253,5 +288,6 @@ module.exports = {
   listBackups,
   appendAudit,
   auditKeyNow,
-  buildAuditEntry
+  buildAuditEntry,
+  staleAuditKeys
 };

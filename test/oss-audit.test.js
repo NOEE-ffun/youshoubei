@@ -3,7 +3,7 @@
 /* 审计日志纯函数单测(oss-retry 风格,不连 OSS) */
 
 const assert = require('node:assert/strict');
-const { auditKeyNow, buildAuditEntry } = require('../api/oss');
+const { auditKeyNow, buildAuditEntry, staleAuditKeys } = require('../api/oss');
 
 // 1. 日志对象名:按月分文件
 {
@@ -31,4 +31,27 @@ const { auditKeyNow, buildAuditEntry } = require('../api/oss');
   assert.equal(empty.detail, '');
 }
 
-console.log('oss-audit 全部 2 组测试通过 ✓');
+// 3. 保留期甄别:满 12 个月的月文件过期,非命名规则条目不动(D-36 A 案)
+{
+  const now = new Date('2026-09-16T08:00:00Z').getTime();
+  const names = [
+    'audit/log-2025-09.json', // 恰满 12 个月 → 过期
+    'audit/log-2025-10.json', // 11 个月 → 保留
+    'audit/log-2026-08.json',
+    'audit/log-2026-09.json',
+    'audit/other.json',       // 非月文件命名 → 不动
+    'backups/data-2026-01-01T00-00-00-000Z.json' // 非 audit 前缀 → 不动
+  ];
+  assert.deepEqual(staleAuditKeys(names, now), ['audit/log-2025-09.json']);
+
+  /* 跨年边界:2025-01 距 2026-03 为 14 个月 → 过期;2025-04 为 11 个月 → 保留 */
+  const mar = new Date('2026-03-01T00:00:00Z').getTime();
+  assert.deepEqual(
+    staleAuditKeys(['audit/log-2025-01.json', 'audit/log-2025-04.json'], mar),
+    ['audit/log-2025-01.json']
+  );
+  assert.deepEqual(staleAuditKeys([], now), [], '空清单安全');
+  assert.deepEqual(staleAuditKeys(null, now), [], 'null 安全');
+}
+
+console.log('oss-audit 全部 3 组测试通过 ✓');
