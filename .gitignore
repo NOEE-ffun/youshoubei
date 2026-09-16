@@ -30,3 +30,7 @@ deploy/ecs.env
 
 # git worktree 隔离工作区
 .worktrees/
+
+# 官方游戏美术(职业/费用图标)不入公开仓库,仅本地工作区+部署层分发
+icons/classes/
+icons/cost/
